@@ -22,10 +22,37 @@ interface Product {
     priceNumeric?: number;
     slug?: string;
 }
+interface RawProductInput {
+    name?: string;
+    title?: string;
+    productName?: string;
+    price?: string | number;
+    priceNumeric?: number;
+    url?: string;
+    image?: string;
+    thumbnail?: string;
+    images?: string[];
+    slug?: string;
+    id?: string;
+    productId?: string;
+    brand?: string;
+    description?: string;
+    originalPrice?: string;
+    discount?: string;
+    currency?: string;
+    stock?: string;
+    availability?: string;
+    rating?: string;
+    reviewCount?: number;
+    category?: string;
+    subCategory?: string;
+    tags?: string[];
+    specs?: Record<string, string>;
+}
 interface HuskelConfig {
-    siteId: string;
-    apiUrl: string;
-    apiToken: string;
+    siteId?: string;
+    apiUrl?: string;
+    apiToken?: string;
 }
 interface SearchRequest {
     query: string;
@@ -64,11 +91,23 @@ declare class HuskelAPI {
 
 declare class HuskelClient {
     readonly api: HuskelAPI;
+    private ingestQueue;
+    private ingestTimer;
+    private ingestedUrls;
+    private onlineHandler;
     constructor(config: HuskelConfig);
+    destroy(): void;
+    queueIngest(rawProduct: RawProductInput): Promise<void>;
+    queueIngestBatch(rawProducts: RawProductInput[]): Promise<void>;
+    private scheduleFlush;
+    private flushQueue;
 }
 declare function initHuskel(config: HuskelConfig): HuskelClient;
 declare function getHuskelClient(): HuskelClient;
 
+/**
+ * @deprecated Use <HuskelProvider> instead to avoid SSR issues.
+ */
 declare function useHuskel(config: HuskelConfig): HuskelClient;
 
 interface UseSearchReturn {
@@ -81,8 +120,8 @@ interface UseSearchReturn {
 declare function useSearch(): UseSearchReturn;
 
 interface UseIngestReturn {
-    ingest: (product: Product) => Promise<void>;
-    ingestBatch: (products: Product[]) => Promise<void>;
+    ingest: (product: RawProductInput) => Promise<void>;
+    ingestBatch: (products: RawProductInput[]) => Promise<void>;
     loading: boolean;
     error: string | null;
 }
@@ -108,4 +147,9 @@ interface SparkleProps {
 }
 declare function Sparkle({ productName, limit, onResult, className }: SparkleProps): react_jsx_runtime.JSX.Element;
 
-export { HuskelAPI, HuskelClient, type HuskelConfig, type HuskelError, type IngestResponse, type Product, SearchBar, type SearchRequest, type SearchResponse, type SearchResult, Sparkle, getHuskelClient, initHuskel, useHuskel, useIngest, useSearch };
+interface HuskelProviderProps extends HuskelConfig {
+    children: React.ReactNode;
+}
+declare function HuskelProvider({ siteId, apiUrl, apiToken, children }: HuskelProviderProps): react_jsx_runtime.JSX.Element;
+
+export { HuskelAPI, HuskelClient, type HuskelConfig, type HuskelError, HuskelProvider, type IngestResponse, type Product, type RawProductInput, SearchBar, type SearchRequest, type SearchResponse, type SearchResult, Sparkle, getHuskelClient, initHuskel, useHuskel, useIngest, useSearch };

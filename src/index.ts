@@ -5,8 +5,10 @@ export { useSearch } from './hooks/useSearch';
 export { useIngest } from './hooks/useIngest';
 export { SearchBar } from './components/SearchBar';
 export { Sparkle } from './components/Sparkle';
+export { HuskelProvider } from './components/HuskelProvider';
 export type {
   Product,
+  RawProductInput,
   HuskelConfig,
   SearchRequest,
   SearchResult,

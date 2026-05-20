@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { SearchResult } from '../types';
-import { getHuskelClient } from '../client';
+import { useHuskelContext } from '../components/HuskelProvider';
 
 interface UseSearchReturn {
   results: SearchResult[];
@@ -11,6 +11,7 @@ interface UseSearchReturn {
 }
 
 export function useSearch(): UseSearchReturn {
+  const client = useHuskelContext();
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,14 +24,14 @@ export function useSearch(): UseSearchReturn {
     setLoading(true);
     setError(null);
     try {
-      const res = await getHuskelClient().api.search(query, limit);
+      const res = await client.api.search(query, limit);
       setResults(res.results ?? []);
     } catch (e: unknown) {
       setError((e as Error).message ?? 'Search failed');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [client]);
 
   const clear = useCallback(() => { setResults([]); setError(null); }, []);
 

@@ -20,10 +20,38 @@ export interface Product {
   slug?: string;
 }
 
+export interface RawProductInput {
+  name?: string;
+  title?: string;
+  productName?: string;
+  price?: string | number;
+  priceNumeric?: number;
+  url?: string;
+  image?: string;
+  thumbnail?: string;
+  images?: string[];
+  slug?: string;
+  id?: string;
+  productId?: string;
+  brand?: string;
+  description?: string;
+  originalPrice?: string;
+  discount?: string;
+  currency?: string;
+  stock?: string;
+  availability?: string;
+  rating?: string;
+  reviewCount?: number;
+  category?: string;
+  subCategory?: string;
+  tags?: string[];
+  specs?: Record<string, string>;
+}
+
 export interface HuskelConfig {
-  siteId: string;
-  apiUrl: string;
-  apiToken: string;
+  siteId?: string;
+  apiUrl?: string;
+  apiToken?: string;
 }
 
 export interface SearchRequest {

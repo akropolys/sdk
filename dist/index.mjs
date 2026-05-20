@@ -71,9 +71,169 @@ var HuskelAPI = class {
 };
 
 // src/client.ts
+function getEnvVar(key) {
+  if (typeof globalThis !== "undefined") {
+    const g = globalThis;
+    if (g.process && g.process.env) {
+      return g.process.env[key];
+    }
+  }
+  return void 0;
+}
+function mapRawProduct(input) {
+  var _a;
+  const name = input.name || input.title || input.productName || "";
+  let price = "";
+  let priceNumeric = void 0;
+  if (input.price !== void 0) {
+    if (typeof input.price === "number") {
+      priceNumeric = input.price;
+      price = String(input.price);
+    } else {
+      price = input.price;
+      const num = parseFloat(input.price.replace(/[^0-9.]/g, ""));
+      priceNumeric = isNaN(num) ? void 0 : num;
+    }
+  }
+  if (input.priceNumeric !== void 0) {
+    priceNumeric = input.priceNumeric;
+  }
+  let url = input.url || "";
+  if (!url && typeof window !== "undefined") {
+    url = window.location.href;
+  }
+  let slug = input.slug || input.id || input.productId || "";
+  if (!slug && url) {
+    slug = url.split("/").filter(Boolean).pop() || "";
+  }
+  if (!slug && name) {
+    slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  }
+  let images = [];
+  if (input.images) {
+    images = input.images;
+  } else if (input.image) {
+    images = [input.image];
+  } else if (input.thumbnail) {
+    images = [input.thumbnail];
+  }
+  if (!name) {
+    console.warn("[Huskel] Validation warning: Product name/title is missing. Skipping:", input);
+    return null;
+  }
+  if (!price) {
+    console.warn("[Huskel] Validation warning: Product price is missing. Skipping:", input);
+    return null;
+  }
+  if (!url) {
+    console.warn("[Huskel] Validation warning: Product URL is missing. Skipping:", input);
+    return null;
+  }
+  return {
+    name,
+    price,
+    url,
+    brand: input.brand,
+    description: input.description,
+    originalPrice: input.originalPrice,
+    discount: input.discount,
+    currency: (_a = input.currency) != null ? _a : "KES",
+    stock: input.stock,
+    availability: input.availability,
+    rating: input.rating,
+    reviewCount: input.reviewCount,
+    category: input.category,
+    subCategory: input.subCategory,
+    tags: input.tags,
+    images: images.length > 0 ? images : void 0,
+    specs: input.specs,
+    priceNumeric,
+    slug
+  };
+}
 var HuskelClient = class {
   constructor(config) {
-    this.api = new HuskelAPI(config.apiUrl, config.siteId, config.apiToken);
+    this.ingestQueue = [];
+    this.ingestTimer = null;
+    this.ingestedUrls = /* @__PURE__ */ new Set();
+    this.onlineHandler = null;
+    const siteId = config.siteId || getEnvVar("NEXT_PUBLIC_HUSKEL_SITE_ID") || "";
+    const apiUrl = config.apiUrl || getEnvVar("NEXT_PUBLIC_HUSKEL_API_URL") || "";
+    const apiToken = config.apiToken || getEnvVar("NEXT_PUBLIC_HUSKEL_API_TOKEN") || "";
+    if (!siteId) console.error('[Huskel] Missing siteId. Set it via <HuskelProvider siteId="..."> or NEXT_PUBLIC_HUSKEL_SITE_ID.');
+    if (!apiUrl) console.error('[Huskel] Missing apiUrl. Set it via <HuskelProvider apiUrl="..."> or NEXT_PUBLIC_HUSKEL_API_URL.');
+    if (!apiToken) console.error('[Huskel] Missing apiToken. Set it via <HuskelProvider apiToken="..."> or NEXT_PUBLIC_HUSKEL_API_TOKEN.');
+    this.api = new HuskelAPI(apiUrl, siteId, apiToken);
+    instance = this;
+    if (typeof window !== "undefined") {
+      this.onlineHandler = () => {
+        console.log("[Huskel] Connectivity restored, flushing queued ingestions.");
+        this.flushQueue();
+      };
+      window.addEventListener("online", this.onlineHandler);
+    }
+  }
+  destroy() {
+    if (typeof window !== "undefined" && this.onlineHandler) {
+      window.removeEventListener("online", this.onlineHandler);
+      this.onlineHandler = null;
+    }
+    if (this.ingestTimer) {
+      clearTimeout(this.ingestTimer);
+      this.ingestTimer = null;
+    }
+    if (instance === this) instance = null;
+  }
+  async queueIngest(rawProduct) {
+    const product = mapRawProduct(rawProduct);
+    if (!product) return;
+    if (this.ingestedUrls.has(product.url)) {
+      return;
+    }
+    this.ingestedUrls.add(product.url);
+    this.ingestQueue.push(product);
+    this.scheduleFlush();
+  }
+  async queueIngestBatch(rawProducts) {
+    rawProducts.forEach((p) => {
+      const product = mapRawProduct(p);
+      if (!product) return;
+      if (this.ingestedUrls.has(product.url)) {
+        return;
+      }
+      this.ingestedUrls.add(product.url);
+      this.ingestQueue.push(product);
+    });
+    if (this.ingestQueue.length > 0) {
+      this.scheduleFlush();
+    }
+  }
+  scheduleFlush() {
+    if (this.ingestTimer) return;
+    this.ingestTimer = setTimeout(() => {
+      this.flushQueue();
+    }, 300);
+  }
+  async flushQueue() {
+    this.ingestTimer = null;
+    if (this.ingestQueue.length === 0) return;
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      console.warn("[Huskel] Browser offline. Postponing ingestion.");
+      return;
+    }
+    const batch = [...this.ingestQueue];
+    this.ingestQueue = [];
+    try {
+      await this.api.ingestBatch(batch);
+    } catch (e) {
+      if (e.status && e.status >= 400 && e.status < 500) {
+        console.error("[Huskel] Ingestion discarded due to client error:", e.message);
+        return;
+      }
+      console.warn("[Huskel] Ingestion failed. Re-queuing to retry.", e);
+      this.ingestQueue = [...batch, ...this.ingestQueue];
+      this.scheduleFlush();
+    }
   }
 };
 var instance = null;
@@ -82,7 +242,16 @@ function initHuskel(config) {
   return instance;
 }
 function getHuskelClient() {
-  if (!instance) throw new Error("[Huskel] Call initHuskel() before using the client.");
+  if (!instance) {
+    const siteId = getEnvVar("NEXT_PUBLIC_HUSKEL_SITE_ID");
+    const apiUrl = getEnvVar("NEXT_PUBLIC_HUSKEL_API_URL");
+    const apiToken = getEnvVar("NEXT_PUBLIC_HUSKEL_API_TOKEN");
+    if (siteId && apiUrl && apiToken) {
+      instance = new HuskelClient({ siteId, apiUrl, apiToken });
+    } else {
+      throw new Error("[Huskel] Call initHuskel() or set NEXT_PUBLIC_HUSKEL_* environment variables before using the client.");
+    }
+  }
   return instance;
 }
 
@@ -91,18 +260,47 @@ import { useRef } from "react";
 function useHuskel(config) {
   const clientRef = useRef(null);
   if (!clientRef.current) {
+    console.warn("[Huskel] useHuskel() is deprecated. Please wrap your application in <HuskelProvider> instead.");
     clientRef.current = initHuskel(config);
   }
   return clientRef.current;
 }
 
 // src/hooks/useSearch.ts
-import { useState, useCallback, useRef as useRef2 } from "react";
+import { useState, useCallback, useRef as useRef3 } from "react";
+
+// src/components/HuskelProvider.tsx
+import { createContext, useContext, useEffect, useRef as useRef2 } from "react";
+import { jsx } from "react/jsx-runtime";
+var HuskelContext = createContext(null);
+function HuskelProvider({ siteId, apiUrl, apiToken, children }) {
+  const clientRef = useRef2(null);
+  if (!clientRef.current) {
+    clientRef.current = new HuskelClient({ siteId, apiUrl, apiToken });
+  }
+  useEffect(() => {
+    return () => {
+      var _a;
+      (_a = clientRef.current) == null ? void 0 : _a.destroy();
+    };
+  }, []);
+  return /* @__PURE__ */ jsx(HuskelContext.Provider, { value: clientRef.current, children });
+}
+function useHuskelContext() {
+  const context = useContext(HuskelContext);
+  if (!context) {
+    return getHuskelClient();
+  }
+  return context;
+}
+
+// src/hooks/useSearch.ts
 function useSearch() {
+  const client = useHuskelContext();
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const abortRef = useRef2(null);
+  const abortRef = useRef3(null);
   const search = useCallback(async (query, limit = 10) => {
     var _a, _b, _c;
     if (!query.trim()) {
@@ -114,14 +312,14 @@ function useSearch() {
     setLoading(true);
     setError(null);
     try {
-      const res = await getHuskelClient().api.search(query, limit);
+      const res = await client.api.search(query, limit);
       setResults((_b = res.results) != null ? _b : []);
     } catch (e) {
       setError((_c = e.message) != null ? _c : "Search failed");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [client]);
   const clear = useCallback(() => {
     setResults([]);
     setError(null);
@@ -132,6 +330,7 @@ function useSearch() {
 // src/hooks/useIngest.ts
 import { useCallback as useCallback2, useState as useState2 } from "react";
 function useIngest() {
+  const client = useHuskelContext();
   const [loading, setLoading] = useState2(false);
   const [error, setError] = useState2(null);
   const ingest = useCallback2(async (product) => {
@@ -139,32 +338,32 @@ function useIngest() {
     setLoading(true);
     setError(null);
     try {
-      await getHuskelClient().api.ingest(product);
+      await client.queueIngest(product);
     } catch (e) {
       setError((_a = e.message) != null ? _a : "Ingest failed");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [client]);
   const ingestBatch = useCallback2(async (products) => {
     var _a;
     if (!products.length) return;
     setLoading(true);
     setError(null);
     try {
-      await getHuskelClient().api.ingestBatch(products);
+      await client.queueIngestBatch(products);
     } catch (e) {
       setError((_a = e.message) != null ? _a : "Batch ingest failed");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [client]);
   return { ingest, ingestBatch, loading, error };
 }
 
 // src/components/SearchBar.tsx
-import { useState as useState3, useEffect as useEffect2, useRef as useRef3 } from "react";
-import { Fragment, jsx, jsxs } from "react/jsx-runtime";
+import { useState as useState3, useEffect as useEffect2, useRef as useRef4 } from "react";
+import { Fragment, jsx as jsx2, jsxs } from "react/jsx-runtime";
 var S = `
   .hsk-wrap{position:relative;width:100%;font-family:inherit}
   .hsk-input{width:100%;padding:10px 16px;font-size:15px;border:1.5px solid #e2e2e2;border-radius:8px;outline:none;box-sizing:border-box;background:#fff;transition:border-color .2s}
@@ -190,8 +389,8 @@ function SearchBar({
   const [query, setQuery] = useState3("");
   const [open, setOpen] = useState3(false);
   const { results, loading, search, clear } = useSearch();
-  const timer = useRef3();
-  const wrap = useRef3(null);
+  const timer = useRef4();
+  const wrap = useRef4(null);
   useEffect2(() => {
     clearTimeout(timer.current);
     if (!query.trim()) {
@@ -204,7 +403,7 @@ function SearchBar({
       setOpen(true);
     }, debounceMs);
     return () => clearTimeout(timer.current);
-  }, [query]);
+  }, [query, search, clear, limit, debounceMs]);
   useEffect2(() => {
     const handler = (e) => {
       if (wrap.current && !wrap.current.contains(e.target)) setOpen(false);
@@ -218,9 +417,9 @@ function SearchBar({
     onSelect == null ? void 0 : onSelect(r);
   };
   return /* @__PURE__ */ jsxs(Fragment, { children: [
-    /* @__PURE__ */ jsx("style", { children: S }),
+    /* @__PURE__ */ jsx2("style", { children: S }),
     /* @__PURE__ */ jsxs("div", { className: `hsk-wrap ${className != null ? className : ""}`, ref: wrap, children: [
-      /* @__PURE__ */ jsx(
+      /* @__PURE__ */ jsx2(
         "input",
         {
           className: `hsk-input ${inputClassName != null ? inputClassName : ""}`,
@@ -232,7 +431,7 @@ function SearchBar({
         }
       ),
       open && /* @__PURE__ */ jsxs("div", { className: `hsk-drop ${dropdownClassName != null ? dropdownClassName : ""}`, children: [
-        loading && /* @__PURE__ */ jsx("div", { className: "hsk-msg", children: "Searching\u2026" }),
+        loading && /* @__PURE__ */ jsx2("div", { className: "hsk-msg", children: "Searching\u2026" }),
         !loading && results.length === 0 && /* @__PURE__ */ jsxs("div", { className: "hsk-msg", children: [
           'No results for "',
           query,
@@ -241,10 +440,10 @@ function SearchBar({
         results.map(
           (r) => {
             var _a, _b;
-            return renderResult ? /* @__PURE__ */ jsx("div", { onClick: () => handleSelect(r), children: renderResult(r) }, r.id) : /* @__PURE__ */ jsxs("div", { className: "hsk-item", onClick: () => handleSelect(r), children: [
-              ((_a = r.product.images) == null ? void 0 : _a[0]) && /* @__PURE__ */ jsx("img", { src: r.product.images[0], alt: r.product.name }),
+            return renderResult ? /* @__PURE__ */ jsx2("div", { onClick: () => handleSelect(r), children: renderResult(r) }, r.id) : /* @__PURE__ */ jsxs("div", { className: "hsk-item", onClick: () => handleSelect(r), children: [
+              ((_a = r.product.images) == null ? void 0 : _a[0]) && /* @__PURE__ */ jsx2("img", { src: r.product.images[0], alt: r.product.name }),
               /* @__PURE__ */ jsxs("div", { children: [
-                /* @__PURE__ */ jsx("div", { className: "hsk-item-name", children: r.product.name }),
+                /* @__PURE__ */ jsx2("div", { className: "hsk-item-name", children: r.product.name }),
                 /* @__PURE__ */ jsxs("div", { className: "hsk-item-price", children: [
                   (_b = r.product.currency) != null ? _b : "KES",
                   " ",
@@ -261,18 +460,19 @@ function SearchBar({
 
 // src/components/Sparkle.tsx
 import { useState as useState4 } from "react";
-import { Fragment as Fragment2, jsx as jsx2, jsxs as jsxs2 } from "react/jsx-runtime";
+import { Fragment as Fragment2, jsx as jsx3, jsxs as jsxs2 } from "react/jsx-runtime";
 var S2 = `
   .hsk-sparkle{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;font-size:12px;font-weight:600;background:#f47c3c;color:#fff;border:none;border-radius:20px;cursor:pointer;transition:opacity .2s,transform .15s}
   .hsk-sparkle:hover{opacity:.88;transform:scale(1.04)}
   .hsk-sparkle:disabled{opacity:.5;cursor:not-allowed}
 `;
 function Sparkle({ productName, limit = 5, onResult, className }) {
+  const client = useHuskelContext();
   const [loading, setLoading] = useState4(false);
   const handleClick = async () => {
     setLoading(true);
     try {
-      const res = await getHuskelClient().api.search(productName, limit);
+      const res = await client.api.search(productName, limit);
       onResult == null ? void 0 : onResult(res.results);
     } catch (e) {
       console.error("[Huskel Sparkle]", e);
@@ -281,7 +481,7 @@ function Sparkle({ productName, limit = 5, onResult, className }) {
     }
   };
   return /* @__PURE__ */ jsxs2(Fragment2, { children: [
-    /* @__PURE__ */ jsx2("style", { children: S2 }),
+    /* @__PURE__ */ jsx3("style", { children: S2 }),
     /* @__PURE__ */ jsxs2("button", { className: `hsk-sparkle ${className != null ? className : ""}`, onClick: handleClick, disabled: loading, children: [
       "\u2726 ",
       loading ? "Finding\u2026" : "Similar"
@@ -291,6 +491,7 @@ function Sparkle({ productName, limit = 5, onResult, className }) {
 export {
   HuskelAPI,
   HuskelClient,
+  HuskelProvider,
   SearchBar,
   Sparkle,
   getHuskelClient,

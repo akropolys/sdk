@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { getHuskelClient } from '../client';
+import { useHuskelContext } from './HuskelProvider';
 import { SearchResult } from '../types';
 
 interface SparkleProps {
@@ -16,12 +16,13 @@ const S = `
 `;
 
 export function Sparkle({ productName, limit = 5, onResult, className }: SparkleProps) {
+  const client = useHuskelContext();
   const [loading, setLoading] = useState(false);
 
   const handleClick = async () => {
     setLoading(true);
     try {
-      const res = await getHuskelClient().api.search(productName, limit);
+      const res = await client.api.search(productName, limit);
       onResult?.(res.results);
     } catch (e) {
       console.error('[Huskel Sparkle]', e);

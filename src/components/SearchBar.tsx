@@ -47,7 +47,7 @@ export function SearchBar({
     if (!query.trim()) { clear(); setOpen(false); return; }
     timer.current = setTimeout(() => { search(query, limit); setOpen(true); }, debounceMs);
     return () => clearTimeout(timer.current);
-  }, [query]);
+  }, [query, search, clear, limit, debounceMs]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
