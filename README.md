@@ -10,24 +10,44 @@ npm install @huskel/sdk
 
 ## Setup
 
+Wrap your application in the `<HuskelProvider>` (it uses `"use client"` internally, allowing your root layout to remain a Next.js Server Component):
+
 ```tsx
-// app/layout.tsx (Next.js) or _app.tsx
-'use client';
-import { useHuskel } from '@huskel/sdk';
+// app/layout.tsx (Next.js Root Layout - Server Component)
+import { HuskelProvider } from '@huskel/sdk';
 
 export default function RootLayout({ children }) {
-  useHuskel({
-    siteId: 'your-site-id',
-    apiUrl: 'https://your-huskel-backend.com',
-    apiToken: 'your-api-token',
-  });
-  return <html><body>{children}</body></html>;
+  return (
+    <html>
+      <body>
+        {/* siteId, apiUrl, and apiToken are read automatically from NEXT_PUBLIC_HUSKEL_* env variables */}
+        <HuskelProvider>
+          {children}
+        </HuskelProvider>
+      </body>
+    </html>
+  );
 }
 ```
 
-## Ingest products (you pass your own data)
+*Or pass configuration explicitly if you are not using environment variables:*
 
 ```tsx
+<HuskelProvider
+  siteId="your-site-id"
+  apiUrl="https://your-huskel-backend.com"
+  apiToken="your-api-token"
+>
+  {children}
+</HuskelProvider>
+```
+
+## Ingest products (forgiving schema mapping)
+
+Pass your raw database or CMS objects directly. The SDK automatically validates, dedupes, batches, and resolves common field naming variations (e.g. `title`/`name`, `thumbnail`/`image`/`images`, `slug`/`id`/`productId`):
+
+```tsx
+import { useEffect } from 'react';
 import { useIngest } from '@huskel/sdk';
 
 // Single product page
@@ -35,15 +55,10 @@ export function ProductPage({ product }) {
   const { ingest } = useIngest();
 
   useEffect(() => {
-    ingest({
-      name: product.title,
-      price: product.price,
-      url: window.location.href,
-      images: product.images,
-      category: product.category,
-      currency: 'KES',
-    });
-  }, [product.id]);
+    // Passes raw product object directly.
+    // Handles background batching, client-side deduplication, and offline recovery automatically.
+    ingest(product);
+  }, [product.id, ingest]);
 }
 
 // Listing / category page
@@ -51,18 +66,15 @@ export function ProductGrid({ products }) {
   const { ingestBatch } = useIngest();
 
   useEffect(() => {
-    ingestBatch(products.map(p => ({
-      name: p.title,
-      price: p.price,
-      url: `/products/${p.slug}`,
-      images: [p.thumbnail],
-      currency: 'KES',
-    })));
-  }, [products]);
+    // Ingest array of products in a single debounced batch
+    ingestBatch(products);
+  }, [products, ingestBatch]);
 }
 ```
 
 ## Search
+
+### SearchBar Dropdown Component
 
 ```tsx
 import { SearchBar } from '@huskel/sdk';
@@ -76,12 +88,25 @@ export function Header() {
 }
 ```
 
+### Headless Search Hook
+
 ```tsx
-// Headless
 import { useSearch } from '@huskel/sdk';
 
-const { results, loading, search } = useSearch();
-<input onChange={e => search(e.target.value)} />
+export function CustomSearch() {
+  const { results, loading, search } = useSearch();
+
+  return (
+    <div>
+      <input onChange={e => search(e.target.value)} />
+      <ul>
+        {results.map(r => (
+          <li key={r.id}>{r.product.name}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 ```
 
 ## Sparkle (similar products)
