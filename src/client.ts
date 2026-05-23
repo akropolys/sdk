@@ -89,12 +89,53 @@ function mapRawProduct(input: RawProductInput): Product | null {
   };
 }
 
+function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 export class HuskelClient {
   readonly api: HuskelAPI;
   private ingestQueue: Product[] = [];
   private ingestTimer: ReturnType<typeof setTimeout> | null = null;
   private ingestedUrls = new Set<string>();
   private onlineHandler: (() => void) | null = null;
+  private shopperId?: string;
+  private sessionId: string = '';
+  public onCheckout?: (cart: import('./types').CartPayload) => void;
+
+  private static INGEST_CACHE_KEY = 'huskel_ingested_v1';
+  private static INGEST_CACHE_TTL = 24 * 60 * 60 * 1000; // 24h
+
+  private loadIngestedCache() {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = localStorage.getItem(HuskelClient.INGEST_CACHE_KEY);
+      if (!raw) return;
+      const { ts, urls }: { ts: number; urls: string[] } = JSON.parse(raw);
+      if (Date.now() - ts > HuskelClient.INGEST_CACHE_TTL) {
+        localStorage.removeItem(HuskelClient.INGEST_CACHE_KEY);
+        return;
+      }
+      this.ingestedUrls = new Set(urls);
+    } catch { /* ignore */ }
+  }
+
+  private saveIngestedCache() {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem(
+        HuskelClient.INGEST_CACHE_KEY,
+        JSON.stringify({ ts: Date.now(), urls: [...this.ingestedUrls] })
+      );
+    } catch { /* ignore */ }
+  }
 
   constructor(config: HuskelConfig) {
     const siteId = config.siteId || getEnvVar('NEXT_PUBLIC_HUSKEL_SITE_ID') || '';
@@ -106,7 +147,18 @@ export class HuskelClient {
     if (!apiUrl) console.error('[Huskel] Missing apiUrl. Set it via <HuskelProvider apiUrl="..."> or NEXT_PUBLIC_HUSKEL_API_URL.');
     if (!apiToken) console.error('[Huskel] Missing apiToken. Set it via <HuskelProvider apiToken="..."> or NEXT_PUBLIC_HUSKEL_API_TOKEN.');
 
-    this.api = new HuskelAPI(apiUrl, siteId, apiToken);
+    this.shopperId = config.shopperId;
+    this.onCheckout = config.onCheckout;
+    this.initSession();
+    this.loadIngestedCache();
+
+    this.api = new HuskelAPI(
+      apiUrl,
+      siteId,
+      apiToken,
+      () => this.getShopperId(),
+      () => this.sessionId
+    );
     instance = this;
 
     if (typeof window !== 'undefined') {
@@ -116,6 +168,35 @@ export class HuskelClient {
       };
       window.addEventListener('online', this.onlineHandler);
     }
+  }
+
+  setShopperId(id: string | undefined) {
+    this.shopperId = id;
+  }
+
+  getShopperId(): string | undefined {
+    return this.shopperId || 'guest_' + this.sessionId;
+  }
+
+  getSessionId(): string {
+    return this.sessionId;
+  }
+
+  private initSession() {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      try {
+        let sid = window.sessionStorage.getItem('huskel_session_id');
+        if (!sid) {
+          sid = generateUUID();
+          window.sessionStorage.setItem('huskel_session_id', sid);
+        }
+        this.sessionId = sid;
+        return;
+      } catch (e) {
+        // Fallback if sessionStorage is disabled or private mode
+      }
+    }
+    this.sessionId = generateUUID();
   }
 
   destroy() {
@@ -135,9 +216,10 @@ export class HuskelClient {
     if (!product) return;
 
     if (this.ingestedUrls.has(product.url)) {
-      return;
+      return; // already indexed in this session or today — skip
     }
     this.ingestedUrls.add(product.url);
+    this.saveIngestedCache();
 
     this.ingestQueue.push(product);
     this.scheduleFlush();
@@ -156,6 +238,7 @@ export class HuskelClient {
     });
 
     if (this.ingestQueue.length > 0) {
+      this.saveIngestedCache();
       this.scheduleFlush();
     }
   }

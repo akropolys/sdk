@@ -10,12 +10,17 @@ interface HuskelProviderProps extends HuskelConfig {
   children: React.ReactNode;
 }
 
-export function HuskelProvider({ siteId, apiUrl, apiToken, children }: HuskelProviderProps) {
+export function HuskelProvider({ siteId, apiUrl, apiToken, shopperId, children }: HuskelProviderProps) {
   const clientRef = useRef<HuskelClient | null>(null);
 
   if (!clientRef.current) {
-    clientRef.current = new HuskelClient({ siteId, apiUrl, apiToken });
+    clientRef.current = new HuskelClient({ siteId, apiUrl, apiToken, shopperId });
   }
+
+  // Update shopperId dynamically when it changes (e.g., shopper logs in/out)
+  useEffect(() => {
+    clientRef.current?.setShopperId(shopperId);
+  }, [shopperId]);
 
   // Clean up the online listener and timers when the provider unmounts
   // (prevents leaks during hot module reload and React StrictMode double-mount)

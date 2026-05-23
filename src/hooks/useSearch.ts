@@ -15,25 +15,44 @@ export function useSearch(): UseSearchReturn {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
+  // Generation counter so stale responses from any in-flight requests don't overwrite newer ones
+  const genRef = useRef(0);
 
-  const search = useCallback(async (query: string, limit = 10) => {
-    if (!query.trim()) { setResults([]); return; }
-    abortRef.current?.abort();
-    abortRef.current = new AbortController();
-    setLoading(true);
+  const search = useCallback(async (query: string, limit = 8) => {
+    if (!query.trim()) { setResults([]); setLoading(false); return; }
+    const gen = ++genRef.current;
+    // No loading spinner for autocomplete — it's so fast it would just flicker
     setError(null);
     try {
-      const res = await client.api.search(query, limit);
-      setResults(res.results ?? []);
+      // searchAutocomplete = pure in-memory Trie, <1ms, no Upstash
+      const res = await client.api.searchAutocomplete(query, limit);
+      if (gen === genRef.current) {
+        setResults(res.results ?? []);
+      }
     } catch (e: unknown) {
-      setError((e as Error).message ?? 'Search failed');
+      if (gen === genRef.current) {
+        let msg = (e as any)?.message ?? 'Search failed';
+        try {
+          const parsed = JSON.parse(msg);
+          if (parsed && parsed.error) {
+            msg = parsed.error;
+          }
+        } catch {
+          // keep original text
+        }
+        setError(msg);
+      }
     } finally {
-      setLoading(false);
+      if (gen === genRef.current) setLoading(false);
     }
   }, [client]);
 
-  const clear = useCallback(() => { setResults([]); setError(null); }, []);
+  const clear = useCallback(() => {
+    genRef.current++;
+    setResults([]);
+    setError(null);
+    setLoading(false);
+  }, []);
 
   return { results, loading, error, search, clear };
 }

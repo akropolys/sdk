@@ -1,121 +1,197 @@
 # @huskel/sdk
 
-AI-powered vector search SDK. You own your data — pass it in, we handle the rest.
+AI-powered vector search for any storefront. Your customers browse → products index automatically. Zero scraping, zero manual uploads.
 
 ## Install
 
 ```bash
 npm install @huskel/sdk
+# or
+pnpm add @huskel/sdk
 ```
 
-## Setup
+---
 
-Wrap your application in the `<HuskelProvider>` (it uses `"use client"` internally, allowing your root layout to remain a Next.js Server Component):
+
+## Next.js (App Router)
+
+Next.js App Router uses **Server Components** by default. The SDK is client-only, so follow this pattern:
+
+### 1. Create a client provider wrapper
 
 ```tsx
-// app/layout.tsx (Next.js Root Layout - Server Component)
+// app/components/HuskelClientProvider.tsx
+'use client';
+
 import { HuskelProvider } from '@huskel/sdk';
 
-export default function RootLayout({ children }) {
+export default function HuskelClientProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return <HuskelProvider>{children}</HuskelProvider>;
+}
+```
+
+### 2. Add it to your root layout
+
+```tsx
+// app/layout.tsx  ← this is a Server Component, no 'use client' needed
+import HuskelClientProvider from './components/HuskelClientProvider';
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html>
+    <html lang="en">
       <body>
-        {/* siteId, apiUrl, and apiToken are read automatically from NEXT_PUBLIC_HUSKEL_* env variables */}
-        <HuskelProvider>
+        <HuskelClientProvider>
           {children}
-        </HuskelProvider>
+        </HuskelClientProvider>
       </body>
     </html>
   );
 }
 ```
 
-*Or pass configuration explicitly if you are not using environment variables:*
+### 3. Auto-ingest on product pages
 
 ```tsx
-<HuskelProvider
-  siteId="your-site-id"
-  apiUrl="https://your-huskel-backend.com"
-  apiToken="your-api-token"
->
-  {children}
-</HuskelProvider>
-```
+// app/products/[slug]/page.tsx
+import { getProduct } from '@/lib/db'; // your own data fetching
 
-## Ingest products (forgiving schema mapping)
+// ProductView is a Client Component — handles ingestion
+'use client';
+import { usePageIngest } from '@huskel/sdk';
 
-Pass your raw database or CMS objects directly. The SDK automatically validates, dedupes, batches, and resolves common field naming variations (e.g. `title`/`name`, `thumbnail`/`image`/`images`, `slug`/`id`/`productId`):
+export function ProductView({ product }) {
+  // One line — fires automatically when the customer's browser loads the page
+  usePageIngest({
+    name: product.title,
+    price: product.price,
+    url: window.location.href,
+    images: [product.thumbnail],
+    category: product.category,
+    description: product.description,
+  });
 
-```tsx
-import { useEffect } from 'react';
-import { useIngest } from '@huskel/sdk';
-
-// Single product page
-export function ProductPage({ product }) {
-  const { ingest } = useIngest();
-
-  useEffect(() => {
-    // Passes raw product object directly.
-    // Handles background batching, client-side deduplication, and offline recovery automatically.
-    ingest(product);
-  }, [product.id, ingest]);
-}
-
-// Listing / category page
-export function ProductGrid({ products }) {
-  const { ingestBatch } = useIngest();
-
-  useEffect(() => {
-    // Ingest array of products in a single debounced batch
-    ingestBatch(products);
-  }, [products, ingestBatch]);
+  return <div>{/* your product UI */}</div>;
 }
 ```
 
-## Search
+> **Why a separate client component?**  
+> `usePageIngest` uses `useEffect` which runs only in the browser. Server Components can't call hooks. The wrapper pattern keeps your data-fetching in Server Components (fast, cached) while the SDK fires client-side.
 
-### SearchBar Dropdown Component
+### 4. Add the search bar
 
 ```tsx
+// app/components/Header.tsx
+'use client';
 import { SearchBar } from '@huskel/sdk';
+import { useRouter } from 'next/navigation';
 
 export function Header() {
+  const router = useRouter();
   return (
     <SearchBar
+      placeholder="Search products..."
       onSelect={(result) => router.push(result.product.url)}
     />
   );
 }
 ```
 
-### Headless Search Hook
+---
+
+## React (CRA / Vite)
+
+With a standard SPA, everything is already a client component. Much simpler:
+
+### 1. Wrap your app
 
 ```tsx
-import { useSearch } from '@huskel/sdk';
+// src/main.tsx or src/App.tsx
+import { HuskelProvider } from '@huskel/sdk';
 
-export function CustomSearch() {
-  const { results, loading, search } = useSearch();
-
+function App() {
   return (
-    <div>
-      <input onChange={e => search(e.target.value)} />
-      <ul>
-        {results.map(r => (
-          <li key={r.id}>{r.product.name}</li>
-        ))}
-      </ul>
-    </div>
+    <HuskelProvider>
+      <Router>
+        <Routes />
+      </Router>
+    </HuskelProvider>
   );
 }
 ```
 
-## Sparkle (similar products)
+### 2. Ingest on product pages
 
 ```tsx
-import { Sparkle } from '@huskel/sdk';
+// src/pages/ProductPage.tsx
+import { usePageIngest } from '@huskel/sdk';
 
-<Sparkle
-  productName={product.name}
-  onResult={(similar) => setSimilar(similar)}
-/>
+export function ProductPage({ product }) {
+  usePageIngest({
+    name: product.title,
+    price: product.price,
+    url: window.location.href,
+    images: [product.thumbnail],
+    category: product.category,
+  });
+
+  return <div>{/* your product UI */}</div>;
+}
 ```
+
+### 3. Add search
+
+```tsx
+import { SearchBar } from '@huskel/sdk';
+
+<SearchBar onSelect={(result) => navigate(result.product.url)} />
+```
+
+---
+
+## Batch ingest (listing pages)
+
+When rendering a grid of products, ingest them all at once:
+
+```tsx
+'use client';
+import { useIngest } from '@huskel/sdk';
+import { useEffect } from 'react';
+
+export function ProductGrid({ products }) {
+  const { ingestBatch } = useIngest();
+
+  useEffect(() => {
+    ingestBatch(
+      products.map((p) => ({
+        name: p.title,
+        price: p.price,
+        url: `/products/${p.slug}`,
+        images: [p.thumbnail],
+        category: p.category,
+        currency: 'KES',
+      }))
+    );
+  }, [products]);
+
+  return <ul>{/* render cards */}</ul>;
+}
+```
+
+---
+
+## API Reference
+
+| Export | Type | Description |
+|--------|------|-------------|
+| `HuskelProvider` | Component | Wraps your app. Reads env vars automatically. |
+| `usePageIngest(product)` | Hook | Ingest one product. Call on any product detail page. |
+| `useIngest()` | Hook | Returns `{ ingest, ingestBatch }` for manual control. |
+| `useSearch()` | Hook | Returns `{ search, results, loading }` for headless search. |
+| `SearchBar` | Component | Plug-and-play autocomplete search UI. |
+| `Sparkle` | Component | "Similar products" button powered by vector similarity. |
+| `getHuskelClient()` | Function | Get the singleton client instance imperatively. |
+| `initHuskel(config)` | Function | Initialize manually (non-React environments). |

@@ -1,40 +1,45 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearch } from '../hooks/useSearch';
-import { SearchResult } from '../types';
+import { SearchResult, HuskelTheme } from '../types';
 
-interface SearchBarProps {
+export interface SearchBarProps {
   placeholder?: string;
   limit?: number;
+  /** Debounce in ms — default 80 for near-instant feel */
   debounceMs?: number;
   onSelect?: (result: SearchResult) => void;
   className?: string;
   inputClassName?: string;
   dropdownClassName?: string;
   renderResult?: (result: SearchResult) => React.ReactNode;
+  theme?: HuskelTheme;
+  classNames?: {
+    root?: string;
+    input?: string;
+    dropdown?: string;
+    row?: string;
+  };
 }
 
-const S = `
-  .hsk-wrap{position:relative;width:100%;font-family:inherit}
-  .hsk-input{width:100%;padding:10px 16px;font-size:15px;border:1.5px solid #e2e2e2;border-radius:8px;outline:none;box-sizing:border-box;background:#fff;transition:border-color .2s}
-  .hsk-input:focus{border-color:#f47c3c}
-  .hsk-drop{position:absolute;top:calc(100% + 6px);left:0;right:0;background:#fff;border:1px solid #e2e2e2;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.1);z-index:9999;max-height:360px;overflow-y:auto}
-  .hsk-item{display:flex;align-items:center;gap:12px;padding:10px 14px;cursor:pointer;transition:background .15s}
-  .hsk-item:hover{background:#faf5f1}
-  .hsk-item img{width:40px;height:40px;object-fit:cover;border-radius:4px}
-  .hsk-item-name{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .hsk-item-price{font-size:13px;color:#f47c3c;margin-top:2px}
-  .hsk-msg{padding:16px;text-align:center;font-size:14px;color:#888}
-`;
+/* SVG search glass — pure inline so no icon dependency */
+const SearchIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <circle cx="8.5" cy="8.5" r="5.5"/>
+    <line x1="13" y1="13" x2="18" y2="18"/>
+  </svg>
+);
 
 export function SearchBar({
-  placeholder = 'Search for what you want — how you want',
+  placeholder = 'Search products…',
   limit = 10,
-  debounceMs = 300,
+  debounceMs = 80,
   onSelect,
   className,
   inputClassName,
   dropdownClassName,
   renderResult,
+  theme,
+  classNames = {},
 }: SearchBarProps) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
@@ -42,19 +47,23 @@ export function SearchBar({
   const timer = useRef<ReturnType<typeof setTimeout>>();
   const wrap = useRef<HTMLDivElement>(null);
 
+  /* Debounce search — but keep stale results visible between calls */
   useEffect(() => {
     clearTimeout(timer.current);
     if (!query.trim()) { clear(); setOpen(false); return; }
-    timer.current = setTimeout(() => { search(query, limit); setOpen(true); }, debounceMs);
+    setOpen(true);   // open immediately (stale results show while fetching)
+    timer.current = setTimeout(() => { search(query, limit); }, debounceMs);
     return () => clearTimeout(timer.current);
-  }, [query, search, clear, limit, debounceMs]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
 
+  /* Click-outside to close */
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
+    const h = (e: MouseEvent) => {
       if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false);
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
   }, []);
 
   const handleSelect = (r: SearchResult) => {
@@ -63,38 +72,68 @@ export function SearchBar({
     onSelect?.(r);
   };
 
+  const showDrop = open && query.trim().length > 0;
+
+  const customStyles = {
+    ...(theme?.primaryColor && { '--hsk-primary': theme.primaryColor }),
+    ...(theme?.backgroundColor && { '--hsk-bg': theme.backgroundColor }),
+    ...(theme?.textColor && { '--hsk-text': theme.textColor }),
+    ...(theme?.fontFamily && { '--hsk-font': theme.fontFamily }),
+    ...(theme?.borderRadius && { '--hsk-border-radius': theme.borderRadius }),
+  } as React.CSSProperties;
+
   return (
-    <>
-      <style>{S}</style>
-      <div className={`hsk-wrap ${className ?? ''}`} ref={wrap}>
-        <input
-          className={`hsk-input ${inputClassName ?? ''}`}
-          type="text"
-          value={query}
-          placeholder={placeholder}
-          onChange={e => setQuery(e.target.value)}
-          onFocus={() => results.length && setOpen(true)}
-        />
-        {open && (
-          <div className={`hsk-drop ${dropdownClassName ?? ''}`}>
-            {loading && <div className="hsk-msg">Searching…</div>}
-            {!loading && results.length === 0 && <div className="hsk-msg">No results for "{query}"</div>}
-            {results.map(r =>
-              renderResult ? (
-                <div key={r.id} onClick={() => handleSelect(r)}>{renderResult(r)}</div>
-              ) : (
-                <div key={r.id} className="hsk-item" onClick={() => handleSelect(r)}>
-                  {r.product.images?.[0] && <img src={r.product.images[0]} alt={r.product.name} />}
-                  <div>
-                    <div className="hsk-item-name">{r.product.name}</div>
-                    <div className="hsk-item-price">{r.product.currency ?? 'KES'} {r.product.price}</div>
-                  </div>
+    <div className={`hsk-sb-wrap ${classNames.root || ''} ${className || ''}`} ref={wrap} style={customStyles}>
+      <span className="hsk-sb-icon"><SearchIcon /></span>
+      <input
+        className={`hsk-sb-input ${classNames.input || ''} ${inputClassName || ''}`}
+        type="text"
+        value={query}
+        placeholder={placeholder}
+        onChange={e => setQuery(e.target.value)}
+        onFocus={() => results.length > 0 && query.trim() && setOpen(true)}
+        autoComplete="off"
+        spellCheck={false}
+      />
+      {showDrop && (
+        <div className={`hsk-sb-drop ${classNames.dropdown || ''} ${dropdownClassName || ''}`} style={{ position: 'absolute' }}>
+          {loading && <div className="hsk-sb-loading-bar" />}
+
+          {results.length === 0 && !loading && (
+            <div className="hsk-sb-empty">No results for &ldquo;{query}&rdquo;</div>
+          )}
+
+          {results.map((r, i) => (
+            renderResult ? (
+              <div
+                key={r.id}
+                onClick={() => handleSelect(r)}
+                className="hsk-sb-fade"
+                style={{ animationDelay: `${i * 18}ms` }}
+              >
+                {renderResult(r)}
+              </div>
+            ) : (
+              <div
+                key={r.id}
+                className={`hsk-sb-row hsk-sb-fade ${classNames.row || ''}`}
+                style={{ animationDelay: `${i * 18}ms` }}
+                onClick={() => handleSelect(r)}
+              >
+                <span className="hsk-sb-row-icon"><SearchIcon /></span>
+                <div className="hsk-sb-row-body">
+                  <div className="hsk-sb-row-title">{r.product.name}</div>
+                  {(r.product.category || r.product.brand) && (
+                    <div className="hsk-sb-row-sub">
+                      {r.product.category ?? r.product.brand}
+                    </div>
+                  )}
                 </div>
-              )
-            )}
-          </div>
-        )}
-      </div>
-    </>
+              </div>
+            )
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
