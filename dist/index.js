@@ -358,6 +358,9 @@ var _HuskelClient = class _HuskelClient {
     } catch (e) {
     }
   }
+  reRegister() {
+    instance = this;
+  }
   setShopperId(id) {
     this.shopperId = id;
   }
@@ -491,11 +494,17 @@ function HuskelProvider({ siteId, apiUrl, apiToken, shopperId, children }) {
   const clientRef = (0, import_react2.useRef)(null);
   if (!clientRef.current) {
     clientRef.current = new HuskelClient({ siteId, apiUrl, apiToken, shopperId });
+  } else {
+    clientRef.current.reRegister();
   }
   (0, import_react2.useEffect)(() => {
     var _a;
     (_a = clientRef.current) == null ? void 0 : _a.setShopperId(shopperId);
   }, [shopperId]);
+  (0, import_react2.useEffect)(() => {
+    var _a;
+    (_a = clientRef.current) == null ? void 0 : _a.reRegister();
+  }, []);
   (0, import_react2.useEffect)(() => {
     return () => {
       var _a;
@@ -527,6 +536,7 @@ function useSearch() {
       return;
     }
     const gen = ++genRef.current;
+    setLoading(true);
     setError(null);
     try {
       const res = await client.api.searchAutocomplete(query, limit);
@@ -730,6 +740,15 @@ function useCart() {
 
 // src/components/SearchBar.tsx
 var import_react8 = require("react");
+
+// src/utils/cn.ts
+var import_clsx = require("clsx");
+var import_tailwind_merge = require("tailwind-merge");
+function cn(...inputs) {
+  return (0, import_tailwind_merge.twMerge)((0, import_clsx.clsx)(inputs));
+}
+
+// src/components/SearchBar.tsx
 var import_jsx_runtime2 = require("react/jsx-runtime");
 var SearchIcon = () => /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("svg", { width: "15", height: "15", viewBox: "0 0 20 20", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", children: [
   /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("circle", { cx: "8.5", cy: "8.5", r: "5.5" }),
@@ -738,7 +757,7 @@ var SearchIcon = () => /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("svg", { wi
 function SearchBar({
   placeholder = "Search products\u2026",
   limit = 10,
-  debounceMs = 80,
+  debounceMs = 300,
   onSelect,
   className,
   inputClassName,
@@ -749,18 +768,28 @@ function SearchBar({
 }) {
   const [query, setQuery] = (0, import_react8.useState)("");
   const [open, setOpen] = (0, import_react8.useState)(false);
+  const [isDebouncing, setIsDebouncing] = (0, import_react8.useState)(false);
   const { results, loading, search, clear } = useSearch();
+  const client = useHuskelContext();
   const timer = (0, import_react8.useRef)();
   const wrap = (0, import_react8.useRef)(null);
+  const ignoreNextQueryChange = (0, import_react8.useRef)(false);
   (0, import_react8.useEffect)(() => {
+    if (ignoreNextQueryChange.current) {
+      ignoreNextQueryChange.current = false;
+      return;
+    }
     clearTimeout(timer.current);
     if (!query.trim()) {
       clear();
       setOpen(false);
+      setIsDebouncing(false);
       return;
     }
     setOpen(true);
+    setIsDebouncing(true);
     timer.current = setTimeout(() => {
+      setIsDebouncing(false);
       search(query, limit);
     }, debounceMs);
     return () => clearTimeout(timer.current);
@@ -773,30 +802,70 @@ function SearchBar({
     return () => document.removeEventListener("mousedown", h);
   }, []);
   const handleSelect = (r) => {
+    if (query.trim()) {
+      client.api.searchVector(query, 1).catch(() => {
+      });
+    }
+    ignoreNextQueryChange.current = true;
     setOpen(false);
     setQuery(r.product.name);
     onSelect == null ? void 0 : onSelect(r);
   };
+  const handleCommitSearch = () => {
+    if (!query.trim()) return;
+    client.api.searchVector(query, 1).catch(() => {
+    });
+    if (results.length > 0) {
+      handleSelect(results[0]);
+    }
+  };
   const showDrop = open && query.trim().length > 0;
   const customStyles = __spreadValues(__spreadValues(__spreadValues(__spreadValues(__spreadValues({}, (theme == null ? void 0 : theme.primaryColor) && { "--hsk-primary": theme.primaryColor }), (theme == null ? void 0 : theme.backgroundColor) && { "--hsk-bg": theme.backgroundColor }), (theme == null ? void 0 : theme.textColor) && { "--hsk-text": theme.textColor }), (theme == null ? void 0 : theme.fontFamily) && { "--hsk-font": theme.fontFamily }), (theme == null ? void 0 : theme.borderRadius) && { "--hsk-border-radius": theme.borderRadius });
-  return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: `hsk-sb-wrap ${classNames.root || ""} ${className || ""}`, ref: wrap, style: customStyles, children: [
+  return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: cn("hsk-sb-wrap", classNames.root, className), ref: wrap, style: customStyles, children: [
     /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "hsk-sb-icon", children: /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(SearchIcon, {}) }),
     /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
       "input",
       {
-        className: `hsk-sb-input ${classNames.input || ""} ${inputClassName || ""}`,
+        className: cn("hsk-sb-input", classNames.input, inputClassName),
         type: "text",
         value: query,
         placeholder,
         onChange: (e) => setQuery(e.target.value),
         onFocus: () => results.length > 0 && query.trim() && setOpen(true),
+        onKeyDown: (e) => {
+          if (e.key === "Enter") {
+            handleCommitSearch();
+          }
+        },
         autoComplete: "off",
         spellCheck: false
       }
     ),
-    showDrop && /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: `hsk-sb-drop ${classNames.dropdown || ""} ${dropdownClassName || ""}`, style: { position: "absolute" }, children: [
-      loading && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "hsk-sb-loading-bar" }),
-      results.length === 0 && !loading && /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "hsk-sb-empty", children: [
+    showDrop && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: cn("hsk-sb-drop", classNames.dropdown, dropdownClassName), style: { position: "absolute" }, children: loading || isDebouncing ? /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(import_jsx_runtime2.Fragment, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "hsk-sb-loading-bar" }),
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "hsk-sb-skeleton-row", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "hsk-sb-skeleton-icon" }),
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "hsk-sb-row-body", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "hsk-sb-skeleton-text1" }),
+          /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "hsk-sb-skeleton-text2" })
+        ] })
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "hsk-sb-skeleton-row", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "hsk-sb-skeleton-icon" }),
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "hsk-sb-row-body", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "hsk-sb-skeleton-text1", style: { width: "45%" } }),
+          /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "hsk-sb-skeleton-text2", style: { width: "25%" } })
+        ] })
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "hsk-sb-skeleton-row", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "hsk-sb-skeleton-icon" }),
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "hsk-sb-row-body", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "hsk-sb-skeleton-text1", style: { width: "70%" } }),
+          /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "hsk-sb-skeleton-text2", style: { width: "40%" } })
+        ] })
+      ] })
+    ] }) : /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(import_jsx_runtime2.Fragment, { children: [
+      results.length === 0 && /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "hsk-sb-empty", children: [
         "No results for \u201C",
         query,
         "\u201D"
@@ -815,7 +884,7 @@ function SearchBar({
         ) : /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
           "div",
           {
-            className: `hsk-sb-row hsk-sb-fade ${classNames.row || ""}`,
+            className: cn("hsk-sb-row hsk-sb-fade", classNames.row),
             style: { animationDelay: `${i * 18}ms` },
             onClick: () => handleSelect(r),
             children: [
@@ -829,7 +898,7 @@ function SearchBar({
           r.id
         );
       })
-    ] })
+    ] }) })
   ] });
 }
 
@@ -1044,14 +1113,14 @@ Question: ${q}`;
   return /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
     "div",
     {
-      className: `hsk-sp-backdrop ${classNames.backdrop || ""}`,
+      className: cn("hsk-sp-backdrop", classNames.backdrop),
       onClick: onClose,
       style: __spreadValues({
         backdropFilter: `blur(${blurVal})`,
         WebkitBackdropFilter: `blur(${blurVal})`,
         background: bg != null ? bg : void 0
       }, customStyles),
-      children: /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: `hsk-sp-card hsk-sp-fullscreen ${classNames.card || ""}`, onClick: (e) => e.stopPropagation(), children: [
+      children: /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: cn("hsk-sp-card hsk-sp-fullscreen", classNames.card), onClick: (e) => e.stopPropagation(), children: [
         /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "hsk-sp-header", children: [
           /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "hsk-sp-header-icon", style: { display: "flex", alignItems: "center" }, children: /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(SparkleIcon, {}) }),
           /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "hsk-sp-header-body", children: [
@@ -1128,7 +1197,7 @@ Question: ${q}`;
                   return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(
                     "div",
                     {
-                      className: `hsk-sp-item ${classNames.item || ""}`,
+                      className: cn("hsk-sp-item", classNames.item),
                       style: { animationDelay: `${i * 55}ms` },
                       children: [
                         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "hsk-sp-img-wrap", children: ((_c2 = r.product.images) == null ? void 0 : _c2[0]) ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("img", { src: r.product.images[0], alt: r.product.name }) : /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "hsk-sp-img-placeholder", children: "\u{1F6CD}" }) }),
@@ -1235,7 +1304,7 @@ function Sparkle({
     /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
       "button",
       {
-        className: `hsk-sp-btn ${classNames.button || ""} ${className || ""}`,
+        className: cn("hsk-sp-btn", classNames.button, className),
         onClick: () => setOpen(true),
         style: customStyles,
         title: "Find similar products",
@@ -1328,10 +1397,10 @@ function ChatWidget({
   return /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(
     "div",
     {
-      className: `hsk-chat-widget ${classNames.root || ""} ${className || ""}`,
+      className: cn("hsk-chat-widget", classNames.root, className),
       style: customStyles,
       children: [
-        /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: `hsk-chat-header ${classNames.header || ""}`, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: cn("hsk-chat-header", classNames.header), children: [
           /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: "hsk-chat-header-icon", children: /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(SparkleIcon2, {}) }),
           /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: "hsk-chat-title", children: title }),
           /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: "hsk-chat-badge", children: "AI" }),
@@ -1344,8 +1413,8 @@ function ChatWidget({
             /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { className: "hsk-chat-empty-suggestions", children: emptyStateSuggestions })
           ] }) : messages.map((msg, idx) => /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { children: [
             /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: `hsk-msg-row ${msg.role}`, children: [
-              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { className: `hsk-msg-avatar ${msg.role === "assistant" ? "ai" : "user"}`, children: msg.role === "assistant" ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(SparkleIcon2, {}) : "U" }),
-              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { className: `hsk-msg-bubble ${msg.role} ${classNames.messageBubble || ""}`, children: renderMarkdown(msg.content) })
+              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { className: cn("hsk-msg-avatar", msg.role === "assistant" ? "ai" : "user"), children: msg.role === "assistant" ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(SparkleIcon2, {}) : "U" }),
+              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { className: cn("hsk-msg-bubble", msg.role, classNames.messageBubble), children: renderMarkdown(msg.content) })
             ] }),
             msg.role === "assistant" && idx === messages.length - 1 && sources.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { className: "hsk-sources-container", children: /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { className: "hsk-sources", children: sources.map((src, si) => /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(SourceCard, { source: src, defaultCurrency, onSelect: onSelectSource }, si)) }) })
           ] }, idx)),
@@ -1372,7 +1441,7 @@ function ChatWidget({
             "textarea",
             {
               ref: textareaRef,
-              className: `hsk-chat-input ${classNames.input || ""}`,
+              className: cn("hsk-chat-input", classNames.input),
               value: input,
               onChange: handleInput,
               onKeyDown: handleKey,
@@ -1541,13 +1610,13 @@ function ChatModal({
   return /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
     "div",
     {
-      className: `hsk-cb-overlay ${classNames.overlay || ""}`,
+      className: cn("hsk-cb-overlay", classNames.overlay),
       onClick: onClose,
       style: __spreadValues(__spreadValues({
         backdropFilter: `blur(${blurVal})`,
         WebkitBackdropFilter: `blur(${blurVal})`
       }, backdropColor ? { background: backdropColor } : {}), customStyles),
-      children: /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: `hsk-cb-panel ${classNames.panel || ""}`, onClick: (e) => e.stopPropagation(), children: [
+      children: /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: cn("hsk-cb-panel", classNames.panel), onClick: (e) => e.stopPropagation(), children: [
         /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "hsk-cb-topbar", children: [
           /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "hsk-cb-topbar-left", children: [
             /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { className: "hsk-cb-topbar-icon", style: { display: "flex", alignItems: "center" }, children: /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(SparkleIcon3, {}) }),
@@ -1624,7 +1693,7 @@ function ChatModal({
               "textarea",
               {
                 ref: textareaRef,
-                className: `hsk-cb-textarea ${classNames.input || ""}`,
+                className: cn("hsk-cb-textarea", classNames.input),
                 value: input,
                 onChange: handleInput,
                 onKeyDown: handleKeyDown,
@@ -1637,7 +1706,7 @@ function ChatModal({
             /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
               "button",
               {
-                className: `hsk-cb-send ${classNames.sendButton || ""}`,
+                className: cn("hsk-cb-send", classNames.sendButton),
                 onClick: () => handleSend(),
                 disabled: !input.trim() || loading,
                 "aria-label": "Send message",
@@ -1674,7 +1743,7 @@ function AIChatButton({
     /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)(
       "button",
       {
-        className: `hsk-cb-btn ${classNames.button || ""} ${className || ""}`,
+        className: cn("hsk-cb-btn", classNames.button, className),
         onClick: () => setOpen(true),
         style: customStyles,
         "aria-label": "Open AI chat",
@@ -1710,7 +1779,7 @@ var import_jsx_runtime7 = require("react/jsx-runtime");
 function CartBadge({ className }) {
   const { cart } = useCart();
   if (!cart || cart.item_count === 0) return null;
-  return /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("span", { className: `hsk-cart-badge ${className || ""}`, children: cart.item_count });
+  return /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("span", { className: cn("hsk-cart-badge", className), children: cart.item_count });
 }
 
 // src/components/CartDrawer.tsx
@@ -1872,7 +1941,7 @@ function CartDrawer({
     /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { onClick: () => setOpen(true), style: { display: "inline-block" }, children: trigger || /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)(
       "button",
       {
-        className: `hsk-cart-trigger ${className || ""}`,
+        className: cn("hsk-cart-trigger", className),
         style: customStyles,
         "data-hsk-theme": hskThemeAttr,
         "aria-label": "Open cart",

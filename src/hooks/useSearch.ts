@@ -21,7 +21,7 @@ export function useSearch(): UseSearchReturn {
   const search = useCallback(async (query: string, limit = 8) => {
     if (!query.trim()) { setResults([]); setLoading(false); return; }
     const gen = ++genRef.current;
-    // No loading spinner for autocomplete — it's so fast it would just flicker
+    setLoading(true);
     setError(null);
     try {
       // searchAutocomplete = pure in-memory Trie, <1ms, no Upstash

@@ -154,6 +154,7 @@ declare class HuskelClient {
     private loadIngestedCache;
     private saveIngestedCache;
     constructor(config: HuskelConfig);
+    reRegister(): void;
     setShopperId(id: string | undefined): void;
     getShopperId(): string | undefined;
     getSessionId(): string;
@@ -243,7 +244,7 @@ declare function useCart(): {
 interface SearchBarProps {
     placeholder?: string;
     limit?: number;
-    /** Debounce in ms — default 80 for near-instant feel */
+    /** Debounce in ms — default 300 for smooth type-ahead */
     debounceMs?: number;
     onSelect?: (result: SearchResult) => void;
     className?: string;

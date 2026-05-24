@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearch } from '../hooks/useSearch';
 import { SearchResult, HuskelTheme } from '../types';
+import { cn } from '../utils/cn';
+import { useHuskelContext } from './HuskelProvider';
 
 export interface SearchBarProps {
   placeholder?: string;
   limit?: number;
-  /** Debounce in ms — default 80 for near-instant feel */
+  /** Debounce in ms — default 300 for smooth type-ahead */
   debounceMs?: number;
   onSelect?: (result: SearchResult) => void;
   className?: string;
@@ -32,7 +34,7 @@ const SearchIcon = () => (
 export function SearchBar({
   placeholder = 'Search products…',
   limit = 10,
-  debounceMs = 80,
+  debounceMs = 300,
   onSelect,
   className,
   inputClassName,
@@ -43,16 +45,32 @@ export function SearchBar({
 }: SearchBarProps) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
+  const [isDebouncing, setIsDebouncing] = useState(false);
   const { results, loading, search, clear } = useSearch();
+  const client = useHuskelContext();
   const timer = useRef<ReturnType<typeof setTimeout>>();
   const wrap = useRef<HTMLDivElement>(null);
+  const ignoreNextQueryChange = useRef(false);
 
   /* Debounce search — but keep stale results visible between calls */
   useEffect(() => {
+    if (ignoreNextQueryChange.current) {
+      ignoreNextQueryChange.current = false;
+      return;
+    }
     clearTimeout(timer.current);
-    if (!query.trim()) { clear(); setOpen(false); return; }
+    if (!query.trim()) {
+      clear();
+      setOpen(false);
+      setIsDebouncing(false);
+      return;
+    }
     setOpen(true);   // open immediately (stale results show while fetching)
-    timer.current = setTimeout(() => { search(query, limit); }, debounceMs);
+    setIsDebouncing(true);
+    timer.current = setTimeout(() => {
+      setIsDebouncing(false);
+      search(query, limit);
+    }, debounceMs);
     return () => clearTimeout(timer.current);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
@@ -67,9 +85,21 @@ export function SearchBar({
   }, []);
 
   const handleSelect = (r: SearchResult) => {
+    if (query.trim()) {
+      client.api.searchVector(query, 1).catch(() => {});
+    }
+    ignoreNextQueryChange.current = true;
     setOpen(false);
     setQuery(r.product.name);
     onSelect?.(r);
+  };
+
+  const handleCommitSearch = () => {
+    if (!query.trim()) return;
+    client.api.searchVector(query, 1).catch(() => {});
+    if (results.length > 0) {
+      handleSelect(results[0]);
+    }
   };
 
   const showDrop = open && query.trim().length > 0;
@@ -83,57 +113,90 @@ export function SearchBar({
   } as React.CSSProperties;
 
   return (
-    <div className={`hsk-sb-wrap ${classNames.root || ''} ${className || ''}`} ref={wrap} style={customStyles}>
+    <div className={cn("hsk-sb-wrap", classNames.root, className)} ref={wrap} style={customStyles}>
       <span className="hsk-sb-icon"><SearchIcon /></span>
       <input
-        className={`hsk-sb-input ${classNames.input || ''} ${inputClassName || ''}`}
+        className={cn("hsk-sb-input", classNames.input, inputClassName)}
         type="text"
         value={query}
         placeholder={placeholder}
         onChange={e => setQuery(e.target.value)}
         onFocus={() => results.length > 0 && query.trim() && setOpen(true)}
+        onKeyDown={e => {
+          if (e.key === 'Enter') {
+            handleCommitSearch();
+          }
+        }}
         autoComplete="off"
         spellCheck={false}
       />
       {showDrop && (
-        <div className={`hsk-sb-drop ${classNames.dropdown || ''} ${dropdownClassName || ''}`} style={{ position: 'absolute' }}>
-          {loading && <div className="hsk-sb-loading-bar" />}
-
-          {results.length === 0 && !loading && (
-            <div className="hsk-sb-empty">No results for &ldquo;{query}&rdquo;</div>
-          )}
-
-          {results.map((r, i) => (
-            renderResult ? (
-              <div
-                key={r.id}
-                onClick={() => handleSelect(r)}
-                className="hsk-sb-fade"
-                style={{ animationDelay: `${i * 18}ms` }}
-              >
-                {renderResult(r)}
-              </div>
-            ) : (
-              <div
-                key={r.id}
-                className={`hsk-sb-row hsk-sb-fade ${classNames.row || ''}`}
-                style={{ animationDelay: `${i * 18}ms` }}
-                onClick={() => handleSelect(r)}
-              >
-                <span className="hsk-sb-row-icon"><SearchIcon /></span>
+        <div className={cn("hsk-sb-drop", classNames.dropdown, dropdownClassName)} style={{ position: 'absolute' }}>
+          {loading || isDebouncing ? (
+            <>
+              <div className="hsk-sb-loading-bar" />
+              <div className="hsk-sb-skeleton-row">
+                <span className="hsk-sb-skeleton-icon" />
                 <div className="hsk-sb-row-body">
-                  <div className="hsk-sb-row-title">{r.product.name}</div>
-                  {(r.product.category || r.product.brand) && (
-                    <div className="hsk-sb-row-sub">
-                      {r.product.category ?? r.product.brand}
-                    </div>
-                  )}
+                  <div className="hsk-sb-skeleton-text1" />
+                  <div className="hsk-sb-skeleton-text2" />
                 </div>
               </div>
-            )
-          ))}
+              <div className="hsk-sb-skeleton-row">
+                <span className="hsk-sb-skeleton-icon" />
+                <div className="hsk-sb-row-body">
+                  <div className="hsk-sb-skeleton-text1" style={{ width: '45%' }} />
+                  <div className="hsk-sb-skeleton-text2" style={{ width: '25%' }} />
+                </div>
+              </div>
+              <div className="hsk-sb-skeleton-row">
+                <span className="hsk-sb-skeleton-icon" />
+                <div className="hsk-sb-row-body">
+                  <div className="hsk-sb-skeleton-text1" style={{ width: '70%' }} />
+                  <div className="hsk-sb-skeleton-text2" style={{ width: '40%' }} />
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              {results.length === 0 && (
+                <div className="hsk-sb-empty">No results for &ldquo;{query}&rdquo;</div>
+              )}
+
+              {results.map((r, i) => (
+                renderResult ? (
+                  <div
+                    key={r.id}
+                    onClick={() => handleSelect(r)}
+                    className="hsk-sb-fade"
+                    style={{ animationDelay: `${i * 18}ms` }}
+                  >
+                    {renderResult(r)}
+                  </div>
+                ) : (
+                  <div
+                    key={r.id}
+                    className={cn("hsk-sb-row hsk-sb-fade", classNames.row)}
+                    style={{ animationDelay: `${i * 18}ms` }}
+                    onClick={() => handleSelect(r)}
+                  >
+                    <span className="hsk-sb-row-icon"><SearchIcon /></span>
+                    <div className="hsk-sb-row-body">
+                      <div className="hsk-sb-row-title">{r.product.name}</div>
+                      {(r.product.category || r.product.brand) && (
+                        <div className="hsk-sb-row-sub">
+                          {r.product.category ?? r.product.brand}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              ))}
+            </>
+          )}
         </div>
       )}
     </div>
   );
 }
+

@@ -15,12 +15,19 @@ export function HuskelProvider({ siteId, apiUrl, apiToken, shopperId, children }
 
   if (!clientRef.current) {
     clientRef.current = new HuskelClient({ siteId, apiUrl, apiToken, shopperId });
+  } else {
+    clientRef.current.reRegister();
   }
 
   // Update shopperId dynamically when it changes (e.g., shopper logs in/out)
   useEffect(() => {
     clientRef.current?.setShopperId(shopperId);
   }, [shopperId]);
+
+  // Ensure active instance is registered on mount (handles development double-mounts and fast refresh)
+  useEffect(() => {
+    clientRef.current?.reRegister();
+  }, []);
 
   // Clean up the online listener and timers when the provider unmounts
   // (prevents leaks during hot module reload and React StrictMode double-mount)

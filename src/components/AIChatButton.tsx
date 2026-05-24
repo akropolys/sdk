@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { useChat, ChatMessage, ChatSource } from '../hooks/useChat';
 import { renderMarkdown } from '../utils/markdown';
 import { HuskelTheme } from '../types';
+import { cn } from '../utils/cn';
 
 
 export interface AIChatButtonProps {
@@ -226,7 +227,7 @@ function ChatModal({
 
   return (
     <div
-      className={`hsk-cb-overlay ${classNames.overlay || ''}`}
+      className={cn("hsk-cb-overlay", classNames.overlay)}
       onClick={onClose}
       style={{
         backdropFilter: `blur(${blurVal})`,
@@ -235,7 +236,7 @@ function ChatModal({
         ...customStyles,
       }}
     >
-      <div className={`hsk-cb-panel ${classNames.panel || ''}`} onClick={e => e.stopPropagation()}>
+      <div className={cn("hsk-cb-panel", classNames.panel)} onClick={e => e.stopPropagation()}>
 
         {/* Top bar */}
         <div className="hsk-cb-topbar">
@@ -354,7 +355,7 @@ function ChatModal({
           <div className="hsk-cb-input-box">
             <textarea
               ref={textareaRef}
-              className={`hsk-cb-textarea ${classNames.input || ''}`}
+              className={cn("hsk-cb-textarea", classNames.input)}
               value={input}
               onChange={handleInput}
               onKeyDown={handleKeyDown}
@@ -364,7 +365,7 @@ function ChatModal({
               autoFocus
             />
             <button
-              className={`hsk-cb-send ${classNames.sendButton || ''}`}
+              className={cn("hsk-cb-send", classNames.sendButton)}
               onClick={() => handleSend()}
               disabled={!input.trim() || loading}
               aria-label="Send message"
@@ -409,7 +410,7 @@ export function AIChatButton({
   return (
     <>
       <button
-        className={`hsk-cb-btn ${classNames.button || ''} ${className || ''}`}
+        className={cn("hsk-cb-btn", classNames.button, className)}
         onClick={() => setOpen(true)}
         style={customStyles}
         aria-label="Open AI chat"

@@ -4,6 +4,7 @@ import { useCart } from '../hooks/useCart';
 import { useHuskelContext } from './HuskelProvider';
 import { HuskelTheme } from '../types';
 import { CheckoutModal } from './CheckoutModal';
+import { cn } from '../utils/cn';
 
 export function CartDrawer({ 
   trigger, 
@@ -63,7 +64,7 @@ export function CartDrawer({
       <div onClick={() => setOpen(true)} style={{ display: 'inline-block' }}>
         {trigger || (
           <button 
-            className={`hsk-cart-trigger ${className || ''}`} 
+            className={cn("hsk-cart-trigger", className)} 
             style={customStyles}
             data-hsk-theme={hskThemeAttr}
             aria-label="Open cart"

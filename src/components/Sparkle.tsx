@@ -5,6 +5,7 @@ import { useChat } from '../hooks/useChat';
 import { useHuskelContext } from './HuskelProvider';
 import { renderMarkdown } from '../utils/markdown';
 import { SearchResult, Product, HuskelTheme } from '../types';
+import { cn } from '../utils/cn';
 
 export interface SparkleProps {
   productName: string;
@@ -178,7 +179,7 @@ function SparkleModal({
 
   return (
     <div
-      className={`hsk-sp-backdrop ${classNames.backdrop || ''}`}
+      className={cn("hsk-sp-backdrop", classNames.backdrop)}
       onClick={onClose}
       style={{
         backdropFilter: `blur(${blurVal})`,
@@ -187,7 +188,7 @@ function SparkleModal({
         ...customStyles,
       }}
     >
-      <div className={`hsk-sp-card hsk-sp-fullscreen ${classNames.card || ''}`} onClick={e => e.stopPropagation()}>
+      <div className={cn("hsk-sp-card hsk-sp-fullscreen", classNames.card)} onClick={e => e.stopPropagation()}>
         <div className="hsk-sp-header">
           <span className="hsk-sp-header-icon" style={{ display: 'flex', alignItems: 'center' }}>
             <SparkleIcon />
@@ -297,7 +298,7 @@ function SparkleModal({
                     return (
                       <div
                         key={r.id}
-                        className={`hsk-sp-item ${classNames.item || ''}`}
+                        className={cn("hsk-sp-item", classNames.item)}
                         style={{ animationDelay: `${i * 55}ms` }}
                       >
                         <div className="hsk-sp-img-wrap">
@@ -440,7 +441,7 @@ export function Sparkle({
   return (
     <>
       <button
-        className={`hsk-sp-btn ${classNames.button || ''} ${className || ''}`}
+        className={cn("hsk-sp-btn", classNames.button, className)}
         onClick={() => setOpen(true)}
         style={customStyles}
         title="Find similar products"

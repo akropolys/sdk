@@ -170,6 +170,10 @@ export class HuskelClient {
     }
   }
 
+  reRegister() {
+    instance = this;
+  }
+
   setShopperId(id: string | undefined) {
     this.shopperId = id;
   }

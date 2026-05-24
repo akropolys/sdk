@@ -1,6 +1,6 @@
 {
   "name": "@huskel/sdk",
-  "version": "0.4.2",
+  "version": "0.4.6",
   "description": "Huskel AI-powered search SDK for SPAs",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -43,5 +43,9 @@
     "onlyBuiltDependencies": [
       "esbuild"
     ]
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.6.0"
   }
 }

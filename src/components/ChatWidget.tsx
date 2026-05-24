@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useChat, ChatMessage, ChatSource } from '../hooks/useChat';
 import { renderMarkdown } from '../utils/markdown';
 import { HuskelTheme } from '../types';
+import { cn } from '../utils/cn';
 
 
 
@@ -109,10 +110,10 @@ export function ChatWidget({
 
   return (
     <div 
-      className={`hsk-chat-widget ${classNames.root || ''} ${className || ''}`} 
+      className={cn("hsk-chat-widget", classNames.root, className)} 
       style={customStyles}
     >
-      <div className={`hsk-chat-header ${classNames.header || ''}`}>
+      <div className={cn("hsk-chat-header", classNames.header)}>
         <span className="hsk-chat-header-icon"><SparkleIcon /></span>
         <span className="hsk-chat-title">{title}</span>
         <span className="hsk-chat-badge">AI</span>
@@ -132,10 +133,10 @@ export function ChatWidget({
           messages.map((msg, idx) => (
             <div key={idx}>
               <div className={`hsk-msg-row ${msg.role}`}>
-                <div className={`hsk-msg-avatar ${msg.role === 'assistant' ? 'ai' : 'user'}`}>
+                <div className={cn("hsk-msg-avatar", msg.role === 'assistant' ? 'ai' : 'user')}>
                   {msg.role === 'assistant' ? <SparkleIcon /> : 'U'}
                 </div>
-                <div className={`hsk-msg-bubble ${msg.role} ${classNames.messageBubble || ''}`}>
+                <div className={cn("hsk-msg-bubble", msg.role, classNames.messageBubble)}>
                   {renderMarkdown(msg.content)}
                 </div>
               </div>
@@ -179,7 +180,7 @@ export function ChatWidget({
       <div className="hsk-chat-input-area">
         <textarea
           ref={textareaRef}
-          className={`hsk-chat-input ${classNames.input || ''}`}
+          className={cn("hsk-chat-input", classNames.input)}
           value={input}
           onChange={handleInput}
           onKeyDown={handleKey}
