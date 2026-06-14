@@ -1,61 +1,12 @@
 import React from 'react';
 import type { ChatSource } from '@akropolys/sdk';
+import { resolveDisplayFields } from '@akropolys/sdk';
 
-interface ComparisonMatrixProps {
+export interface ComparisonMatrixProps {
   sources: ChatSource[];
   defaultCurrency?: string;
+  displayConfig?: Record<string, string>;
 }
-
-// ── Spec parsers ──────────────────────────────────────────────────────────────
-
-function extractSize(p: ChatSource): string | null {
-  const name = p.name;
-  const cat = (p.category || '').toLowerCase();
-  
-  // 1. If there's an explicit unit like " or inch(es)
-  const mExplicit = name.match(/(\d+(?:\.\d+)?)\s*(?:inch(?:es)?|["'″])/i);
-  if (mExplicit) {
-    return `${mExplicit[1]} inches`;
-  }
-  
-  // 2. If it is a TV and contains a 2-digit size (like 43 in Hisense 43A4K)
-  if (cat.includes('tv') || cat.includes('audio')) {
-    const mTv = name.match(/\b(\d{2})(?:[a-zA-Z]|\b)/);
-    if (mTv) {
-      const size = parseInt(mTv[1], 10);
-      if (size >= 24 && size <= 120) {
-        return `${size} inches`;
-      }
-    }
-  }
-  
-  return null;
-}
-function extractResolution(name: string): string | null {
-  if (/\b4K\b/i.test(name)) return '4K Ultra HD (2160p)';
-  if (/\bUHD\b/i.test(name)) return 'Ultra HD (2160p)';
-  if (/\b(?:Full HD|FHD|1080p)\b/i.test(name)) return 'Full HD (1080p)';
-  if (/\b(?:HD|720p)\b/i.test(name)) return 'HD (720p)';
-  return null;
-}
-function extractStorage(name: string): string | null {
-  const m = name.match(/(\d+)\s*GB(?!\s*RAM)/i);
-  return m ? `${m[1]} GB` : null;
-}
-function extractRAM(name: string): string | null {
-  const m = name.match(/(\d+)\s*GB\s*RAM/i);
-  return m ? `${m[1]} GB` : null;
-}
-function extractCamera(name: string): string | null {
-  const m = name.match(/(\d+)\s*MP/i);
-  return m ? `${m[1]} MP` : null;
-}
-function extractBattery(name: string): string | null {
-  const m = name.match(/(\d{3,5})\s*mAh/i);
-  return m ? `${m[1]} mAh` : null;
-}
-
-// ── Row types ─────────────────────────────────────────────────────────────────
 
 interface Row {
   label: string;
@@ -64,28 +15,55 @@ interface Row {
   bestIdx?: number;
 }
 
-function buildRows(products: ChatSource[], currency: string): Row[] {
-  const rows: Row[] = [];
+function normalizeKey(key: string): string {
+  let s = key.replace(/[_-]+/g, ' ');
+  s = s.replace(/([a-z])([A-Z])/g, '$1 $2');
+  return s.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
 
-  // Image preview
+function getBaseGroup(normalized: string): string {
+  const norm = normalized.toLowerCase().trim();
+  if (norm.startsWith('salary') || norm.startsWith('pay') || norm.startsWith('wage')) {
+    return 'Salary';
+  }
+  if (norm.startsWith('price') || norm.startsWith('cost') || norm.startsWith('rate')) {
+    return 'Price';
+  }
+  if (norm.startsWith('location') || norm.startsWith('address') || norm.startsWith('city')) {
+    return 'Location';
+  }
+  if (norm.startsWith('image') || norm.startsWith('photo') || norm.startsWith('pic') || norm.startsWith('thumb')) {
+    return 'Image';
+  }
+  if (norm.startsWith('title') || norm.startsWith('name') || norm.startsWith('label') || norm.startsWith('heading')) {
+    return 'Title';
+  }
+  return normalized;
+}
+
+function buildRows(products: ChatSource[], displayConfig?: Record<string, string>, defaultCurrency = 'KES'): Row[] {
+  const rows: Row[] = [];
+  const resolved = products.map(p => resolveDisplayFields(p.fields || p, displayConfig));
+
   rows.push({
     label: 'Product Preview',
-    values: products.map(s => s.image || null),
+    values: resolved.map(r => r.image || null),
     type: 'image',
   });
 
-  // Price (lowest = best)
-  const prices = products.map(s => {
-    const n = parseFloat(String(s.price ?? '').replace(/[^0-9.]/g, ''));
+  const prices = resolved.map(r => {
+    const n = parseFloat(String(r.price ?? '').replace(/[^0-9.]/g, ''));
     return isNaN(n) ? null : n;
   });
-  const priceLabels = products.map((s, i) => {
-    const c = s.currency || currency;
+
+  const priceLabels = products.map((p, i) => {
+    const c = p.fields?.currency || p.currency || defaultCurrency;
     const n = prices[i];
     return n !== null
       ? `${c} ${n.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
       : null;
   });
+
   const validPrices = prices.filter((p): p is number => p !== null);
   const minPrice = validPrices.length ? Math.min(...validPrices) : null;
   rows.push({
@@ -95,47 +73,76 @@ function buildRows(products: ChatSource[], currency: string): Row[] {
     bestIdx: minPrice !== null ? prices.indexOf(minPrice) : undefined,
   });
 
-  // Brand
-  const brands = products.map(s => s.brand || null);
-  if (brands.some(Boolean)) rows.push({ label: 'Brand', values: brands });
-
-  // Spec rows — only include if at least one product has a value
-  const specDefs: { label: string; fn: (p: ChatSource) => string | null; higherIsBetter?: boolean }[] = [
-    { label: 'Display Size', fn: extractSize },
-    { label: 'Resolution', fn: p => extractResolution(p.name), higherIsBetter: true },
-    { label: 'Storage', fn: p => extractStorage(p.name), higherIsBetter: true },
-    { label: 'RAM', fn: p => extractRAM(p.name), higherIsBetter: true },
-    { label: 'Camera', fn: p => extractCamera(p.name), higherIsBetter: true },
-    { label: 'Battery', fn: p => extractBattery(p.name), higherIsBetter: true },
-  ];
-
-  const resOrder = ['4K Ultra HD (2160p)', 'Ultra HD (2160p)', 'Full HD (1080p)', 'HD (720p)'];
-
-  for (const { label, fn, higherIsBetter } of specDefs) {
-    const vals = products.map(s => fn(s));
-    if (!vals.some(Boolean)) continue;
-
-    let bestIdx: number | undefined;
-    if (higherIsBetter && vals.filter(Boolean).length > 1) {
-      if (label === 'Resolution') {
-        bestIdx = vals.reduce((best, v, i) => {
-          const rank = resOrder.indexOf(v ?? '');
-          const bestRank = resOrder.indexOf(vals[best] ?? '');
-          return rank !== -1 && (bestRank === -1 || rank < bestRank) ? i : best;
-        }, 0);
-      } else {
-        // Numeric comparison — higher wins
-        const nums = vals.map(v => parseFloat((v ?? '').replace(/[^0-9.]/g, '')));
-        const max = Math.max(...nums.filter(n => !isNaN(n)));
-        bestIdx = nums.indexOf(max);
-      }
-    }
-    rows.push({ label, values: vals, bestIdx });
+  const keysToExclude = new Set<string>([
+    'url', 'fields', 'id', 'score', 'currency', 'status', 'indexed_at', 'indexedAt'
+  ]);
+  
+  if (displayConfig) {
+    Object.values(displayConfig).forEach(v => {
+      if (v) keysToExclude.add(v);
+    });
   }
 
-  // Availability
+  const commonKeys = [
+    'title', 'name', 'label', 'headline', 'subject', 'job_title', 'listing_title', 'common_name', 'product_name',
+    'image', 'images', 'thumbnail', 'photo', 'cover', 'featured_image', 'hero_image', 'listing_image', 'logo',
+    'price', 'cost', 'listingPrice', 'rate', 'fee', 'startingFrom',
+    'brand', 'category', 'location', 'type', 'variety', 'make'
+  ];
+  commonKeys.forEach(k => keysToExclude.add(k));
+
+  const allFieldKeys = new Set<string>();
+  products.forEach(p => {
+    const f = p.fields || p;
+    if (f) {
+      Object.keys(f).forEach(k => {
+        if (!keysToExclude.has(k)) {
+          allFieldKeys.add(k);
+        }
+      });
+    }
+  });
+
+  const groupedKeys = new Map<string, string[]>();
+  allFieldKeys.forEach(k => {
+    const norm = normalizeKey(k);
+    const base = getBaseGroup(norm);
+    if (!groupedKeys.has(base)) {
+      groupedKeys.set(base, []);
+    }
+    groupedKeys.get(base)!.push(k);
+  });
+
+  const sortedGroups = Array.from(groupedKeys.keys()).sort();
+
+  sortedGroups.forEach(group => {
+    const originalKeys = groupedKeys.get(group)!;
+    const values = products.map(p => {
+      const f = p.fields || p;
+      if (!f) return null;
+      for (const k of originalKeys) {
+        if (f[k] !== undefined && f[k] !== null) {
+          if (typeof f[k] === 'object') {
+            return JSON.stringify(f[k]);
+          }
+          return String(f[k]);
+        }
+      }
+      return null;
+    });
+
+    if (values.some(v => v !== null)) {
+      rows.push({
+        label: group,
+        values,
+        type: 'text',
+      });
+    }
+  });
+
   const avail = products.map(s => {
-    const a = s.availability ?? '';
+    const f = s.fields || s;
+    const a = (f.availability as string) || '';
     if (!a) return null;
     if (/in.?stock/i.test(a)) return 'In-Stock';
     if (/out.?of.?stock/i.test(a)) return 'Out of Stock';
@@ -145,14 +152,14 @@ function buildRows(products: ChatSource[], currency: string): Row[] {
     rows.push({ label: 'Availability', values: avail, type: 'availability' });
   }
 
-  // Category
-  const cats = products.map(s => s.category || null);
+  const cats = products.map(s => {
+    const f = s.fields || s;
+    return (f.category as string) || null;
+  });
   if (cats.some(Boolean)) rows.push({ label: 'Category', values: cats });
 
   return rows;
 }
-
-// ── Sub-renderers ─────────────────────────────────────────────────────────────
 
 function ImageCell({ value, name }: { value: string | null; name: string }) {
   if (!value) {
@@ -174,6 +181,7 @@ function ImageCell({ value, name }: { value: string | null; name: string }) {
   );
 }
 
+// Custom green pulsing ring on availability dot to match design guidelines
 function AvailabilityCell({ value }: { value: string | null }) {
   if (!value) return <span style={{ color: '#9ca3af' }}>—</span>;
   const inStock = /in.?stock/i.test(value);
@@ -190,21 +198,17 @@ function AvailabilityCell({ value }: { value: string | null }) {
   );
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
-
-export function ComparisonMatrix({ sources, defaultCurrency = 'KES' }: ComparisonMatrixProps) {
-  if (sources.length < 2) return null;
+export function ComparisonMatrix({ sources, defaultCurrency = 'KES', displayConfig }: ComparisonMatrixProps) {
+  if (!sources || sources.length < 2) return null;
 
   const products = sources.slice(0, 3);
-  const rows = buildRows(products, defaultCurrency);
-
+  const rows = buildRows(products, displayConfig, defaultCurrency);
   const colTemplate = `140px repeat(${products.length}, 1fr)`;
 
   const labelStyle: React.CSSProperties = {
     padding: '10px 12px',
     fontSize: 11,
     fontWeight: 700,
-    // Solid dark fallback — never inherit a muted ancestor color
     color: 'var(--hsk-text-muted, #4b5563)',
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
@@ -218,7 +222,6 @@ export function ComparisonMatrix({ sources, defaultCurrency = 'KES' }: Compariso
   const cellBase: React.CSSProperties = {
     padding: '10px 14px',
     fontSize: 13,
-    // Explicit color so cells are always readable regardless of parent theme
     color: 'var(--hsk-text, #111827)',
     borderBottom: '1px solid var(--hsk-border, rgba(0,0,0,0.07))',
     verticalAlign: 'middle',
@@ -238,33 +241,34 @@ export function ComparisonMatrix({ sources, defaultCurrency = 'KES' }: Compariso
         fontSize: 13,
       }}
     >
-      {/* ── Header ── */}
       <div style={{ display: 'grid', gridTemplateColumns: colTemplate, background: 'var(--hsk-surface2, #f9fafb)', borderBottom: '2px solid var(--hsk-border, rgba(0,0,0,0.09))' }}>
         <div style={{ ...labelStyle, borderBottom: 'none', color: 'var(--hsk-text, #111)', fontSize: 12 }}>Feature</div>
-        {products.map((p, i) => (
-          <a
-            key={i}
-            href={p.url || '#'}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              padding: '10px 14px',
-              fontSize: 12,
-              fontWeight: 700,
-              color: 'var(--hsk-primary, #16a34a)',
-              textDecoration: 'none',
-              lineHeight: 1.3,
-              borderLeft: i > 0 ? '1px solid var(--hsk-border, rgba(0,0,0,0.07))' : 'none',
-            }}
-          >
-            {p.name}
-          </a>
-        ))}
+        {products.map((p, i) => {
+          const { title } = resolveDisplayFields(p.fields || p, displayConfig);
+          return (
+            <a
+              key={i}
+              href={p.url || '#'}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                padding: '10px 14px',
+                fontSize: 12,
+                fontWeight: 700,
+                color: 'var(--hsk-primary, #16a34a)',
+                textDecoration: 'none',
+                lineHeight: 1.3,
+                borderLeft: i > 0 ? '1px solid var(--hsk-border, rgba(0,0,0,0.07))' : 'none',
+              }}
+            >
+              {title}
+            </a>
+          );
+        })}
       </div>
 
-      {/* ── Data rows ── */}
       {rows.map((row, rowIdx) => (
         <div
           key={rowIdx}
@@ -274,18 +278,17 @@ export function ComparisonMatrix({ sources, defaultCurrency = 'KES' }: Compariso
             background: rowIdx % 2 === 1 ? 'var(--hsk-surface2, rgba(0,0,0,0.015))' : 'transparent',
           }}
         >
-          {/* Label */}
           <div style={labelStyle}>{row.label}</div>
 
-          {/* Values */}
           {products.map((p, i) => {
             const val = row.values[i];
             const isBest = row.bestIdx === i && row.values.filter(Boolean).length > 1;
+            const { title } = resolveDisplayFields(p.fields || p, displayConfig);
 
             if (row.type === 'image') {
               return (
                 <div key={i} style={{ ...cellBase, justifyContent: 'center', padding: '12px', borderLeft: i > 0 ? '1px solid var(--hsk-border, rgba(0,0,0,0.07))' : 'none' }}>
-                  <ImageCell value={val} name={p.name} />
+                  <ImageCell value={val} name={title} />
                 </div>
               );
             }
@@ -302,11 +305,10 @@ export function ComparisonMatrix({ sources, defaultCurrency = 'KES' }: Compariso
                 style={{
                   ...cellBase,
                   fontWeight: isBest ? 700 : 400,
-                  // Always use a solid dark fallback — never 'inherit' which can be muted/invisible
                   color: isBest
                     ? 'var(--hsk-primary, #ea580c)'
                     : row.type === 'price'
-                      ? 'var(--hsk-text, #374151)'   // non-cheapest price: visible but not highlighted
+                      ? 'var(--hsk-text, #374151)'
                       : 'var(--hsk-text, #111827)',
                   borderLeft: i > 0 ? '1px solid var(--hsk-border, rgba(0,0,0,0.07))' : 'none',
                 }}
