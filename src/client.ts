@@ -1,7 +1,25 @@
-import { HuskelConfig, Product, RawProductInput } from './types';
-import { HuskelAPI } from './api';
+import { AkropolysConfig, Product, RawProductInput } from './types';
+import { AkropolysAPI } from './api';
+import { stableStringify } from './utils/stableStringify';
+
+declare const process: any;
+
+let defaultVertical: string = 'commerce';
+export function setSDKDefaultVertical(v: string) {
+  defaultVertical = v;
+}
 
 function getEnvVar(key: string): string | undefined {
+  if (key === 'NEXT_PUBLIC_HUSKEL_SITE_ID') {
+    try { return process.env.NEXT_PUBLIC_HUSKEL_SITE_ID; } catch { /* ignore */ }
+  }
+  if (key === 'NEXT_PUBLIC_HUSKEL_API_URL') {
+    try { return process.env.NEXT_PUBLIC_HUSKEL_API_URL; } catch { /* ignore */ }
+  }
+  if (key === 'NEXT_PUBLIC_HUSKEL_API_TOKEN') {
+    try { return process.env.NEXT_PUBLIC_HUSKEL_API_TOKEN; } catch { /* ignore */ }
+  }
+
   if (typeof globalThis !== 'undefined') {
     const g = globalThis as any;
     if (g.process && g.process.env) {
@@ -11,81 +29,85 @@ function getEnvVar(key: string): string | undefined {
   return undefined;
 }
 
-function mapRawProduct(input: RawProductInput): Product | null {
-  const name = input.name || input.title || input.productName || '';
-  
-  let price = '';
-  let priceNumeric: number | undefined = undefined;
+export interface DisplayFields {
+  title: string;
+  image?: string;
+  price?: string;
+  subtitle?: string;
+}
 
-  if (input.price !== undefined) {
-    if (typeof input.price === 'number') {
-      priceNumeric = input.price;
-      price = String(input.price);
-    } else {
-      price = input.price;
-      const num = parseFloat(input.price.replace(/[^0-9.]/g, ''));
-      priceNumeric = isNaN(num) ? undefined : num;
+export function resolveDisplayFields(fields: Record<string, any>, display?: import('./types').DisplayConfig): DisplayFields {
+  const titleKey = display?.cardTitle || '';
+  const imageKey = display?.cardImage || '';
+  const subtitleKey = display?.cardSubtitle || '';
+  const priceKey = display?.cardPrice || '';
+
+  // Title resolution with strict priority and URL checks
+  const commonTitleKeys = ['title', 'name', 'label', 'headline', 'subject', 'job_title', 'listing_title', 'common_name'];
+  let title = fields[titleKey] || '';
+  if (!title) {
+    for (const k of commonTitleKeys) {
+      if (typeof fields[k] === 'string' && fields[k].trim() !== '') {
+        title = fields[k];
+        break;
+      }
     }
   }
-  if (input.priceNumeric !== undefined) {
-    priceNumeric = input.priceNumeric;
+  if (!title) {
+    const fallbackStr = Object.values(fields).find(v => 
+      typeof v === 'string' && 
+      v.length >= 2 && 
+      v.length <= 80 && 
+      !v.startsWith('http://') && 
+      !v.startsWith('https://')
+    );
+    title = fallbackStr || 'Untitled';
   }
 
+  // Image resolution
+  const commonImageKeys = ['image', 'images', 'thumbnail', 'photo', 'cover', 'featured_image'];
+  let image = fields[imageKey] || undefined;
+  if (!image) {
+    for (const k of commonImageKeys) {
+      const v = fields[k];
+      if (typeof v === 'string' && v.startsWith('http')) {
+        image = v;
+        break;
+      } else if (Array.isArray(v) && typeof v[0] === 'string' && v[0].startsWith('http')) {
+        image = v[0];
+        break;
+      }
+    }
+  }
+
+  return {
+    title,
+    image,
+    price:    fields[priceKey] ?? fields.price ?? fields.cost ?? fields.listingPrice,
+    subtitle: fields[subtitleKey] ?? fields.brand ?? fields.category,
+  };
+}
+
+function mapRawProduct(input: RawProductInput): Product | null {
   let url = input.url || '';
   if (!url && typeof window !== 'undefined') {
     url = window.location.href;
   }
-
-  let slug = input.slug || input.id || input.productId || '';
-  if (!slug && url) {
-    slug = url.split('/').filter(Boolean).pop() || '';
-  }
-  if (!slug && name) {
-    slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-  }
-
-  let images: string[] = [];
-  if (input.images) {
-    images = input.images;
-  } else if (input.image) {
-    images = [input.image];
-  } else if (input.thumbnail) {
-    images = [input.thumbnail];
-  }
-
-  if (!name) {
-    console.warn('[Huskel] Validation warning: Product name/title is missing. Skipping:', input);
-    return null;
-  }
-  if (!price) {
-    console.warn('[Huskel] Validation warning: Product price is missing. Skipping:', input);
-    return null;
-  }
   if (!url) {
-    console.warn('[Huskel] Validation warning: Product URL is missing. Skipping:', input);
+    console.warn('[Akropolys] Validation warning: Product URL is missing. Skipping:', input);
     return null;
+  }
+
+  const fields: Record<string, any> = {};
+  for (const [k, v] of Object.entries(input)) {
+    if (k !== 'url' && v !== undefined) {
+      fields[k] = v;
+    }
   }
 
   return {
-    name,
-    price,
     url,
-    brand: input.brand,
-    description: input.description,
-    originalPrice: input.originalPrice,
-    discount: input.discount,
-    currency: input.currency ?? 'KES',
-    stock: input.stock,
-    availability: input.availability,
-    rating: input.rating,
-    reviewCount: input.reviewCount,
-    category: input.category,
-    subCategory: input.subCategory,
-    tags: input.tags,
-    images: images.length > 0 ? images : undefined,
-    specs: input.specs,
-    priceNumeric,
-    slug,
+    fields,
   };
 }
 
@@ -100,30 +122,34 @@ function generateUUID(): string {
   });
 }
 
-export class HuskelClient {
-  readonly api: HuskelAPI;
+export class AkropolysClient {
+  readonly api: AkropolysAPI;
+  readonly vertical: string;
+  readonly display?: import('./types').DisplayConfig;
   private ingestQueue: Product[] = [];
   private ingestTimer: ReturnType<typeof setTimeout> | null = null;
-  private ingestedUrls = new Set<string>();
+  private ingestedUrls = new Map<string, string>();
   private onlineHandler: (() => void) | null = null;
   private shopperId?: string;
   private sessionId: string = '';
+  private authLoading?: boolean;
   public onCheckout?: (cart: import('./types').CartPayload) => void;
+  public onError?: (error: import('./types').AkropolysError) => void;
 
-  private static INGEST_CACHE_KEY = 'huskel_ingested_v1';
+  private static INGEST_CACHE_KEY = 'akropolys_ingested_v3';
   private static INGEST_CACHE_TTL = 24 * 60 * 60 * 1000; // 24h
 
   private loadIngestedCache() {
     if (typeof window === 'undefined') return;
     try {
-      const raw = localStorage.getItem(HuskelClient.INGEST_CACHE_KEY);
+      const raw = localStorage.getItem(AkropolysClient.INGEST_CACHE_KEY);
       if (!raw) return;
-      const { ts, urls }: { ts: number; urls: string[] } = JSON.parse(raw);
-      if (Date.now() - ts > HuskelClient.INGEST_CACHE_TTL) {
-        localStorage.removeItem(HuskelClient.INGEST_CACHE_KEY);
+      const { ts, urlFingerprints }: { ts: number; urlFingerprints: [string, string][] } = JSON.parse(raw);
+      if (Date.now() - ts > AkropolysClient.INGEST_CACHE_TTL) {
+        localStorage.removeItem(AkropolysClient.INGEST_CACHE_KEY);
         return;
       }
-      this.ingestedUrls = new Set(urls);
+      this.ingestedUrls = new Map(urlFingerprints);
     } catch { /* ignore */ }
   }
 
@@ -131,39 +157,44 @@ export class HuskelClient {
     if (typeof window === 'undefined') return;
     try {
       localStorage.setItem(
-        HuskelClient.INGEST_CACHE_KEY,
-        JSON.stringify({ ts: Date.now(), urls: [...this.ingestedUrls] })
+        AkropolysClient.INGEST_CACHE_KEY,
+        JSON.stringify({ ts: Date.now(), urlFingerprints: Array.from(this.ingestedUrls.entries()) })
       );
     } catch { /* ignore */ }
   }
 
-  constructor(config: HuskelConfig) {
+  constructor(config: AkropolysConfig) {
     const siteId = config.siteId || getEnvVar('NEXT_PUBLIC_HUSKEL_SITE_ID') || '';
     const apiUrl = config.apiUrl || getEnvVar('NEXT_PUBLIC_HUSKEL_API_URL') || '';
     const apiToken = config.apiToken || getEnvVar('NEXT_PUBLIC_HUSKEL_API_TOKEN') || '';
 
     // Runtime validation — fail loudly so misconfiguration is never silent
-    if (!siteId) console.error('[Huskel] Missing siteId. Set it via <HuskelProvider siteId="..."> or NEXT_PUBLIC_HUSKEL_SITE_ID.');
-    if (!apiUrl) console.error('[Huskel] Missing apiUrl. Set it via <HuskelProvider apiUrl="..."> or NEXT_PUBLIC_HUSKEL_API_URL.');
-    if (!apiToken) console.error('[Huskel] Missing apiToken. Set it via <HuskelProvider apiToken="..."> or NEXT_PUBLIC_HUSKEL_API_TOKEN.');
+    if (!siteId) console.error('[Akropolys] Missing siteId. Set it via <AkropolysProvider siteId="..."> or NEXT_PUBLIC_HUSKEL_SITE_ID.');
+    if (!apiUrl) console.error('[Akropolys] Missing apiUrl. Set it via <AkropolysProvider apiUrl="..."> or NEXT_PUBLIC_HUSKEL_API_URL.');
+    if (!apiToken) console.error('[Akropolys] Missing apiToken. Set it via <AkropolysProvider apiToken="..."> or NEXT_PUBLIC_HUSKEL_API_TOKEN.');
 
     this.shopperId = config.shopperId;
+    this.authLoading = config.authLoading;
     this.onCheckout = config.onCheckout;
+    this.onError = config.onError;
+    this.vertical = config.vertical || defaultVertical;
+    this.display = config.display;
     this.initSession();
     this.loadIngestedCache();
 
-    this.api = new HuskelAPI(
+    this.api = new AkropolysAPI(
       apiUrl,
       siteId,
       apiToken,
       () => this.getShopperId(),
-      () => this.sessionId
+      () => this.sessionId,
+      this.vertical
     );
     instance = this;
 
     if (typeof window !== 'undefined') {
       this.onlineHandler = () => {
-        console.log('[Huskel] Connectivity restored, flushing queued ingestions.');
+        console.log('[Akropolys] Connectivity restored, flushing queued ingestions.');
         this.flushQueue();
       };
       window.addEventListener('online', this.onlineHandler);
@@ -176,6 +207,17 @@ export class HuskelClient {
 
   setShopperId(id: string | undefined) {
     this.shopperId = id;
+    if (!this.authLoading) {
+      this.flushQueue();
+    }
+  }
+
+  setAuthLoading(loading: boolean) {
+    const wasLoading = this.authLoading;
+    this.authLoading = loading;
+    if (wasLoading && !loading) {
+      this.flushQueue();
+    }
   }
 
   getShopperId(): string | undefined {
@@ -189,10 +231,10 @@ export class HuskelClient {
   private initSession() {
     if (typeof window !== 'undefined' && window.sessionStorage) {
       try {
-        let sid = window.sessionStorage.getItem('huskel_session_id');
+        let sid = window.sessionStorage.getItem('akropolys_session_id');
         if (!sid) {
           sid = generateUUID();
-          window.sessionStorage.setItem('huskel_session_id', sid);
+          window.sessionStorage.setItem('akropolys_session_id', sid);
         }
         this.sessionId = sid;
         return;
@@ -219,10 +261,11 @@ export class HuskelClient {
     const product = mapRawProduct(rawProduct);
     if (!product) return;
 
-    if (this.ingestedUrls.has(product.url)) {
-      return; // already indexed in this session or today — skip
+    const fingerprint = stableStringify(product);
+    if (this.ingestedUrls.get(product.url) === fingerprint) {
+      return; // already indexed in this session or today with same content — skip
     }
-    this.ingestedUrls.add(product.url);
+    this.ingestedUrls.set(product.url, fingerprint);
     this.saveIngestedCache();
 
     this.ingestQueue.push(product);
@@ -230,18 +273,21 @@ export class HuskelClient {
   }
 
   async queueIngestBatch(rawProducts: RawProductInput[]): Promise<void> {
+    let changed = false;
     rawProducts.forEach(p => {
       const product = mapRawProduct(p);
       if (!product) return;
 
-      if (this.ingestedUrls.has(product.url)) {
+      const fingerprint = stableStringify(product);
+      if (this.ingestedUrls.get(product.url) === fingerprint) {
         return;
       }
-      this.ingestedUrls.add(product.url);
+      this.ingestedUrls.set(product.url, fingerprint);
       this.ingestQueue.push(product);
+      changed = true;
     });
 
-    if (this.ingestQueue.length > 0) {
+    if (changed && this.ingestQueue.length > 0) {
       this.saveIngestedCache();
       this.scheduleFlush();
     }
@@ -258,8 +304,13 @@ export class HuskelClient {
     this.ingestTimer = null;
     if (this.ingestQueue.length === 0) return;
 
+    if (this.authLoading) {
+      console.log('[Akropolys] Authentication is loading. Deferring ingestion flush.');
+      return;
+    }
+
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      console.warn('[Huskel] Browser offline. Postponing ingestion.');
+      console.warn('[Akropolys] Browser offline. Postponing ingestion.');
       return;
     }
 
@@ -269,36 +320,49 @@ export class HuskelClient {
     try {
       await this.api.ingestBatch(batch);
     } catch (e: any) {
+      const akropolysError = {
+        status: e.status || 500,
+        message: e.message || 'Unknown network error'
+      };
+
+      if (this.onError) {
+        try {
+          this.onError(akropolysError);
+        } catch (err) {
+          console.error('[Akropolys] Error inside onError callback:', err);
+        }
+      }
+
       if (e.status && e.status >= 400 && e.status < 500) {
-        console.error('[Huskel] Ingestion discarded due to client error:', e.message);
+        console.error('[Akropolys] Ingestion discarded due to client error:', e.message);
         return;
       }
 
       // Re-queue and schedule another flush so items are not stuck forever
-      console.warn('[Huskel] Ingestion failed. Re-queuing to retry.', e);
+      console.warn('[Akropolys] Ingestion failed. Re-queuing to retry.', e);
       this.ingestQueue = [...batch, ...this.ingestQueue];
       this.scheduleFlush();
     }
   }
 }
 
-let instance: HuskelClient | null = null;
+let instance: AkropolysClient | null = null;
 
-export function initHuskel(config: HuskelConfig): HuskelClient {
-  instance = new HuskelClient(config);
+export function initAkropolys(config: AkropolysConfig): AkropolysClient {
+  instance = new AkropolysClient(config);
   return instance;
 }
 
-export function getHuskelClient(): HuskelClient {
+export function getAkropolysClient(): AkropolysClient {
   if (!instance) {
     const siteId = getEnvVar('NEXT_PUBLIC_HUSKEL_SITE_ID');
     const apiUrl = getEnvVar('NEXT_PUBLIC_HUSKEL_API_URL');
     const apiToken = getEnvVar('NEXT_PUBLIC_HUSKEL_API_TOKEN');
 
     if (siteId && apiUrl && apiToken) {
-      instance = new HuskelClient({ siteId, apiUrl, apiToken });
+      instance = new AkropolysClient({ siteId, apiUrl, apiToken });
     } else {
-      throw new Error('[Huskel] Call initHuskel() or set NEXT_PUBLIC_HUSKEL_* environment variables before using the client.');
+      throw new Error('[Akropolys] Call initAkropolys() or set NEXT_PUBLIC_HUSKEL_* environment variables before using the client.');
     }
   }
   return instance;

@@ -1,13 +1,14 @@
 import { useEffect, useRef } from 'react';
 import { RawProductInput } from '../types';
-import { getHuskelClient } from '../client';
+import { getAkropolysClient } from '../client';
+import { stableStringify } from '../utils/stableStringify';
 
 /**
  * usePageIngest — drop this into any product page component.
  * The moment a customer's browser renders the page, the product is
  * automatically captured and queued for ingestion into the vector index.
  *
- * No configuration needed beyond <HuskelProvider> in your layout.
+ * No configuration needed beyond <AkropolysProvider> in your layout.
  *
  * @example
  * // Product detail page — Next.js or React
@@ -23,25 +24,21 @@ import { getHuskelClient } from '../client';
  * }
  */
 export function usePageIngest(product: RawProductInput | null | undefined): void {
-  // Use url as the stable key — avoids re-ingesting on unrelated re-renders
-  const ingestedRef = useRef<string | null>(null);
+  const url = product?.url || (typeof window !== 'undefined' ? window.location.href : '');
+  const fingerprint = product ? stableStringify({ ...product, url }) : '';
+  const fingerprintRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!product) return;
 
-    // Resolve URL — falls back to window.location if not provided
-    const url =
-      product.url ||
-      (typeof window !== 'undefined' ? window.location.href : '');
-
-    // Guard: only ingest once per URL per component lifecycle
-    if (ingestedRef.current === url) return;
-    ingestedRef.current = url;
+    // Guard: only ingest once per content change per component lifecycle
+    if (fingerprintRef.current === fingerprint) return;
+    fingerprintRef.current = fingerprint;
 
     try {
-      getHuskelClient().queueIngest({ ...product, url });
+      getAkropolysClient().queueIngest({ ...product, url });
     } catch {
       // Client not initialised — silently skip
     }
-  }, [product?.url ?? product?.name]);
+  }, [fingerprint, url]);
 }

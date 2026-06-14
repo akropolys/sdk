@@ -1,51 +1,12 @@
 {
-  "name": "@huskel/sdk",
-  "version": "0.4.6",
-  "description": "Huskel AI-powered search SDK for SPAs",
-  "main": "dist/index.js",
-  "module": "dist/index.mjs",
-  "types": "dist/index.d.ts",
-  "style": "dist/index.css",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js"
-    },
-    "./styles.css": "./dist/index.css"
-  },
-  "files": [
-    "dist"
-  ],
+  "name": "akropolys-monorepo",
+  "private": true,
   "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch"
-  },
-  "peerDependencies": {
-    "react": ">=17",
-    "react-dom": ">=17"
-  },
-  "peerDependenciesMeta": {
-    "react": {
-      "optional": true
-    },
-    "react-dom": {
-      "optional": true
-    }
+    "build": "pnpm --filter \"*\" build",
+    "dev": "pnpm --filter \"*\" dev"
   },
   "devDependencies": {
-    "@types/react": "^18.0.0",
-    "@types/react-dom": "^19.2.3",
-    "tsup": "^8.0.0",
+    "@changesets/cli": "^2.31.0",
     "typescript": "^5.0.0"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild"
-    ]
-  },
-  "dependencies": {
-    "clsx": "^2.1.1",
-    "tailwind-merge": "^3.6.0"
   }
 }

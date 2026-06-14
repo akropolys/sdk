@@ -1,7 +1,11 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  entry: ['src/index.ts'],
+  entry: {
+    index: 'src/index.ts',
+    commerce: 'src/commerce.ts',
+    property: 'src/property.ts',
+  },
   format: ['cjs', 'esm'],
   dts: true,
   // Prepend the 'use client' directive to every output JS file so React client APIs work in Next.js

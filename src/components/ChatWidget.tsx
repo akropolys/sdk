@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useChat, ChatMessage, ChatSource } from '../hooks/useChat';
 import { renderMarkdown } from '../utils/markdown';
-import { HuskelTheme } from '../types';
+import { AkropolysTheme } from '../types';
 import { cn } from '../utils/cn';
+import { useAkropolysContext } from './AkropolysProvider';
+import { resolveDisplayFields } from '../client';
 
 
 
@@ -16,7 +18,7 @@ export interface ChatWidgetProps {
   className?: string;
   
   // Allow overriding styles via standard CSS variables
-  theme?: HuskelTheme;
+  theme?: AkropolysTheme;
   
   // Allow targeting specific elements with custom classes (e.g. Tailwind)
   classNames?: {
@@ -44,13 +46,15 @@ const ArrowUpIcon = () => (
 );
 
 function SourceCard({ source, defaultCurrency, onSelect }: { source: ChatSource; defaultCurrency: string; onSelect?: (s: ChatSource) => void }) {
+  const client = useAkropolysContext();
+  const { title, image, price } = resolveDisplayFields(source.fields || source, client?.display);
   return (
     <div className="hsk-source-card" onClick={() => onSelect?.(source)}>
-      {source.image && <img src={source.image} alt={source.name} className="hsk-source-img" />}
+      {image && <img src={image} alt={title} className="hsk-source-img" />}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div className="hsk-source-name">{source.name}</div>
-        {source.price && (
-          <div className="hsk-source-price">{source.currency ?? defaultCurrency} {source.price}</div>
+        <div className="hsk-source-name">{title}</div>
+        {price && (
+          <div className="hsk-source-price">{source.fields?.currency ?? source.currency ?? defaultCurrency} {price}</div>
         )}
       </div>
     </div>
@@ -156,8 +160,16 @@ export function ChatWidget({
         {loading && (
           <div className="hsk-msg-row">
             <div className="hsk-msg-avatar ai"><SparkleIcon /></div>
-            <div className="hsk-typing">
-              <div className="hsk-typing-dot" /><div className="hsk-typing-dot" /><div className="hsk-typing-dot" />
+            <div className="hsk-pending" role="status" aria-live="polite">
+              <div className="hsk-pending-glyph">
+                <span className="hsk-pending-ring" />
+                <span className="hsk-pending-dot" />
+              </div>
+              <div className="hsk-pending-text">
+                <span className="hsk-pending-step step-1">Searching catalog</span>
+                <span className="hsk-pending-step step-2">Reasoning</span>
+                <span className="hsk-pending-step step-3">Composing</span>
+              </div>
             </div>
           </div>
         )}

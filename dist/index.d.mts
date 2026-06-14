@@ -1,7 +1,7 @@
 import * as react_jsx_runtime from 'react/jsx-runtime';
 import React from 'react';
 
-interface Product {
+type Product<T extends Record<string, any> = Record<string, any>> = {
     name: string;
     price: string;
     url: string;
@@ -21,8 +21,9 @@ interface Product {
     specs?: Record<string, string>;
     priceNumeric?: number;
     slug?: string;
-}
-interface RawProductInput {
+    metadata?: Record<string, any>;
+} & T;
+type RawProductInput<T extends Record<string, any> = Record<string, any>> = {
     name?: string;
     title?: string;
     productName?: string;
@@ -48,7 +49,8 @@ interface RawProductInput {
     subCategory?: string;
     tags?: string[];
     specs?: Record<string, string>;
-}
+    metadata?: Record<string, any>;
+} & T;
 interface CartItem {
     id: string;
     cart_id: string;
@@ -78,7 +80,10 @@ interface HuskelConfig {
     apiUrl?: string;
     apiToken?: string;
     shopperId?: string;
+    vertical?: 'commerce' | 'property' | 'motor' | 'blog' | string;
     onCheckout?: (cart: CartPayload) => void;
+    onError?: (error: HuskelError) => void;
+    authLoading?: boolean;
 }
 interface SearchRequest {
     query: string;
@@ -117,7 +122,8 @@ declare class HuskelAPI {
     private apiToken;
     private getShopperId?;
     private getSessionId?;
-    constructor(apiUrl: string, siteId: string, apiToken: string, getShopperId?: (() => string | undefined) | undefined, getSessionId?: (() => string | undefined) | undefined);
+    private vertical?;
+    constructor(apiUrl: string, siteId: string, apiToken: string, getShopperId?: (() => string | undefined) | undefined, getSessionId?: (() => string | undefined) | undefined, vertical?: string | undefined);
     private post;
     ingest(product: Product): Promise<IngestResponse>;
     ingestBatch(products: Product[]): Promise<IngestResponse>;
@@ -130,25 +136,35 @@ declare class HuskelAPI {
     }>): Promise<{
         answer: string;
         sources: any[];
+        intent?: string;
         checkout?: CartPayload;
         action?: any;
     }>;
+    chatStream(query: string, history?: Array<{
+        role: 'user' | 'assistant';
+        content: string;
+    }>, signal?: AbortSignal): Promise<Response>;
     private buildHeaders;
     getCart(): Promise<CartPayload>;
     clearCart(): Promise<CartPayload>;
     checkoutCart(): Promise<CartPayload>;
     getCheckoutConfig(): Promise<any>;
+    initiatePayment(phoneNumber: string, email?: string, firstName?: string, lastName?: string): Promise<any>;
+    getPaymentStatus(ref: string): Promise<any>;
 }
 
 declare class HuskelClient {
     readonly api: HuskelAPI;
+    readonly vertical: string;
     private ingestQueue;
     private ingestTimer;
     private ingestedUrls;
     private onlineHandler;
     private shopperId?;
     private sessionId;
+    private authLoading?;
     onCheckout?: (cart: CartPayload) => void;
+    onError?: (error: HuskelError) => void;
     private static INGEST_CACHE_KEY;
     private static INGEST_CACHE_TTL;
     private loadIngestedCache;
@@ -156,6 +172,7 @@ declare class HuskelClient {
     constructor(config: HuskelConfig);
     reRegister(): void;
     setShopperId(id: string | undefined): void;
+    setAuthLoading(loading: boolean): void;
     getShopperId(): string | undefined;
     getSessionId(): string;
     private initSession;
@@ -183,12 +200,33 @@ interface UseSearchReturn {
 declare function useSearch(): UseSearchReturn;
 
 interface UseIngestReturn {
-    ingest: (product: RawProductInput) => Promise<void>;
-    ingestBatch: (products: RawProductInput[]) => Promise<void>;
-    loading: boolean;
-    error: string | null;
+    ingest: (product: RawProductInput) => void;
+    ingestBatch: (products: RawProductInput[]) => void;
+    /**
+     * @deprecated Ingest is fire-and-forget. This is always `false` and will be
+     * removed in the next major version. Remove it from your destructuring.
+     */
+    loading: false;
+    /**
+     * @deprecated Ingest is fire-and-forget. This is always `null` and will be
+     * removed in the next major version. Remove it from your destructuring.
+     */
+    error: null;
 }
 declare function useIngest(): UseIngestReturn;
+
+/**
+ * useListIngest — drop this into any catalog or list page.
+ * It automatically ingests all items in the array, using a built-in
+ * component-lifecycle ref guard to prevent duplicate calls during mounts.
+ *
+ * @example
+ * export function CategoryPage({ products }) {
+ *   useListIngest(products);
+ *   return <ProductGrid products={products} />;
+ * }
+ */
+declare function useListIngest(products: RawProductInput[] | null | undefined): void;
 
 /**
  * usePageIngest — drop this into any product page component.
@@ -215,6 +253,10 @@ declare function usePageIngest(product: RawProductInput | null | undefined): voi
 interface ChatMessage {
     role: 'user' | 'assistant';
     content: string;
+    /** Cart snapshot attached to assistant messages that mutated the cart */
+    cartSnapshot?: CartPayload;
+    /** The action type that triggered this message (for pill rendering) */
+    actionType?: string;
 }
 interface ChatSource {
     id?: string;
@@ -224,12 +266,18 @@ interface ChatSource {
     category?: string;
     url?: string;
     image?: string;
+    brand?: string;
+    availability?: string;
 }
 interface UseChatReturn {
     messages: ChatMessage[];
     sources: ChatSource[];
     loading: boolean;
+    /** True while real tokens are arriving from the server */
+    streaming: boolean;
     error: string | null;
+    lastAction: any | null;
+    lastIntent: string | null;
     send: (query: string, displayQuery?: string) => Promise<void>;
     reset: () => void;
 }
@@ -239,6 +287,19 @@ declare function useCart(): {
     cart: CartPayload | null;
     loading: boolean;
     fetchCart: () => Promise<void>;
+};
+
+interface UsePaymentPollingProps {
+    client: HuskelAPI;
+    merchantReference: string | null;
+    onSuccess?: () => void;
+    onFailure?: (errorMsg?: string) => void;
+    intervalMs?: number;
+    timeoutMs?: number;
+}
+declare function usePaymentPolling({ client, merchantReference, onSuccess, onFailure, intervalMs, timeoutMs, }: UsePaymentPollingProps): {
+    status: "IDLE" | "PENDING" | "COMPLETED" | "FAILED";
+    error: string | null;
 };
 
 interface SearchBarProps {
@@ -312,7 +373,7 @@ interface AIChatButtonProps {
     onSelectSource?: (source: ChatSource) => void;
     defaultCurrency?: string;
     chips?: string[];
-    theme?: HuskelTheme;
+    theme?: 'light' | 'dark' | HuskelTheme;
     classNames?: {
         button?: string;
         overlay?: string;
@@ -336,6 +397,7 @@ declare function CartDrawer({ trigger, className, theme }: {
 interface HuskelProviderProps extends HuskelConfig {
     children: React.ReactNode;
 }
-declare function HuskelProvider({ siteId, apiUrl, apiToken, shopperId, children }: HuskelProviderProps): react_jsx_runtime.JSX.Element;
+declare function HuskelProvider({ siteId, apiUrl, apiToken, shopperId, vertical, authLoading, onCheckout, onError, children }: HuskelProviderProps): react_jsx_runtime.JSX.Element;
+declare function useHuskelContext(): HuskelClient;
 
-export { AIChatButton, CartBadge, CartDrawer, type ChatMessage, type ChatSource, ChatWidget, HuskelAPI, HuskelClient, type HuskelConfig, type HuskelError, HuskelProvider, type IngestResponse, type Product, type RawProductInput, SearchBar, type SearchRequest, type SearchResponse, type SearchResult, Sparkle, getHuskelClient, initHuskel, useCart, useChat, useHuskel, useIngest, usePageIngest, useSearch };
+export { AIChatButton, CartBadge, CartDrawer, type ChatMessage, type ChatSource, ChatWidget, HuskelAPI, HuskelClient, type HuskelConfig, type HuskelError, HuskelProvider, type IngestResponse, type Product, type RawProductInput, SearchBar, type SearchRequest, type SearchResponse, type SearchResult, Sparkle, type UsePaymentPollingProps, getHuskelClient, initHuskel, useCart, useChat, useHuskel, useHuskelContext, useIngest, useListIngest, usePageIngest, usePaymentPolling, useSearch };

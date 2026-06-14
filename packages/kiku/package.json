@@ -1,0 +1,68 @@
+{
+  "name": "@akropolys/kiku",
+  "version": "1.5.8",
+  "description": "Kiku — plug-and-play React AI chat, search, and commerce UI components for Akropolys.",
+  "license": "MIT",
+  "keywords": [
+    "akropolys",
+    "kiku",
+    "ai",
+    "chat",
+    "search",
+    "react",
+    "ui",
+    "components",
+    "ecommerce",
+    "shopping-assistant",
+    "conversational-ui"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/akropolys/sdk.git"
+  },
+  "homepage": "https://akropolys.io",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "style": "dist/styles.css",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch"
+  },
+  "peerDependencies": {
+    "react": ">=17",
+    "react-dom": ">=17",
+    "@akropolys/sdk": "^1.5.8"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": false
+    },
+    "react-dom": {
+      "optional": false
+    }
+  },
+  "devDependencies": {
+    "@akropolys/sdk": "workspace:*",
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.6.0"
+  }
+}

@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useHuskelContext } from '../components/HuskelProvider';
+import { useAkropolysContext } from '../components/AkropolysProvider';
 import { CartPayload } from '../types';
 
 export function useCart() {
-  const client = useHuskelContext();
+  const client = useAkropolysContext();
   const [cart, setCart] = useState<CartPayload | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -16,7 +16,7 @@ export function useCart() {
       const res = await client.api.getCart();
       setCart(res);
     } catch (e) {
-      console.error('[Huskel] Failed to fetch cart', e);
+      console.error('[Akropolys] Failed to fetch cart', e);
     } finally {
       setLoading(false);
     }
@@ -33,8 +33,8 @@ export function useCart() {
       }
     };
     if (typeof window !== 'undefined') {
-      window.addEventListener('huskel:cart_updated', handleCartUpdate as EventListener);
-      return () => window.removeEventListener('huskel:cart_updated', handleCartUpdate as EventListener);
+      window.addEventListener('akropolys:cart_updated', handleCartUpdate as EventListener);
+      return () => window.removeEventListener('akropolys:cart_updated', handleCartUpdate as EventListener);
     }
   }, [fetchCart, shopperId]);
 

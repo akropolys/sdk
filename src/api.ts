@@ -1,10 +1,10 @@
-import { Product, SearchResponse, IngestResponse, HuskelError } from './types';
+import { Product, SearchResponse, IngestResponse, AkropolysError } from './types';
 
 const MAX_RETRIES = 3;
 const RETRY_DELAYS = [500, 1000, 2000]; // ms
 
 function log(level: 'info' | 'warn' | 'error', msg: string, data?: unknown) {
-  const prefix = '[Huskel]';
+  const prefix = '[Akropolys]';
   if (level === 'error') console.error(prefix, msg, data ?? '');
   else if (level === 'warn') console.warn(prefix, msg, data ?? '');
   else console.log(prefix, msg, data ?? '');
@@ -14,13 +14,14 @@ async function sleep(ms: number) {
   return new Promise(r => setTimeout(r, ms));
 }
 
-export class HuskelAPI {
+export class AkropolysAPI {
   constructor(
     private apiUrl: string,
     private siteId: string,
     private apiToken: string,
     private getShopperId?: () => string | undefined,
-    private getSessionId?: () => string | undefined
+    private getSessionId?: () => string | undefined,
+    private vertical?: string
   ) {}
 
   private async post<T>(path: string, body: unknown, attempt = 0): Promise<T> {
@@ -29,18 +30,25 @@ export class HuskelAPI {
     try {
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
-        'X-Huskel-Token': this.apiToken,
-        'X-Huskel-Site': this.siteId,
+        'X-Akropolys-Token': this.apiToken,
+        'X-Akropolys-Site': this.siteId,
       };
 
       const shopperId = this.getShopperId?.();
       if (shopperId) {
-        headers['X-Huskel-Shopper-Id'] = shopperId;
+        headers['X-Akropolys-Shopper-Id'] = shopperId;
       }
 
       const sessionId = this.getSessionId?.();
       if (sessionId) {
-        headers['X-Huskel-Session-Id'] = sessionId;
+        headers['X-Akropolys-Session-Id'] = sessionId;
+      }
+
+      if (typeof window !== 'undefined') {
+        const phone = localStorage.getItem('akropolys_user_phone');
+        if (phone) {
+          headers['X-Akropolys-Shopper-Phone'] = phone;
+        }
       }
 
       const res = await fetch(url, {
@@ -60,7 +68,7 @@ export class HuskelAPI {
         } catch {
           // keep original text
         }
-        const err: HuskelError = { status: res.status, message };
+        const err: AkropolysError = { status: res.status, message };
 
         // Don't retry 4xx — developer errors
         if (res.status >= 400 && res.status < 500) {
@@ -82,7 +90,7 @@ export class HuskelAPI {
       return res.json();
     } catch (e) {
       // Network error (offline, DNS, etc.)
-      if ((e as HuskelError).status === undefined) {
+      if ((e as AkropolysError).status === undefined) {
         if (attempt < MAX_RETRIES - 1) {
           log('warn', `${path} network error, retrying (${attempt + 1}/${MAX_RETRIES})...`);
           await sleep(RETRY_DELAYS[attempt]);
@@ -120,22 +128,85 @@ export class HuskelAPI {
   }
 
   // LLM chat — conversational search with history context.
-  async chat(query: string, history: Array<{ role: 'user' | 'assistant'; content: string }> = []): Promise<{ answer: string; sources: any[]; checkout?: import('./types').CartPayload; action?: any }> {
+  async chat(query: string, history: Array<{ role: 'user' | 'assistant'; content: string }> = []): Promise<{ answer: string; sources: any[]; intent?: string; checkout?: import('./types').CartPayload; action?: any }> {
     log('info', 'chat query', query);
-    return this.post('/chat', { query, siteId: this.siteId, history });
+    const path = !this.vertical || this.vertical === 'commerce' ? '/chat' : `/chat/${this.vertical}`;
+    return this.post(path, { query, siteId: this.siteId, history });
+  }
+
+  // Streaming variant — returns the raw fetch Response.
+  // The caller reads body as a ReadableStream of SSE frames.
+  async chatStream(query: string, history: Array<{ role: 'user' | 'assistant'; content: string }> = [], signal?: AbortSignal): Promise<Response> {
+    log('info', 'chatStream query', query);
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'X-Akropolys-Token': this.apiToken,
+      'X-Akropolys-Site': this.siteId,
+    };
+    const shopperId = this.getShopperId?.();
+    if (shopperId) headers['X-Akropolys-Shopper-Id'] = shopperId;
+    const sessionId = this.getSessionId?.();
+    if (sessionId) headers['X-Akropolys-Session-Id'] = sessionId;
+    if (typeof window !== 'undefined') {
+      const phone = localStorage.getItem('akropolys_user_phone');
+      if (phone) headers['X-Akropolys-Shopper-Phone'] = phone;
+    }
+    const path = !this.vertical || this.vertical === 'commerce' ? '/chat/stream' : `/chat/stream/${this.vertical}`;
+    const res = await fetch(`${this.apiUrl}${path}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ query, siteId: this.siteId, history }),
+      signal,
+    });
+    if (!res.ok || !res.body) {
+      throw new Error(`Stream request failed: ${res.status}`);
+    }
+    return res;
+  }
+
+  // Visual style-match search — "find a dress that matches my shoes"
+  // image: base64 data URI ("data:image/jpeg;base64,...") or a public image URL
+  // categoryHint: optional target category e.g. "dress", "curtains", "sofa"
+  async searchByImage(
+    image: string,
+    categoryHint?: string,
+    limit = 8
+  ): Promise<import('./types').VisualSearchResponse> {
+    log('info', 'searchByImage', categoryHint ?? 'no hint');
+    return this.post('/search/visual', {
+      siteId: this.siteId,
+      image,
+      category_hint: categoryHint,
+      limit,
+    });
+  }
+
+  // Free-form visual Q&A — "what is this product?" / "describe this item"
+  async analyzeImage(
+    image: string,
+    query?: string
+  ): Promise<{ answer: string }> {
+    log('info', 'analyzeImage query', query ?? '(describe)');
+    return this.post('/chat/vision', { siteId: this.siteId, image, query });
   }
 
   // --- Cart System ---
   private buildHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'X-Huskel-Token': this.apiToken,
-      'X-Huskel-Site': this.siteId,
+      'X-Akropolys-Token': this.apiToken,
+      'X-Akropolys-Site': this.siteId,
     };
     const shopperId = this.getShopperId?.();
-    if (shopperId) headers['X-Huskel-Shopper-Id'] = shopperId;
+    if (shopperId) headers['X-Akropolys-Shopper-Id'] = shopperId;
     const sessionId = this.getSessionId?.();
-    if (sessionId) headers['X-Huskel-Session-Id'] = sessionId;
+    if (sessionId) headers['X-Akropolys-Session-Id'] = sessionId;
+    if (typeof window !== 'undefined') {
+      const phone = localStorage.getItem('akropolys_user_phone');
+      if (phone) {
+        headers['X-Akropolys-Shopper-Phone'] = phone;
+      }
+    }
     return headers;
   }
 
@@ -173,5 +244,57 @@ export class HuskelAPI {
     });
     if (!res.ok) throw new Error('Failed to fetch checkout config');
     return res.json();
+  }
+
+  async initiatePayment(phoneNumber: string, email?: string, firstName?: string, lastName?: string): Promise<any> {
+    const res = await fetch(`${this.apiUrl}/payment/initiate`, {
+      method: 'POST',
+      headers: this.buildHeaders(),
+      body: JSON.stringify({
+        siteId: this.siteId,
+        phoneNumber,
+        email,
+        firstName,
+        lastName
+      })
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error('Failed to initiate payment: ' + errText);
+    }
+    return res.json();
+  }
+
+  async getPaymentStatus(ref: string): Promise<any> {
+    const res = await fetch(`${this.apiUrl}/payment/status?ref=${ref}`, {
+      method: 'GET',
+      headers: this.buildHeaders()
+    });
+    if (!res.ok) throw new Error('Failed to get payment status');
+    return res.json();
+  }
+
+  // Visual style-match search — "find a dress that matches my shoes"
+  // image: base64 data URI ("data:image/jpeg;base64,...") or public image URL
+  // categoryHint: optional target category e.g. "dress", "curtains"
+  async searchByImage(
+    image: string,
+    categoryHint?: string,
+    limit = 8
+  ): Promise<import('./types').VisualSearchResponse> {
+    return this.post('/search/visual', {
+      siteId: this.siteId,
+      image,
+      category_hint: categoryHint,
+      limit,
+    });
+  }
+
+  // Free-form visual Q&A — "what is this product?"
+  async analyzeImage(
+    image: string,
+    query?: string
+  ): Promise<{ answer: string }> {
+    return this.post('/chat/vision', { siteId: this.siteId, image, query });
   }
 }

@@ -1,0 +1,71 @@
+{
+  "name": "@akropolys/sdk",
+  "version": "1.5.8",
+  "description": "Akropolys — headless AI search, chat, and commerce SDK. Event-driven streaming via KikuStream. Works with any UI or framework.",
+  "license": "MIT",
+  "keywords": [
+    "akropolys",
+    "kiku",
+    "ai",
+    "search",
+    "chat",
+    "ecommerce",
+    "headless",
+    "sdk",
+    "streaming",
+    "react",
+    "nextjs",
+    "vector-search"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/akropolys/sdk.git"
+  },
+  "homepage": "https://akropolys.io",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./commerce": {
+      "types": "./dist/commerce.d.ts",
+      "import": "./dist/commerce.mjs",
+      "require": "./dist/commerce.js"
+    },
+    "./property": {
+      "types": "./dist/property.d.ts",
+      "import": "./dist/property.mjs",
+      "require": "./dist/property.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch"
+  },
+  "peerDependencies": {
+    "react": ">=17",
+    "react-dom": ">=17"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0"
+  }
+}

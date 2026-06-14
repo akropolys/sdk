@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useCart } from '../hooks/useCart';
-import { useHuskelContext } from './HuskelProvider';
-import { HuskelTheme } from '../types';
+import { useAkropolysContext } from './AkropolysProvider';
+import { AkropolysTheme } from '../types';
 import { CheckoutModal } from './CheckoutModal';
 import { cn } from '../utils/cn';
 
@@ -13,13 +13,13 @@ export function CartDrawer({
 }: { 
   trigger?: React.ReactNode, 
   className?: string,
-  theme?: 'light' | 'dark' | HuskelTheme 
+  theme?: 'light' | 'dark' | AkropolysTheme 
 }) {
   const { cart, loading } = useCart();
   const [open, setOpen] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const client = useHuskelContext();
+  const client = useAkropolysContext();
 
   useEffect(() => {
     setMounted(true);
@@ -27,9 +27,9 @@ export function CartDrawer({
       setShowCheckout(true);
       setOpen(false);
     };
-    window.addEventListener('huskel:trigger_checkout', handleTriggerCheckout);
+    window.addEventListener('akropolys:trigger_checkout', handleTriggerCheckout);
     return () => {
-      window.removeEventListener('huskel:trigger_checkout', handleTriggerCheckout);
+      window.removeEventListener('akropolys:trigger_checkout', handleTriggerCheckout);
     };
   }, []);
 
@@ -45,6 +45,15 @@ export function CartDrawer({
 
   const handleCheckout = async () => {
     if (!cart || cart.items.length === 0) return;
+    
+    const event = new CustomEvent('akropolys:trigger_checkout', { cancelable: true });
+    window.dispatchEvent(event);
+    
+    if (event.defaultPrevented) {
+      setOpen(false);
+      return;
+    }
+    
     setShowCheckout(true);
   };
 
@@ -61,25 +70,28 @@ export function CartDrawer({
 
   return (
     <>
-      <div onClick={() => setOpen(true)} style={{ display: 'inline-block' }}>
-        {trigger || (
-          <button 
-            className={cn("hsk-cart-trigger", className)} 
-            style={customStyles}
-            data-hsk-theme={hskThemeAttr}
-            aria-label="Open cart"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="9" cy="21" r="1"></circle>
-              <circle cx="20" cy="21" r="1"></circle>
-              <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
-            </svg>
-            {cart && cart.item_count > 0 ? (
-              <span className="hsk-cart-trigger-badge">{cart.item_count}</span>
-            ) : null}
-          </button>
-        )}
-      </div>
+      {trigger ? (
+        <div onClick={() => setOpen(true)} style={{ display: 'inline-block' }}>
+          {trigger}
+        </div>
+      ) : (
+        <button 
+          onClick={() => setOpen(true)}
+          className={cn("hsk-cart-trigger", className)} 
+          style={customStyles}
+          data-hsk-theme={hskThemeAttr}
+          aria-label="Open cart"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="9" cy="21" r="1"></circle>
+            <circle cx="20" cy="21" r="1"></circle>
+            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+          </svg>
+          {cart && cart.item_count > 0 ? (
+            <span className="hsk-cart-trigger-badge">{cart.item_count}</span>
+          ) : null}
+        </button>
+      )}
       
       {open && mounted && createPortal(
         <div 

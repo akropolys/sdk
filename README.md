@@ -1,13 +1,13 @@
-# @huskel/sdk
+# @akropolys/sdk
 
 AI-powered vector search for any storefront. Your customers browse → products index automatically. Zero scraping, zero manual uploads.
 
 ## Install
 
 ```bash
-npm install @huskel/sdk
+npm install @akropolys/sdk
 # or
-pnpm add @huskel/sdk
+pnpm add @akropolys/sdk
 ```
 
 ---
@@ -17,43 +17,59 @@ pnpm add @huskel/sdk
 
 Next.js App Router uses **Server Components** by default. The SDK is client-only, so follow this pattern:
 
-### 1. Create a client provider wrapper
+### 1. Enable Package Transpilation (CRITICAL)
+
+In your `next.config.ts` (or `next.config.js`), you must add `@akropolys/sdk` to `transpilePackages` to ensure Next.js can transpile the SDK components properly:
+
+```typescript
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
+  transpilePackages: ["@akropolys/sdk"],
+};
+
+export default nextConfig;
+```
+
+*Note: Without this, importing SDK UI components like `SearchBar` will fail during compilation.*
+
+### 2. Create a client provider wrapper
 
 ```tsx
-// app/components/HuskelClientProvider.tsx
+// app/components/AkropolysClientProvider.tsx
 'use client';
 
-import { HuskelProvider } from '@huskel/sdk';
+import { AkropolysProvider } from '@akropolys/sdk';
 
-export default function HuskelClientProvider({
+export default function AkropolysClientProvider({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <HuskelProvider>{children}</HuskelProvider>;
+  return <AkropolysProvider>{children}</AkropolysProvider>;
 }
 ```
 
-### 2. Add it to your root layout
+### 3. Add it to your root layout
 
 ```tsx
 // app/layout.tsx  ← this is a Server Component, no 'use client' needed
-import HuskelClientProvider from './components/HuskelClientProvider';
+import AkropolysClientProvider from './components/AkropolysClientProvider';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body>
-        <HuskelClientProvider>
+        <AkropolysClientProvider>
           {children}
-        </HuskelClientProvider>
+        </AkropolysClientProvider>
       </body>
     </html>
   );
 }
 ```
 
-### 3. Auto-ingest on product pages
+### 4. Auto-ingest on product pages
 
 ```tsx
 // app/products/[slug]/page.tsx
@@ -61,7 +77,7 @@ import { getProduct } from '@/lib/db'; // your own data fetching
 
 // ProductView is a Client Component — handles ingestion
 'use client';
-import { usePageIngest } from '@huskel/sdk';
+import { usePageIngest } from '@akropolys/sdk';
 
 export function ProductView({ product }) {
   // One line — fires automatically when the customer's browser loads the page
@@ -81,12 +97,12 @@ export function ProductView({ product }) {
 > **Why a separate client component?**  
 > `usePageIngest` uses `useEffect` which runs only in the browser. Server Components can't call hooks. The wrapper pattern keeps your data-fetching in Server Components (fast, cached) while the SDK fires client-side.
 
-### 4. Add the search bar
+### 5. Add the search bar
 
 ```tsx
 // app/components/Header.tsx
 'use client';
-import { SearchBar } from '@huskel/sdk';
+import { SearchBar } from '@akropolys/sdk';
 import { useRouter } from 'next/navigation';
 
 export function Header() {
@@ -110,15 +126,15 @@ With a standard SPA, everything is already a client component. Much simpler:
 
 ```tsx
 // src/main.tsx or src/App.tsx
-import { HuskelProvider } from '@huskel/sdk';
+import { AkropolysProvider } from '@akropolys/sdk';
 
 function App() {
   return (
-    <HuskelProvider>
+    <AkropolysProvider>
       <Router>
         <Routes />
       </Router>
-    </HuskelProvider>
+    </AkropolysProvider>
   );
 }
 ```
@@ -127,7 +143,7 @@ function App() {
 
 ```tsx
 // src/pages/ProductPage.tsx
-import { usePageIngest } from '@huskel/sdk';
+import { usePageIngest } from '@akropolys/sdk';
 
 export function ProductPage({ product }) {
   usePageIngest({
@@ -145,7 +161,7 @@ export function ProductPage({ product }) {
 ### 3. Add search
 
 ```tsx
-import { SearchBar } from '@huskel/sdk';
+import { SearchBar } from '@akropolys/sdk';
 
 <SearchBar onSelect={(result) => navigate(result.product.url)} />
 ```
@@ -154,28 +170,23 @@ import { SearchBar } from '@huskel/sdk';
 
 ## Batch ingest (listing pages)
 
-When rendering a grid of products, ingest them all at once:
+When rendering a catalog or grid of products, use the `useListIngest` hook. It handles React render cycles, deduplication, and component lifecycles internally:
 
 ```tsx
 'use client';
-import { useIngest } from '@huskel/sdk';
-import { useEffect } from 'react';
+import { useListIngest } from '@akropolys/sdk';
 
 export function ProductGrid({ products }) {
-  const { ingestBatch } = useIngest();
-
-  useEffect(() => {
-    ingestBatch(
-      products.map((p) => ({
-        name: p.title,
-        price: p.price,
-        url: `/products/${p.slug}`,
-        images: [p.thumbnail],
-        category: p.category,
-        currency: 'KES',
-      }))
-    );
-  }, [products]);
+  useListIngest(
+    products.map((p) => ({
+      name: p.title,
+      price: p.price,
+      url: `/products/${p.slug}`,
+      images: [p.thumbnail],
+      category: p.category,
+      currency: 'KES',
+    }))
+  );
 
   return <ul>{/* render cards */}</ul>;
 }
@@ -187,11 +198,25 @@ export function ProductGrid({ products }) {
 
 | Export | Type | Description |
 |--------|------|-------------|
-| `HuskelProvider` | Component | Wraps your app. Reads env vars automatically. |
-| `usePageIngest(product)` | Hook | Ingest one product. Call on any product detail page. |
-| `useIngest()` | Hook | Returns `{ ingest, ingestBatch }` for manual control. |
+| `AkropolysProvider` | Component | Wraps your app. Accepts config, handles lifecycle. |
+| `usePageIngest(product)` | Hook | Ingest one product automatically on page mount. |
+| `useListIngest(products)` | Hook | Batch ingest products. Handles mounting lifecycle & caching. |
+| `useIngest()` | Hook | Returns `{ ingest, ingestBatch }` with built-in cache deduplication. |
 | `useSearch()` | Hook | Returns `{ search, results, loading }` for headless search. |
 | `SearchBar` | Component | Plug-and-play autocomplete search UI. |
 | `Sparkle` | Component | "Similar products" button powered by vector similarity. |
-| `getHuskelClient()` | Function | Get the singleton client instance imperatively. |
-| `initHuskel(config)` | Function | Initialize manually (non-React environments). |
+| `getAkropolysClient()` | Function | Get the singleton client instance imperatively. |
+| `initAkropolys(config)` | Function | Initialize manually (non-React environments). |
+
+### AkropolysProvider Configuration
+
+You can pass the following properties to `<AkropolysProvider>` (or set their corresponding environment variables):
+
+| Property | Environment Variable | Type | Description |
+|---|---|---|---|
+| `siteId` | `NEXT_PUBLIC_HUSKEL_SITE_ID` | `string` | Unique site identifier. |
+| `apiUrl` | `NEXT_PUBLIC_HUSKEL_API_URL` | `string` | The endpoint of the Akropolys backend. |
+| `apiToken` | `NEXT_PUBLIC_HUSKEL_API_TOKEN` | `string` | API access token. |
+| `shopperId` | - | `string` | Current customer's user ID. Set dynamically to sync search preferences. |
+| `authLoading` | - | `boolean` | Set to `true` while auth resolves (e.g. `!user` or `!isLoaded` in Clerk) to buffer/hold early ingests, avoiding guest session tagging. |
+| `onError` | - | `(error: AkropolysError) => void` | Event handler called when search or ingestion fails, or on initialization errors. |

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearch } from '../hooks/useSearch';
-import { SearchResult, HuskelTheme } from '../types';
+import { SearchResult, AkropolysTheme } from '../types';
 import { cn } from '../utils/cn';
-import { useHuskelContext } from './HuskelProvider';
+import { useAkropolysContext } from './AkropolysProvider';
 
 export interface SearchBarProps {
   placeholder?: string;
@@ -14,7 +14,7 @@ export interface SearchBarProps {
   inputClassName?: string;
   dropdownClassName?: string;
   renderResult?: (result: SearchResult) => React.ReactNode;
-  theme?: HuskelTheme;
+  theme?: AkropolysTheme;
   classNames?: {
     root?: string;
     input?: string;
@@ -47,7 +47,7 @@ export function SearchBar({
   const [open, setOpen] = useState(false);
   const [isDebouncing, setIsDebouncing] = useState(false);
   const { results, loading, search, clear } = useSearch();
-  const client = useHuskelContext();
+  const client = useAkropolysContext();
   const timer = useRef<ReturnType<typeof setTimeout>>();
   const wrap = useRef<HTMLDivElement>(null);
   const ignoreNextQueryChange = useRef(false);
@@ -132,9 +132,10 @@ export function SearchBar({
       />
       {showDrop && (
         <div className={cn("hsk-sb-drop", classNames.dropdown, dropdownClassName)} style={{ position: 'absolute' }}>
-          {loading || isDebouncing ? (
+          {(loading || isDebouncing) && <div className="hsk-sb-loading-bar" />}
+
+          {(loading || isDebouncing) && results.length === 0 ? (
             <>
-              <div className="hsk-sb-loading-bar" />
               <div className="hsk-sb-skeleton-row">
                 <span className="hsk-sb-skeleton-icon" />
                 <div className="hsk-sb-row-body">
@@ -149,17 +150,10 @@ export function SearchBar({
                   <div className="hsk-sb-skeleton-text2" style={{ width: '25%' }} />
                 </div>
               </div>
-              <div className="hsk-sb-skeleton-row">
-                <span className="hsk-sb-skeleton-icon" />
-                <div className="hsk-sb-row-body">
-                  <div className="hsk-sb-skeleton-text1" style={{ width: '70%' }} />
-                  <div className="hsk-sb-skeleton-text2" style={{ width: '40%' }} />
-                </div>
-              </div>
             </>
           ) : (
             <>
-              {results.length === 0 && (
+              {results.length === 0 && !loading && !isDebouncing && (
                 <div className="hsk-sb-empty">No results for &ldquo;{query}&rdquo;</div>
               )}
 

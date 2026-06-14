@@ -1,0 +1,27 @@
+{
+  "name": "@akropolys/mcp",
+  "version": "1.5.8",
+  "description": "Akropolys MCP Server — Omni-vertical dynamic proxy server",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "bin": {
+    "akropolys-mcp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.6.0",
+    "pg": "^8.11.3",
+    "redis": "^4.6.13",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/pg": "^8.11.2",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0"
+  }
+}

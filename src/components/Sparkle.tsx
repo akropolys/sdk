@@ -2,9 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearch } from '../hooks/useSearch';
 import { useChat } from '../hooks/useChat';
-import { useHuskelContext } from './HuskelProvider';
+import { useAkropolysContext } from './AkropolysProvider';
 import { renderMarkdown } from '../utils/markdown';
-import { SearchResult, Product, HuskelTheme } from '../types';
+import { SearchResult, Product, AkropolysTheme } from '../types';
 import { cn } from '../utils/cn';
 
 export interface SparkleProps {
@@ -19,7 +19,7 @@ export interface SparkleProps {
   className?: string;
   /** Called when user clicks a result — return false to prevent default navigation */
   onNavigate?: (result: SearchResult) => boolean | void;
-  theme?: HuskelTheme;
+  theme?: AkropolysTheme;
   classNames?: {
     button?: string;
     backdrop?: string;
@@ -29,9 +29,60 @@ export interface SparkleProps {
   product?: Product;
 }
 
-const SparkleIcon = ({ className }: { className?: string }) => (
-  <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+const SparkleIcon = ({ className, size = 16 }: { className?: string; size?: number }) => (
+  <svg
+    className={cn("hsk-brand-a", className)}
+    width={size}
+    height={size}
+    viewBox="0 0 28 30"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    aria-label="Akropolys"
+  >
+    {/* Left leg: elegant thin stroke */}
+    <path
+      d="M14.5 4.5 L6.5 25"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+    />
+    {/* Right leg: bold ancient serif thick stroke */}
+    <path
+      d="M14.5 4.5 L22.5 25"
+      stroke="currentColor"
+      strokeWidth="4.2"
+      strokeLinecap="round"
+    />
+    {/* Crossbar */}
+    <path
+      d="M9.5 17 H19.5"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+    {/* Left base serif */}
+    <path
+      d="M3 25 H10"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+    {/* Right base serif */}
+    <path
+      d="M19 25 H26"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+    />
+    {/* Smooth breathing mark (spiritus lenis) at top-left — animated */}
+    <path
+      d="M8.5 2.5 C10 2.5, 11 3.5, 11 5 C11 7, 8.5 8.5, 7.5 9.5"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      fill="none"
+      className="hsk-akr-breath"
+    />
   </svg>
 );
 
@@ -84,12 +135,15 @@ function SparkleModal({
   classNames = {},
   product: initialProduct,
 }: ModalProps) {
-  const client = useHuskelContext();
+  const client = useAkropolysContext();
   const [fetchedProduct, setFetchedProduct] = useState<Product | null>(null);
   const displayProduct = initialProduct || fetchedProduct;
-  const { results, loading: searchLoading, search } = useSearch();
+  const { results, loading: searchLoading, search } = useSearch({ type: 'vector' });
   const { messages, sources, loading: chatLoading, error: chatError, send } = useChat();
   const [chatInput, setChatInput] = useState('');
+  const [isMobile, setIsMobile] = useState(false);
+  const [showSpecs, setShowSpecs] = useState(false);
+  const [collapseSimilar, setCollapseSimilar] = useState(false);
   const chatBottomRef = useRef<HTMLDivElement>(null);
   const chatTextareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -102,10 +156,20 @@ function SparkleModal({
             setFetchedProduct(res.results[0].product);
           }
         })
-        .catch(err => console.error('[Huskel] Failed to fetch product details', err));
+        .catch(err => console.error('[Akropolys] Failed to fetch product details', err));
     }
     search(productName, limit);
   }, [productName, initialProduct, fetchedProduct, client, limit, search]);
+
+  /* handle window resize for mobile check */
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    handleResize();
+    if (typeof window !== 'undefined') {
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }
+  }, []);
 
   /* fire callback */
   useEffect(() => { if (results.length > 0) onResult?.(results); }, [results, onResult]);
@@ -176,6 +240,230 @@ function SparkleModal({
         },
       ]
     : messages;
+
+  if (isMobile) {
+    return (
+      <div
+        className={cn("hsk-sp-backdrop hsk-sp-mobile-view", classNames.backdrop)}
+        onClick={onClose}
+        style={{
+          backdropFilter: `blur(${blurVal})`,
+          WebkitBackdropFilter: `blur(${blurVal})`,
+          background: bg ?? undefined,
+          ...customStyles,
+        }}
+      >
+        <div className={cn("hsk-sp-card hsk-sp-fullscreen hsk-sp-mobile-card", classNames.card)} onClick={e => e.stopPropagation()}>
+          {/* Header */}
+          <div className="hsk-sp-header">
+            <span className="hsk-sp-header-icon" style={{ display: 'flex', alignItems: 'center' }}>
+              <SparkleIcon />
+            </span>
+            <div className="hsk-sp-header-body">
+              <div className="hsk-sp-header-title-row">
+                <div className="hsk-sp-header-title">{displayProduct?.name || productName}</div>
+                {displayProduct && (
+                  <button 
+                    type="button" 
+                    className="hsk-sp-header-specs-btn"
+                    onClick={() => setShowSpecs(true)}
+                  >
+                    Specs
+                  </button>
+                )}
+              </div>
+              <div className="hsk-sp-header-sub">Akropolys AI Shopping Assistant</div>
+            </div>
+            <button className="hsk-sp-close" onClick={onClose} aria-label="Close">
+              <CloseIcon />
+            </button>
+          </div>
+
+          {searchLoading && <div className="hsk-sp-bar" />}
+
+          {/* Chat Assistant */}
+          <div className="hsk-sp-mobile-chat-container">
+            <div className="hsk-cb-msgs">
+              {displayMessages.map((msg, idx) => {
+                const isUser = msg.role === 'user';
+                return (
+                  <div key={idx} className="hsk-cb-msg-group">
+                    {isUser ? (
+                      <div className="hsk-cb-user-msg">
+                        <div className="hsk-cb-user-bubble">{msg.content}</div>
+                      </div>
+                    ) : (
+                      <div className="hsk-cb-ai-msg">
+                        <div className="hsk-cb-ai-icon" style={{ display: 'flex', alignItems: 'center' }}>
+                          <SparkleIcon />
+                        </div>
+                        <div className="hsk-cb-ai-body">
+                          <div className="hsk-cb-ai-text">{renderMarkdown(msg.content)}</div>
+                          
+                          {/* Inline Claude-like attachments under the first assistant message */}
+                          {idx === 0 && displayProduct && (
+                            <div className="hsk-sp-mobile-attachment-deck">
+                              {/* Main Product Card */}
+                              <div className="hsk-sp-mobile-main-card">
+                                <div className="hsk-sp-mobile-main-card-img">
+                                  {displayProduct.images?.[0] ? (
+                                    <img src={displayProduct.images[0]} alt={displayProduct.name} />
+                                  ) : (
+                                    <span>🛍</span>
+                                  )}
+                                </div>
+                                <div className="hsk-sp-mobile-main-card-info">
+                                  <div className="hsk-sp-mobile-main-card-brand">
+                                    {displayProduct.brand || displayProduct.category || 'Product'}
+                                  </div>
+                                  <div className="hsk-sp-mobile-main-card-name">{displayProduct.name}</div>
+                                  <div className="hsk-sp-mobile-main-card-price">
+                                    {displayProduct.currency ?? 'KES'} {parseFloat(displayProduct.price?.replace(/[^0-9.]/g, '') || '0').toLocaleString()}
+                                  </div>
+                                </div>
+                                {((displayProduct.specs && Object.keys(displayProduct.specs).length > 0) || displayProduct.description) && (
+                                  <button 
+                                    type="button"
+                                    className="hsk-sp-mobile-main-card-specs-btn"
+                                    onClick={() => setShowSpecs(true)}
+                                  >
+                                    Specs
+                                  </button>
+                                )}
+                              </div>
+
+                              {/* Similar Products Carousel */}
+                              {(() => {
+                                const similarProducts = results.filter(
+                                  r => {
+                                    const isSameName = !!(r.product.name && displayProduct?.name && r.product.name.toLowerCase() === displayProduct.name.toLowerCase());
+                                    const isSameSlug = r.product.slug && displayProduct?.slug && r.product.slug.toLowerCase() === displayProduct.slug.toLowerCase();
+                                    return !isSameName && !isSameSlug;
+                                  }
+                                );
+
+                                if (similarProducts.length === 0) return null;
+
+                                return (
+                                  <div className="hsk-sp-mobile-similar-carousel-inline">
+                                    <div className="hsk-sp-mobile-similar-carousel-title">Similar Products</div>
+                                    <div className="hsk-sp-mobile-similar-carousel-list">
+                                      {similarProducts.map((r) => {
+                                        const price = parseFloat(r.product.price?.replace(/[^0-9.]/g, '') || '0');
+                                        const currency = r.product.currency ?? 'KES';
+                                        return (
+                                          <div
+                                            key={r.id}
+                                            className="hsk-sp-mobile-similar-carousel-item"
+                                            onClick={() => handleNav(r)}
+                                          >
+                                            <div className="hsk-sp-mobile-similar-carousel-img">
+                                              {r.product.images?.[0] ? (
+                                                <img src={r.product.images[0]} alt={r.product.name} />
+                                              ) : (
+                                                <span>🛍</span>
+                                              )}
+                                            </div>
+                                            <div className="hsk-sp-mobile-similar-carousel-meta">
+                                              <div className="hsk-sp-mobile-similar-carousel-name" title={r.product.name}>
+                                                {r.product.name}
+                                              </div>
+                                              <div className="hsk-sp-mobile-similar-carousel-price">
+                                                {currency} {price.toLocaleString()}
+                                              </div>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {chatLoading && (
+                <div className="hsk-cb-typing-row">
+                  <div className="hsk-cb-ai-icon" style={{ display: 'flex', alignItems: 'center' }}>
+                    <SparkleIcon />
+                  </div>
+                  <div className="hsk-cb-typing">
+                    <div className="hsk-cb-dot" />
+                    <div className="hsk-cb-dot" />
+                    <div className="hsk-cb-dot" />
+                  </div>
+                </div>
+              )}
+
+              {chatError && <div className="hsk-cb-error">{getFriendlyError(chatError)}</div>}
+              <div ref={chatBottomRef} style={{ height: 1 }} />
+            </div>
+
+            <div className="hsk-cb-input-wrap">
+              <div className="hsk-cb-input-box">
+                <textarea
+                  ref={chatTextareaRef}
+                  className="hsk-cb-textarea"
+                  value={chatInput}
+                  onChange={handleInput}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Ask about this product, specs, or comparison..."
+                  rows={1}
+                  disabled={chatLoading}
+                />
+                <button
+                  className="hsk-cb-send"
+                  onClick={() => handleSend()}
+                  disabled={!chatInput.trim() || chatLoading}
+                  aria-label="Send message"
+                >
+                  <ArrowUpIcon />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Specs Sheet Drawer Overlay */}
+          {showSpecs && displayProduct && (
+            <div className="hsk-sp-mobile-specs-overlay" onClick={() => setShowSpecs(false)}>
+              <div className="hsk-sp-mobile-specs-drawer" onClick={e => e.stopPropagation()}>
+                <div className="hsk-sp-mobile-specs-header">
+                  <h3>Specifications</h3>
+                  <button type="button" onClick={() => setShowSpecs(false)}>Close</button>
+                </div>
+                <div className="hsk-sp-mobile-specs-body">
+                  <h4 className="hsk-sp-mobile-specs-title">{displayProduct.name}</h4>
+                  {displayProduct.description && (
+                    <div className="hsk-sp-mobile-specs-desc">
+                      <h5>Description</h5>
+                      <p>{displayProduct.description}</p>
+                    </div>
+                  )}
+                  {displayProduct.specs && Object.keys(displayProduct.specs).length > 0 && (
+                    <div className="hsk-sp-mobile-specs-list">
+                      <h5>Details</h5>
+                      {Object.entries(displayProduct.specs).map(([key, val]) => (
+                        <div key={key} className="hsk-sp-mobile-spec-row">
+                          <span className="hsk-sp-mobile-spec-label">{key}</span>
+                          <span className="hsk-sp-mobile-spec-value">{val}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -282,7 +570,7 @@ function SparkleModal({
                 {(() => {
                   const similarProducts = results.filter(
                     r => {
-                      const isSameName = r.product.name.toLowerCase() === displayProduct?.name?.toLowerCase();
+                      const isSameName = !!(r.product.name && displayProduct?.name && r.product.name.toLowerCase() === displayProduct.name.toLowerCase());
                       const isSameSlug = r.product.slug && displayProduct?.slug && r.product.slug.toLowerCase() === displayProduct.slug.toLowerCase();
                       return !isSameName && !isSameSlug;
                     }
@@ -299,7 +587,8 @@ function SparkleModal({
                       <div
                         key={r.id}
                         className={cn("hsk-sp-item", classNames.item)}
-                        style={{ animationDelay: `${i * 55}ms` }}
+                        style={{ animationDelay: `${i * 55}ms`, cursor: 'pointer' }}
+                        onClick={() => handleNav(r)}
                       >
                         <div className="hsk-sp-img-wrap">
                           {r.product.images?.[0] ? (
@@ -322,7 +611,7 @@ function SparkleModal({
                           <div className="hsk-sp-actions">
                             <button
                               className="hsk-sp-action hsk-sp-action-primary"
-                              onClick={() => handleNav(r)}
+                              onClick={(e) => { e.stopPropagation(); handleNav(r); }}
                             >
                               View
                             </button>
@@ -399,7 +688,7 @@ function SparkleModal({
                   <ArrowUpIcon />
                 </button>
               </div>
-              <div className="hsk-cb-hint">Huskel AI &middot; instant product knowledge</div>
+              <div className="hsk-cb-hint">Akropolys &middot; instant product knowledge</div>
             </div>
           </div>
         </div>
