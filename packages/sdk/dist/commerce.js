@@ -27,6 +27,7 @@ __export(commerce_exports, {
   KikuStream: () => KikuStream,
   getAkropolysClient: () => getAkropolysClient,
   initAkropolys: () => initAkropolys,
+  pollTransactionStatus: () => pollTransactionStatus,
   resolveDisplayFields: () => resolveDisplayFields,
   setSDKDefaultVertical: () => setSDKDefaultVertical,
   useAkropolys: () => useAkropolys,
@@ -63,7 +64,7 @@ var AkropolysAPI = class {
     this.vertical = vertical;
     this.getDeviceId = getDeviceId;
   }
-  async post(path, body, attempt = 0) {
+  async post(path, body, attempt = 0, signal) {
     const url = `${this.apiUrl}${path}`;
     try {
       const headers = {
@@ -86,7 +87,8 @@ var AkropolysAPI = class {
       const res = await fetch(url, {
         method: "POST",
         headers,
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
+        signal
       });
       if (!res.ok) {
         const text = await res.text();
@@ -106,7 +108,7 @@ var AkropolysAPI = class {
         if (attempt < MAX_RETRIES - 1) {
           log("warn", `${path} [${res.status}] retrying (${attempt + 1}/${MAX_RETRIES})...`);
           await sleep(RETRY_DELAYS[attempt]);
-          return this.post(path, body, attempt + 1);
+          return this.post(path, body, attempt + 1, signal);
         }
         log("error", `${path} failed after ${MAX_RETRIES} attempts`, err);
         throw err;
@@ -117,7 +119,7 @@ var AkropolysAPI = class {
         if (attempt < MAX_RETRIES - 1) {
           log("warn", `${path} network error, retrying (${attempt + 1}/${MAX_RETRIES})...`);
           await sleep(RETRY_DELAYS[attempt]);
-          return this.post(path, body, attempt + 1);
+          return this.post(path, body, attempt + 1, signal);
         }
         log("error", `${path} unreachable after ${MAX_RETRIES} attempts`);
       }
@@ -173,12 +175,12 @@ var AkropolysAPI = class {
     return this.post("/search", { query, siteId: this.siteId, limit });
   }
   // Pure vector search — no LLM, instant results.
-  async searchVector(query, limit = 10) {
-    return this.post("/search/vector", { query, siteId: this.siteId, limit });
+  async searchVector(query, limit = 10, signal) {
+    return this.post("/search/vector", { query, siteId: this.siteId, limit }, 0, signal);
   }
   // Autocomplete — pure in-memory Trie, <1ms, no Upstash call. Only true prefix matches.
-  async searchAutocomplete(query, limit = 8) {
-    return this.post("/search/autocomplete", { query, siteId: this.siteId, limit });
+  async searchAutocomplete(query, limit = 8, signal) {
+    return this.post("/search/autocomplete", { query, siteId: this.siteId, limit }, 0, signal);
   }
   // LLM chat — conversational search with history context.
   async chat(query, history2 = [], currentContext) {
@@ -792,6 +794,18 @@ var _AkropolysClient = class _AkropolysClient {
       window.addEventListener("online", this.onlineHandler);
     }
   }
+  updateConfig(config) {
+    if (config.apiUrl) this.api.apiUrl = config.apiUrl;
+    if (config.siteId) this.api.siteId = config.siteId;
+    if (config.apiToken) this.api.apiToken = config.apiToken;
+    if (config.vertical !== void 0) {
+      this.vertical = config.vertical;
+      this.api.vertical = config.vertical;
+    }
+    if (config.display !== void 0) {
+      this.display = config.display;
+    }
+  }
   setShopperId(id) {
     this.shopperId = id;
     if (!this.authLoading) {
@@ -980,11 +994,11 @@ var _AkropolysClient = class _AkropolysClient {
     if (this.ingestTimer) return;
     const baseDelay = 1e3;
     const jitter = Math.random() * 1e3;
-    const delay = Math.min(baseDelay * Math.pow(2, this.retryCount), 3e4) + jitter;
+    const delay2 = Math.min(baseDelay * Math.pow(2, this.retryCount), 3e4) + jitter;
     this.retryCount++;
     this.ingestTimer = setTimeout(() => {
       this.flushQueue();
-    }, delay);
+    }, delay2);
   }
   async queueContentIngest(payload) {
     this.contentQueue.push(payload);
@@ -1050,11 +1064,11 @@ var _AkropolysClient = class _AkropolysClient {
     if (this.contentIngestTimer) return;
     const baseDelay = 1e3;
     const jitter = Math.random() * 1e3;
-    const delay = Math.min(baseDelay * Math.pow(2, this.contentRetryCount), 3e4) + jitter;
+    const delay2 = Math.min(baseDelay * Math.pow(2, this.contentRetryCount), 3e4) + jitter;
     this.contentRetryCount++;
     this.contentIngestTimer = setTimeout(() => {
       this.flushContentQueue();
-    }, delay);
+    }, delay2);
   }
 };
 _AkropolysClient.INGEST_CACHE_KEY = "akropolys_ingested_v3";
@@ -1109,6 +1123,13 @@ function AkropolysProvider({
       display
     });
   } else {
+    clientRef.current.updateConfig({
+      siteId,
+      apiUrl,
+      apiToken,
+      vertical,
+      display
+    });
     clientRef.current.reRegister();
   }
   (0, import_react.useEffect)(() => {
@@ -1159,43 +1180,64 @@ function useSearch(options) {
   const [results, setResults] = (0, import_react3.useState)([]);
   const [loading, setLoading] = (0, import_react3.useState)(false);
   const [error, setError] = (0, import_react3.useState)(null);
-  const genRef = (0, import_react3.useRef)(0);
+  const abortRef = (0, import_react3.useRef)(null);
+  const debounceTimerRef = (0, import_react3.useRef)(null);
   const searchType = options?.type ?? "autocomplete";
-  const search = (0, import_react3.useCallback)(async (query, limit = 8) => {
+  const search = (0, import_react3.useCallback)((query, limit = 8) => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
     if (!query.trim()) {
       setResults([]);
       setLoading(false);
+      setError(null);
+      abortRef.current?.abort();
       return;
     }
-    const gen = ++genRef.current;
     setLoading(true);
     setError(null);
-    try {
-      const res = searchType === "vector" ? await client.api.searchVector(query, limit) : await client.api.searchAutocomplete(query, limit);
-      if (gen === genRef.current) {
-        setResults(res.results ?? []);
-      }
-    } catch (e) {
-      if (gen === genRef.current) {
-        let msg = e?.message ?? "Search failed";
-        try {
-          const parsed = JSON.parse(msg);
-          if (parsed && parsed.error) {
-            msg = parsed.error;
-          }
-        } catch {
+    debounceTimerRef.current = setTimeout(async () => {
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      try {
+        const res = searchType === "vector" ? await client.api.searchVector(query, limit, controller.signal) : await client.api.searchAutocomplete(query, limit, controller.signal);
+        if (!controller.signal.aborted) {
+          setResults(res.results ?? []);
+          setLoading(false);
         }
-        setError(msg);
+      } catch (e) {
+        if (!controller.signal.aborted) {
+          let msg = e?.message ?? "Search failed";
+          try {
+            const parsed = JSON.parse(msg);
+            if (parsed && parsed.error) {
+              msg = parsed.error;
+            }
+          } catch {
+          }
+          setError(msg);
+          setLoading(false);
+        }
       }
-    } finally {
-      if (gen === genRef.current) setLoading(false);
-    }
+    }, 300);
   }, [client, searchType]);
   const clear = (0, import_react3.useCallback)(() => {
-    genRef.current++;
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    abortRef.current?.abort();
     setResults([]);
     setError(null);
     setLoading(false);
+  }, []);
+  (0, import_react3.useEffect)(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      abortRef.current?.abort();
+    };
   }, []);
   return { results, loading, error, search, clear };
 }
@@ -1208,20 +1250,34 @@ function getProductKey(p) {
 }
 function useIngest() {
   const client = useAkropolysContext();
-  const ingest = (0, import_react4.useCallback)((product) => {
+  const [status, setStatus] = (0, import_react4.useState)("idle");
+  const [error, setError] = (0, import_react4.useState)(null);
+  const ingest = (0, import_react4.useCallback)(async (product) => {
     const key = getProductKey(product);
     const fingerprint = stableStringify(product);
     if (key) {
       const cached = recentlyIngested.get(key);
       if (cached && cached.fingerprint === fingerprint && Date.now() - cached.timestamp < 24 * 60 * 60 * 1e3) {
+        setStatus("success");
+        setError(null);
         return;
       }
-      recentlyIngested.set(key, { fingerprint, timestamp: Date.now() });
     }
-    client.queueIngest(product).catch(() => {
-    });
+    setStatus("loading");
+    setError(null);
+    try {
+      await client.api.ingest(product);
+      if (key) {
+        recentlyIngested.set(key, { fingerprint, timestamp: Date.now() });
+      }
+      setStatus("success");
+    } catch (e) {
+      const err = e instanceof Error ? e : new Error(String(e));
+      setError(err);
+      setStatus("error");
+    }
   }, [client]);
-  const ingestBatch = (0, import_react4.useCallback)((products) => {
+  const ingestBatch = (0, import_react4.useCallback)(async (products) => {
     const toIngest = products.filter((p) => {
       const key = getProductKey(p);
       const fingerprint = stableStringify(p);
@@ -1230,14 +1286,37 @@ function useIngest() {
       if (cached && cached.fingerprint === fingerprint && Date.now() - cached.timestamp < 24 * 60 * 60 * 1e3) {
         return false;
       }
-      recentlyIngested.set(key, { fingerprint, timestamp: Date.now() });
       return true;
     });
-    if (!toIngest.length) return;
-    client.queueIngestBatch(toIngest).catch(() => {
-    });
+    if (!toIngest.length) {
+      setStatus("success");
+      setError(null);
+      return;
+    }
+    setStatus("loading");
+    setError(null);
+    try {
+      await client.api.ingestBatch(toIngest);
+      toIngest.forEach((p) => {
+        const key = getProductKey(p);
+        if (key) {
+          recentlyIngested.set(key, { fingerprint: stableStringify(p), timestamp: Date.now() });
+        }
+      });
+      setStatus("success");
+    } catch (e) {
+      const err = e instanceof Error ? e : new Error(String(e));
+      setError(err);
+      setStatus("error");
+    }
   }, [client]);
-  return { ingest, ingestBatch, loading: false, error: null };
+  return {
+    ingest,
+    ingestBatch,
+    status,
+    loading: status === "loading",
+    error
+  };
 }
 
 // src/hooks/useListIngest.ts
@@ -1275,13 +1354,11 @@ function usePageIngest(product) {
     if (!product) return;
     if (fingerprintRef.current === fingerprint) return;
     fingerprintRef.current = fingerprint;
-    try {
-      getAkropolysClient().queueIngest({ ...product, url });
-    } catch (err) {
+    getAkropolysClient().queueIngest({ ...product, url }).catch((err) => {
       if (typeof process !== "undefined" && process.env && process.env.NODE_ENV !== "production") {
         console.warn("[Akropolys] Ingestion failed inside usePageIngest:", err);
       }
-    }
+    });
   }, [fingerprint, url]);
 }
 
@@ -1475,6 +1552,25 @@ function useCart() {
 
 // src/hooks/usePaymentPolling.ts
 var import_react9 = require("react");
+
+// src/utils/poll.ts
+var delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+async function pollTransactionStatus(clientId, checkStatusFn, maxAttempts = 5, maxDelay = 3e4) {
+  let attempt = 0;
+  while (attempt < maxAttempts) {
+    const res = await checkStatusFn();
+    if (res.completed) return res;
+    attempt++;
+    if (attempt >= maxAttempts) break;
+    const nextDelay = Math.min(Math.pow(2, attempt) * 1e3, maxDelay);
+    await delay(nextDelay);
+  }
+  throw new Error(
+    `[Akropolys SDK] Transaction timeout for client "${clientId}" after ${maxAttempts} attempts.`
+  );
+}
+
+// src/hooks/usePaymentPolling.ts
 function usePaymentPolling({
   client,
   merchantReference,
@@ -1500,39 +1596,52 @@ function usePaymentPolling({
     }
     setStatus("PENDING");
     setError(null);
-    const startTime = Date.now();
-    let timerId = null;
-    async function checkStatus() {
+    let cancelled = false;
+    const clientId = client.siteId || merchantReference || "payment-client";
+    const maxAttempts = timeoutMs ? Math.max(5, Math.ceil(timeoutMs / 3e4) + 4) : 15;
+    const checkStatus = async () => {
+      if (cancelled) {
+        return { completed: true };
+      }
       try {
-        if (Date.now() - startTime >= timeoutMs) {
-          setStatus("FAILED");
-          setError("Payment session timed out");
-          if (onFailureRef.current) onFailureRef.current("Payment session timed out");
-          return;
-        }
         const res = await client.getPaymentStatus(merchantReference);
+        if (cancelled) {
+          return { completed: true };
+        }
         if (res.status === "COMPLETED") {
           setStatus("COMPLETED");
           if (onSuccessRef.current) onSuccessRef.current();
-        } else if (res.status === "FAILED") {
-          setStatus("FAILED");
-          setError("Payment failed");
-          if (onFailureRef.current) onFailureRef.current("Payment failed");
-        } else {
-          timerId = setTimeout(checkStatus, intervalMs);
+          return { completed: true };
         }
+        if (res.status === "FAILED") {
+          setStatus("FAILED");
+          const errText = res.message || "Payment failed";
+          setError(errText);
+          if (onFailureRef.current) onFailureRef.current(errText);
+          return { completed: true };
+        }
+        return { completed: false };
       } catch (err) {
+        if (cancelled) {
+          return { completed: true };
+        }
         console.error("[Akropolys Polling Error]", err);
-        timerId = setTimeout(checkStatus, intervalMs);
-      }
-    }
-    timerId = setTimeout(checkStatus, intervalMs);
-    return () => {
-      if (timerId) {
-        clearTimeout(timerId);
+        return { completed: false };
       }
     };
-  }, [client, merchantReference, intervalMs, timeoutMs]);
+    pollTransactionStatus(clientId, checkStatus, maxAttempts, 3e4).catch((err) => {
+      if (!cancelled) {
+        setStatus("FAILED");
+        setError(err.message || "Payment session timed out");
+        if (onFailureRef.current) {
+          onFailureRef.current(err.message || "Payment session timed out");
+        }
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, merchantReference, timeoutMs]);
   return { status, error };
 }
 
@@ -1546,6 +1655,7 @@ setSDKDefaultVertical("commerce");
   KikuStream,
   getAkropolysClient,
   initAkropolys,
+  pollTransactionStatus,
   resolveDisplayFields,
   setSDKDefaultVertical,
   useAkropolys,

@@ -118,7 +118,7 @@ function buildRows(products: ChatSource[], displayConfig?: Record<string, string
   sortedGroups.forEach(group => {
     const originalKeys = groupedKeys.get(group)!;
     const values = products.map(p => {
-      const f = p.fields || p;
+      const f = (p.fields || p) as Record<string, any>;
       if (!f) return null;
       for (const k of originalKeys) {
         if (f[k] !== undefined && f[k] !== null) {

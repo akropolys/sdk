@@ -265,6 +265,19 @@ export class AkropolysClient {
     }
   }
 
+  updateConfig(config: Partial<AkropolysConfig>) {
+    if (config.apiUrl) this.api.apiUrl = config.apiUrl;
+    if (config.siteId) this.api.siteId = config.siteId;
+    if (config.apiToken) this.api.apiToken = config.apiToken;
+    if (config.vertical !== undefined) {
+      (this as any).vertical = config.vertical;
+      this.api.vertical = config.vertical;
+    }
+    if (config.display !== undefined) {
+      (this as any).display = config.display;
+    }
+  }
+
   setShopperId(id: string | undefined) {
     this.shopperId = id;
     if (!this.authLoading) {

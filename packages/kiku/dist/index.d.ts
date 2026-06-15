@@ -116,8 +116,9 @@ declare function CheckoutModal({ onClose, theme, customStyles, hskThemeAttr }: {
 interface ComparisonMatrixProps {
     sources: ChatSource[];
     defaultCurrency?: string;
+    displayConfig?: Record<string, string>;
 }
-declare function ComparisonMatrix({ sources, defaultCurrency }: ComparisonMatrixProps): React.JSX.Element | null;
+declare function ComparisonMatrix({ sources, defaultCurrency, displayConfig }: ComparisonMatrixProps): React.JSX.Element | null;
 
 interface VoiceButtonProps {
     onTranscript: (text: string) => void;

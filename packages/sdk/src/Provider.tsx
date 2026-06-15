@@ -35,6 +35,13 @@ export function AkropolysProvider({
       display
     });
   } else {
+    clientRef.current.updateConfig({
+      siteId,
+      apiUrl,
+      apiToken,
+      vertical,
+      display
+    });
     clientRef.current.reRegister();
   }
 

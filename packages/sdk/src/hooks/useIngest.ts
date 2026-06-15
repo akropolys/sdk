@@ -1,25 +1,17 @@
-import { useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useAkropolysContext } from '../Provider';
 import { stableStringify } from '../utils/stableStringify';
 
 export type RawItem = Record<string, any>;
 
 interface UseIngestReturn {
-  ingest: (product: RawItem) => void;
-  ingestBatch: (products: RawItem[]) => void;
-  /**
-   * @deprecated Ingest is fire-and-forget. This is always `false` and will be
-   * removed in the next major version. Remove it from your destructuring.
-   */
-  loading: false;
-  /**
-   * @deprecated Ingest is fire-and-forget. This is always `null` and will be
-   * removed in the next major version. Remove it from your destructuring.
-   */
-  error: null;
+  ingest: (product: RawItem) => Promise<void>;
+  ingestBatch: (products: RawItem[]) => Promise<void>;
+  status: 'idle' | 'loading' | 'success' | 'error';
+  loading: boolean;
+  error: Error | null;
 }
 
-// Module-level TTL cache (24 hours TTL) to prevent duplicate ingestion requests in the same session
 const recentlyIngested = new Map<string, { fingerprint: string; timestamp: number }>();
 
 function getProductKey(p: RawItem): string | null {
@@ -28,22 +20,38 @@ function getProductKey(p: RawItem): string | null {
 
 export function useIngest(): UseIngestReturn {
   const client = useAkropolysContext();
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [error, setError] = useState<Error | null>(null);
 
-  const ingest = useCallback((product: RawItem) => {
+  const ingest = useCallback(async (product: RawItem) => {
     const key = getProductKey(product);
     const fingerprint = stableStringify(product);
     if (key) {
       const cached = recentlyIngested.get(key);
       if (cached && cached.fingerprint === fingerprint && Date.now() - cached.timestamp < 24 * 60 * 60 * 1000) {
+        setStatus('success');
+        setError(null);
         return;
       }
-      recentlyIngested.set(key, { fingerprint, timestamp: Date.now() });
     }
-    // Fire-and-forget — errors are logged internally by the client
-    client.queueIngest(product).catch(() => {});
+
+    setStatus('loading');
+    setError(null);
+
+    try {
+      await client.api.ingest(product);
+      if (key) {
+        recentlyIngested.set(key, { fingerprint, timestamp: Date.now() });
+      }
+      setStatus('success');
+    } catch (e: any) {
+      const err = e instanceof Error ? e : new Error(String(e));
+      setError(err);
+      setStatus('error');
+    }
   }, [client]);
 
-  const ingestBatch = useCallback((products: RawItem[]) => {
+  const ingestBatch = useCallback(async (products: RawItem[]) => {
     const toIngest = products.filter(p => {
       const key = getProductKey(p);
       const fingerprint = stableStringify(p);
@@ -52,15 +60,39 @@ export function useIngest(): UseIngestReturn {
       if (cached && cached.fingerprint === fingerprint && Date.now() - cached.timestamp < 24 * 60 * 60 * 1000) {
         return false;
       }
-      recentlyIngested.set(key, { fingerprint, timestamp: Date.now() });
       return true;
     });
 
-    if (!toIngest.length) return;
-    // Fire-and-forget — errors are logged internally by the client
-    client.queueIngestBatch(toIngest).catch(() => {});
+    if (!toIngest.length) {
+      setStatus('success');
+      setError(null);
+      return;
+    }
+
+    setStatus('loading');
+    setError(null);
+
+    try {
+      await client.api.ingestBatch(toIngest);
+      toIngest.forEach(p => {
+        const key = getProductKey(p);
+        if (key) {
+          recentlyIngested.set(key, { fingerprint: stableStringify(p), timestamp: Date.now() });
+        }
+      });
+      setStatus('success');
+    } catch (e: any) {
+      const err = e instanceof Error ? e : new Error(String(e));
+      setError(err);
+      setStatus('error');
+    }
   }, [client]);
 
-  // loading/error kept as stable literals for backwards compatibility.
-  return { ingest, ingestBatch, loading: false, error: null };
+  return {
+    ingest,
+    ingestBatch,
+    status,
+    loading: status === 'loading',
+    error,
+  };
 }

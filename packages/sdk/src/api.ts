@@ -16,16 +16,16 @@ async function sleep(ms: number) {
 
 export class AkropolysAPI {
   constructor(
-    private apiUrl: string,
-    private siteId: string,
-    private apiToken: string,
+    public apiUrl: string,
+    public siteId: string,
+    public apiToken: string,
     private getShopperId?: () => string | undefined,
     private getSessionId?: () => string | undefined,
-    private vertical?: string,
+    public vertical?: string,
     private getDeviceId?: () => string | undefined
   ) {}
 
-  private async post<T>(path: string, body: unknown, attempt = 0): Promise<T> {
+  private async post<T>(path: string, body: unknown, attempt = 0, signal?: AbortSignal): Promise<T> {
     const url = `${this.apiUrl}${path}`;
 
     try {
@@ -54,6 +54,7 @@ export class AkropolysAPI {
         method: 'POST',
         headers,
         body: JSON.stringify(body),
+        signal,
       });
 
       if (!res.ok) {
@@ -79,7 +80,7 @@ export class AkropolysAPI {
         if (attempt < MAX_RETRIES - 1) {
           log('warn', `${path} [${res.status}] retrying (${attempt + 1}/${MAX_RETRIES})...`);
           await sleep(RETRY_DELAYS[attempt]);
-          return this.post(path, body, attempt + 1);
+          return this.post(path, body, attempt + 1, signal);
         }
 
         log('error', `${path} failed after ${MAX_RETRIES} attempts`, err);
@@ -93,7 +94,7 @@ export class AkropolysAPI {
         if (attempt < MAX_RETRIES - 1) {
           log('warn', `${path} network error, retrying (${attempt + 1}/${MAX_RETRIES})...`);
           await sleep(RETRY_DELAYS[attempt]);
-          return this.post(path, body, attempt + 1);
+          return this.post(path, body, attempt + 1, signal);
         }
         log('error', `${path} unreachable after ${MAX_RETRIES} attempts`);
       }
@@ -154,13 +155,13 @@ export class AkropolysAPI {
   }
 
   // Pure vector search — no LLM, instant results.
-  async searchVector(query: string, limit = 10): Promise<SearchResponse> {
-    return this.post('/search/vector', { query, siteId: this.siteId, limit });
+  async searchVector(query: string, limit = 10, signal?: AbortSignal): Promise<SearchResponse> {
+    return this.post('/search/vector', { query, siteId: this.siteId, limit }, 0, signal);
   }
 
   // Autocomplete — pure in-memory Trie, <1ms, no Upstash call. Only true prefix matches.
-  async searchAutocomplete(query: string, limit = 8): Promise<SearchResponse> {
-    return this.post('/search/autocomplete', { query, siteId: this.siteId, limit });
+  async searchAutocomplete(query: string, limit = 8, signal?: AbortSignal): Promise<SearchResponse> {
+    return this.post('/search/autocomplete', { query, siteId: this.siteId, limit }, 0, signal);
   }
 
   // LLM chat — conversational search with history context.

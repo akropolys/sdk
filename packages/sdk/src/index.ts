@@ -36,4 +36,7 @@ export type {
   VisualSearchResponse,
 } from './types';
 
+export { pollTransactionStatus } from './utils/poll';
+
+
 

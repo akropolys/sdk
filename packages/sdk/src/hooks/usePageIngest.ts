@@ -26,12 +26,12 @@ export function usePageIngest(product: Record<string, any> | null | undefined): 
 
     fingerprintRef.current = fingerprint;
 
-    try {
-      getAkropolysClient().queueIngest({ ...product, url });
-    } catch (err) {
-      if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV !== 'production') {
-        console.warn('[Akropolys] Ingestion failed inside usePageIngest:', err);
-      }
-    }
+    getAkropolysClient()
+      .queueIngest({ ...product, url })
+      .catch(err => {
+        if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV !== 'production') {
+          console.warn('[Akropolys] Ingestion failed inside usePageIngest:', err);
+        }
+      });
   }, [fingerprint, url]);
 }

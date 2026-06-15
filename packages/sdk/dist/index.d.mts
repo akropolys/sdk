@@ -189,12 +189,12 @@ interface VisualSearchResponse extends SearchResponse {
 }
 
 declare class AkropolysAPI {
-    private apiUrl;
-    private siteId;
-    private apiToken;
+    apiUrl: string;
+    siteId: string;
+    apiToken: string;
     private getShopperId?;
     private getSessionId?;
-    private vertical?;
+    vertical?: string | undefined;
     private getDeviceId?;
     constructor(apiUrl: string, siteId: string, apiToken: string, getShopperId?: (() => string | undefined) | undefined, getSessionId?: (() => string | undefined) | undefined, vertical?: string | undefined, getDeviceId?: (() => string | undefined) | undefined);
     private post;
@@ -207,8 +207,8 @@ declare class AkropolysAPI {
         capturedAt: number;
     }>): Promise<IngestResponse>;
     search(query: string, limit?: number): Promise<SearchResponse>;
-    searchVector(query: string, limit?: number): Promise<SearchResponse>;
-    searchAutocomplete(query: string, limit?: number): Promise<SearchResponse>;
+    searchVector(query: string, limit?: number, signal?: AbortSignal): Promise<SearchResponse>;
+    searchAutocomplete(query: string, limit?: number, signal?: AbortSignal): Promise<SearchResponse>;
     chat(query: string, history?: Array<{
         role: 'user' | 'assistant';
         content: string;
@@ -318,6 +318,7 @@ declare class AkropolysClient {
         content: string;
     }>, attachments?: ChatAttachment[]): KikuStream;
     reRegister(): void;
+    updateConfig(config: Partial<AkropolysConfig>): void;
     setShopperId(id: string | undefined): void;
     setAuthLoading(loading: boolean): void;
     getShopperId(): string | undefined;
@@ -362,7 +363,7 @@ interface UseSearchReturn {
     results: SearchResult[];
     loading: boolean;
     error: string | null;
-    search: (query: string, limit?: number) => Promise<void>;
+    search: (query: string, limit?: number) => void;
     clear: () => void;
 }
 declare function useSearch(options?: {
@@ -371,18 +372,11 @@ declare function useSearch(options?: {
 
 type RawItem = Record<string, any>;
 interface UseIngestReturn {
-    ingest: (product: RawItem) => void;
-    ingestBatch: (products: RawItem[]) => void;
-    /**
-     * @deprecated Ingest is fire-and-forget. This is always `false` and will be
-     * removed in the next major version. Remove it from your destructuring.
-     */
-    loading: false;
-    /**
-     * @deprecated Ingest is fire-and-forget. This is always `null` and will be
-     * removed in the next major version. Remove it from your destructuring.
-     */
-    error: null;
+    ingest: (product: RawItem) => Promise<void>;
+    ingestBatch: (products: RawItem[]) => Promise<void>;
+    status: 'idle' | 'loading' | 'success' | 'error';
+    loading: boolean;
+    error: Error | null;
 }
 declare function useIngest(): UseIngestReturn;
 
@@ -452,4 +446,10 @@ declare function usePaymentPolling({ client, merchantReference, onSuccess, onFai
     error: string | null;
 };
 
-export { AkropolysAPI, AkropolysClient, type AkropolysConfig, type AkropolysError, AkropolysProvider, type AkropolysTheme, type CartItem, type CartPayload, type ChatAction, type ChatAttachment, type ChatMessage, type ChatMetadata, type ChatSource, type CheckoutConfig, type ContentIngestPayload, type DisplayConfig, type DisplayFields, type IngestResponse, KikuStream, type PaymentInitResponse, type PaymentStatusResponse, type Product, type RawProductInput, type SearchRequest, type SearchResponse, type SearchResult, type StyleDNA, type UsePaymentPollingProps, type VisualSearchResponse, getAkropolysClient, initAkropolys, resolveDisplayFields, setSDKDefaultVertical, useAkropolys, useAkropolysContext, useCart, useIngest, useKiku, useListIngest, usePageIngest, usePaymentPolling, useSearch };
+declare function pollTransactionStatus(clientId: string, checkStatusFn: () => Promise<{
+    completed: boolean;
+}>, maxAttempts?: number, maxDelay?: number): Promise<{
+    completed: boolean;
+}>;
+
+export { AkropolysAPI, AkropolysClient, type AkropolysConfig, type AkropolysError, AkropolysProvider, type AkropolysTheme, type CartItem, type CartPayload, type ChatAction, type ChatAttachment, type ChatMessage, type ChatMetadata, type ChatSource, type CheckoutConfig, type ContentIngestPayload, type DisplayConfig, type DisplayFields, type IngestResponse, KikuStream, type PaymentInitResponse, type PaymentStatusResponse, type Product, type RawProductInput, type SearchRequest, type SearchResponse, type SearchResult, type StyleDNA, type UsePaymentPollingProps, type VisualSearchResponse, getAkropolysClient, initAkropolys, pollTransactionStatus, resolveDisplayFields, setSDKDefaultVertical, useAkropolys, useAkropolysContext, useCart, useIngest, useKiku, useListIngest, usePageIngest, usePaymentPolling, useSearch };
