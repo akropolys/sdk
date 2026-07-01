@@ -1,7 +1,19 @@
+/**
+ * Pass any object. The only requirement is a stable identifier for dedup
+ * (`url`, `id`, or `slug`). Map title/image once via `display: { cardTitle,
+ * cardImage }` only if your keys are unusual. Every field is stored and
+ * shown to the assistant verbatim.
+ */
+export type Entity<T extends Record<string, any> = Record<string, any>> = {
+  url?: string;
+  id?: string;
+} & T;
+
+/** @deprecated Use Entity<T> instead */
 export type Product<T extends Record<string, any> = Record<string, any>> = {
-  name: string;
-  price: string;
-  url: string;
+  name?: string;
+  price?: string;
+  url?: string;
   brand?: string;
   description?: string;
   originalPrice?: string;
@@ -21,6 +33,7 @@ export type Product<T extends Record<string, any> = Record<string, any>> = {
   metadata?: Record<string, any>;
 } & T;
 
+/** @deprecated Use Entity<T> instead */
 export type RawProductInput<T extends Record<string, any> = Record<string, any>> = {
   name?: string;
   title?: string;
@@ -100,7 +113,7 @@ export interface SearchRequest {
 export interface SearchResult {
   id: string;
   score: number;
-  product: Product;
+  entity: Entity;
 }
 
 export interface SearchResponse {
@@ -125,20 +138,6 @@ export interface AkropolysTheme {
   textColor?: string;
   fontFamily?: string;
   borderRadius?: string;
-}
-
-export interface CheckoutConfig {
-  payment_methods: Record<string, { enabled: boolean }>;
-}
-
-export interface PaymentInitResponse {
-  merchantReference: string;
-  checkoutRequestId?: string;
-}
-
-export interface PaymentStatusResponse {
-  status: 'PENDING' | 'COMPLETED' | 'FAILED';
-  message?: string;
 }
 
 export type ChatAction =

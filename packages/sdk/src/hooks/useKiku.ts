@@ -37,6 +37,20 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
   const [lastIntent, setLastIntent] = useState<string | null>(null);
   const activeStreamRef = useRef<any | null>(null);
 
+  // Streaming pace buffer — decouples on-screen typing speed from how fast (or
+  // bursty) the network delivers tokens, so a fast backend still "types" smoothly.
+  const targetTextRef = useRef('');
+  const displayedLenRef = useRef(0);
+  const rafRef = useRef<number | null>(null);
+  const streamDoneRef = useRef(false);
+
+  const stopPacing = useCallback(() => {
+    if (rafRef.current != null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+  }, []);
+
   // Keep references to options callbacks to avoid hook dependencies issues
   const onTokenRef = useRef(options.onToken);
   const onMetaRef = useRef(options.onMeta);
@@ -54,8 +68,9 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
   useEffect(() => {
     return () => {
       activeStreamRef.current?.destroy();
+      stopPacing();
     };
-  }, []);
+  }, [stopPacing]);
 
   const send = useCallback(async (query: string, displayQuery?: string, attachments?: ChatAttachment[]) => {
     if (!query.trim() || loading) return;
@@ -86,6 +101,31 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
       let messageInitialized = false;
       let lastMeta: any = null;
 
+      // Reveal buffered text a little each animation frame. Speed scales with the
+      // backlog so it never lags far behind, but always reads as deliberate typing.
+      const tick = () => {
+        const target = targetTextRef.current;
+        const remaining = target.length - displayedLenRef.current;
+        if (remaining > 0) {
+          const step = Math.max(2, Math.ceil(remaining * 0.15));
+          displayedLenRef.current = Math.min(target.length, displayedLenRef.current + step);
+          const shown = target.slice(0, displayedLenRef.current);
+          setMessages(prev => {
+            const next = [...prev];
+            if (next.length > 0 && next[next.length - 1].role === 'assistant') {
+              next[next.length - 1] = { ...next[next.length - 1], content: shown };
+            }
+            return next;
+          });
+        }
+        if (displayedLenRef.current < targetTextRef.current.length || !streamDoneRef.current) {
+          rafRef.current = requestAnimationFrame(tick);
+        } else {
+          rafRef.current = null;
+          setStreaming(false);
+        }
+      };
+
       stream.on('meta', (meta: any) => {
         lastMeta = meta;
         setSources(meta.sources ?? []);
@@ -105,27 +145,27 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
         if (!messageInitialized) {
           setLoading(false);
           setStreaming(true);
-          setMessages(prev => [...prev, { role: 'assistant', content: token }]);
+          targetTextRef.current = '';
+          displayedLenRef.current = 0;
+          streamDoneRef.current = false;
+          setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
           messageInitialized = true;
-        } else {
-          setMessages(prev => {
-            const next = [...prev];
-            if (next.length > 0 && next[next.length - 1].role === 'assistant') {
-              next[next.length - 1] = {
-                ...next[next.length - 1],
-                content: next[next.length - 1].content + token,
-              };
-            }
-            return next;
-          });
+          rafRef.current = requestAnimationFrame(tick);
         }
+        // Buffer the token; the rAF loop reveals it at a smooth pace.
+        targetTextRef.current += token;
 
         onTokenRef.current?.(token);
       });
 
       stream.on('done', (fullMessage: string) => {
         setLoading(false);
-        setStreaming(false);
+        streamDoneRef.current = true;
+        // Let the pacing loop finish revealing buffered text — it flips streaming
+        // off once caught up. If nothing streamed, settle immediately.
+        if (rafRef.current == null) {
+          setStreaming(false);
+        }
 
         const metaAction = lastMeta?.action;
         const metaCheckout = lastMeta?.checkout;
@@ -166,6 +206,8 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
       });
 
       stream.on('error', (err: Error) => {
+        streamDoneRef.current = true;
+        stopPacing();
         setLoading(false);
         setStreaming(false);
         setError(err.message);
@@ -185,6 +227,10 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
 
   const reset = useCallback(() => {
     activeStreamRef.current?.destroy();
+    stopPacing();
+    streamDoneRef.current = true;
+    targetTextRef.current = '';
+    displayedLenRef.current = 0;
     setMessages([]);
     setSources([]);
     setReferencedIds([]);

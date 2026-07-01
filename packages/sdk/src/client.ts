@@ -6,29 +6,24 @@ import { stableStringify } from './utils/stableStringify';
 
 declare const process: any;
 
-let defaultVertical: string = 'commerce';
-export function setSDKDefaultVertical(v: string) {
-  defaultVertical = v;
-}
-
 function getEnvVar(key: string): string | undefined {
   if (key === 'NEXT_PUBLIC_AKROPOLYS_SITE_ID') {
-    try { return process.env.NEXT_PUBLIC_AKROPOLYS_SITE_ID || process.env.NEXT_PUBLIC_HUSKEL_SITE_ID; } catch { /* ignore */ }
+    try { return process.env.NEXT_PUBLIC_AKROPOLYS_SITE_ID; } catch { /* ignore */ }
   }
   if (key === 'NEXT_PUBLIC_AKROPOLYS_API_URL') {
-    try { return process.env.NEXT_PUBLIC_AKROPOLYS_API_URL || process.env.NEXT_PUBLIC_HUSKEL_API_URL; } catch { /* ignore */ }
+    try { return process.env.NEXT_PUBLIC_AKROPOLYS_API_URL; } catch { /* ignore */ }
   }
   if (key === 'NEXT_PUBLIC_AKROPOLYS_API_TOKEN') {
-    try { return process.env.NEXT_PUBLIC_AKROPOLYS_API_TOKEN || process.env.NEXT_PUBLIC_HUSKEL_API_TOKEN; } catch { /* ignore */ }
+    try { return process.env.NEXT_PUBLIC_AKROPOLYS_API_TOKEN; } catch { /* ignore */ }
   }
 
   // Fallback check for Vite (import.meta.env)
   try {
     const metaEnv = (import.meta as any).env;
     if (metaEnv) {
-      if (key === 'NEXT_PUBLIC_AKROPOLYS_SITE_ID') return metaEnv.NEXT_PUBLIC_AKROPOLYS_SITE_ID || metaEnv.VITE_AKROPOLYS_SITE_ID || metaEnv.NEXT_PUBLIC_HUSKEL_SITE_ID;
-      if (key === 'NEXT_PUBLIC_AKROPOLYS_API_URL') return metaEnv.NEXT_PUBLIC_AKROPOLYS_API_URL || metaEnv.VITE_AKROPOLYS_API_URL || metaEnv.NEXT_PUBLIC_HUSKEL_API_URL;
-      if (key === 'NEXT_PUBLIC_AKROPOLYS_API_TOKEN') return metaEnv.NEXT_PUBLIC_AKROPOLYS_API_TOKEN || metaEnv.VITE_AKROPOLYS_API_TOKEN || metaEnv.NEXT_PUBLIC_HUSKEL_API_TOKEN;
+      if (key === 'NEXT_PUBLIC_AKROPOLYS_SITE_ID') return metaEnv.NEXT_PUBLIC_AKROPOLYS_SITE_ID || metaEnv.VITE_AKROPOLYS_SITE_ID;
+      if (key === 'NEXT_PUBLIC_AKROPOLYS_API_URL') return metaEnv.NEXT_PUBLIC_AKROPOLYS_API_URL || metaEnv.VITE_AKROPOLYS_API_URL;
+      if (key === 'NEXT_PUBLIC_AKROPOLYS_API_TOKEN') return metaEnv.NEXT_PUBLIC_AKROPOLYS_API_TOKEN || metaEnv.VITE_AKROPOLYS_API_TOKEN;
     }
   } catch { /* ignore */ }
 
@@ -37,9 +32,6 @@ function getEnvVar(key: string): string | undefined {
     if (g.process && g.process.env) {
       const val = g.process.env[key];
       if (val !== undefined) return val;
-      if (key === 'NEXT_PUBLIC_AKROPOLYS_SITE_ID') return g.process.env.NEXT_PUBLIC_HUSKEL_SITE_ID;
-      if (key === 'NEXT_PUBLIC_AKROPOLYS_API_URL') return g.process.env.NEXT_PUBLIC_HUSKEL_API_URL;
-      if (key === 'NEXT_PUBLIC_AKROPOLYS_API_TOKEN') return g.process.env.NEXT_PUBLIC_HUSKEL_API_TOKEN;
     }
   }
   return undefined;
@@ -119,6 +111,30 @@ export class AkropolysClient {
   readonly api: AkropolysAPI;
   readonly vertical: string;
   readonly display?: import('./types').DisplayConfig;
+  readonly entities = {
+    query: async (
+      params: { q: string },
+      options?: { signal?: AbortSignal; onToken?: (token: string) => void }
+    ): Promise<void> => {
+      const stream = this.chat(params.q);
+      if (options?.signal) {
+        options.signal.addEventListener('abort', () => {
+          stream.destroy();
+        });
+      }
+      return new Promise<void>((resolve, reject) => {
+        stream.on('token', (token: string) => {
+          options?.onToken?.(token);
+        });
+        stream.on('error', (err: any) => {
+          reject(err);
+        });
+        stream.on('done', () => {
+          resolve();
+        });
+      });
+    }
+  };
   private ingestQueue: Record<string, any>[] = [];
   private ingestTimer: ReturnType<typeof setTimeout> | null = null;
   private ingestedUrls = new Map<string, string>();
@@ -129,6 +145,8 @@ export class AkropolysClient {
   private authLoading?: boolean;
   public onCheckout?: (cart: import('./types').CartPayload) => void;
   public onError?: (error: import('./types').AkropolysError) => void;
+
+  private contextProviders: Array<(signal?: AbortSignal) => Promise<Record<string, any>>> = [];
 
   private isFlushing = false;
   private retryCount = 0;
@@ -168,21 +186,24 @@ export class AkropolysClient {
     } catch { /* ignore */ }
   }
 
+  static readonly DEFAULT_API_URL = 'https://api.akropolys.cloud/v1';
+
   constructor(config: AkropolysConfig) {
     const siteId = config.siteId || getEnvVar('NEXT_PUBLIC_AKROPOLYS_SITE_ID') || '';
-    const apiUrl = config.apiUrl || getEnvVar('NEXT_PUBLIC_AKROPOLYS_API_URL') || '';
+    // Every site shares the same managed backend — only self-hosted/local dev
+    // needs to override this via apiUrl or NEXT_PUBLIC_AKROPOLYS_API_URL.
+    const apiUrl = config.apiUrl || getEnvVar('NEXT_PUBLIC_AKROPOLYS_API_URL') || AkropolysClient.DEFAULT_API_URL;
     const apiToken = config.apiToken || getEnvVar('NEXT_PUBLIC_AKROPOLYS_API_TOKEN') || '';
 
     // Runtime validation — fail loudly so misconfiguration is never silent
     if (!siteId) console.error('[Akropolys] Missing siteId. Set it via <AkropolysProvider siteId="..."> or NEXT_PUBLIC_AKROPOLYS_SITE_ID.');
-    if (!apiUrl) console.error('[Akropolys] Missing apiUrl. Set it via <AkropolysProvider apiUrl="..."> or NEXT_PUBLIC_AKROPOLYS_API_URL.');
     if (!apiToken) console.error('[Akropolys] Missing apiToken. Set it via <AkropolysProvider apiToken="..."> or NEXT_PUBLIC_AKROPOLYS_API_TOKEN.');
 
     this.shopperId = config.shopperId;
     this.authLoading = config.authLoading;
     this.onCheckout = config.onCheckout;
     this.onError = config.onError;
-    this.vertical = config.vertical || defaultVertical;
+    this.vertical = config.vertical || 'commerce';
     this.display = config.display;
     this.initSession();
     this.initDevice();
@@ -197,7 +218,7 @@ export class AkropolysClient {
       this.vertical,
       () => this.deviceId
     );
-    instance = this;
+    setInstance(this);
 
     if (typeof window !== 'undefined') {
       this.onlineHandler = () => {
@@ -211,6 +232,34 @@ export class AkropolysClient {
     if (config.indexContent) {
       initContentIndexer(this);
     }
+  }
+
+  registerContextProvider(fn: (signal?: AbortSignal) => Promise<Record<string, any>>): () => void {
+    this.contextProviders.push(fn);
+    return () => {
+      this.contextProviders = this.contextProviders.filter(p => p !== fn);
+    };
+  }
+
+  private async getCurrentContextAsync(signal?: AbortSignal): Promise<any> {
+    const base = this.getCurrentContext();
+    if (this.contextProviders.length === 0) return base ?? {};
+    const results = await Promise.all(
+      this.contextProviders.map(fn =>
+        Promise.race([
+          fn(signal),
+          new Promise<Record<string, any>>((_, reject) =>
+            setTimeout(() => reject(new Error('timeout')), 3000)
+          ),
+        ]).catch(err => {
+          console.warn('[Akropolys] Live context provider failed:', err?.message ?? err);
+          return {} as Record<string, any>;
+        })
+      )
+    );
+    const merged = Object.assign({}, ...results);
+    const safeBase = base ?? {};
+    return { ...safeBase, raw: { ...(safeBase.raw ?? {}), ...merged } };
   }
 
   getCurrentContext(): any {
@@ -252,13 +301,14 @@ export class AkropolysClient {
 
   chat(query: string, history: Array<{ role: 'user' | 'assistant'; content: string }> = [], attachments?: ChatAttachment[]): KikuStream {
     const abortController = new AbortController();
-    const currentContext = this.getCurrentContext();
-    const responsePromise = this.api.chatStream(query, history, abortController.signal, currentContext, attachments);
+    const responsePromise = this.getCurrentContextAsync(abortController.signal).then(ctx =>
+      this.api.chatStream(query, history, abortController.signal, ctx, attachments)
+    );
     return new KikuStream(responsePromise, abortController);
   }
 
   reRegister() {
-    instance = this;
+    setInstance(this);
     if (typeof window !== 'undefined' && !this.onlineHandler) {
       this.onlineHandler = () => this.flushQueue();
       window.addEventListener('online', this.onlineHandler);
@@ -319,12 +369,10 @@ export class AkropolysClient {
   }
 
   /**
-   * Persistent device identity — survives page reloads and is shared across
-   * all Akropolys-powered sites on the same browser. This is the key for
-   * Kiku cross-site capture/memory without requiring a login or phone number.
-   *
-   * To transfer identity to another device, the user exports/imports this ID
-   * via a "link device" flow (future feature).
+   * Persistent device identity — survives reloads, but is scoped to THIS origin
+   * only (localStorage is partitioned per site by the browser). It gives
+   * anonymous within-site continuity. For capture/memory that follows the
+   * shopper ACROSS sites and devices, use setShopperIdentity(phone, magicWord).
    */
   private initDevice() {
     if (typeof window === 'undefined') {
@@ -347,7 +395,31 @@ export class AkropolysClient {
     return this.deviceId;
   }
 
+  /**
+   * Enable cross-site Kiku capture/memory. The phone + magic word together form
+   * the shopper's identity: enter the SAME pair on any site/device to recall
+   * what was saved. The word is never sent or stored in plaintext server-side —
+   * it's folded into a hash; a wrong word simply opens a different empty space.
+   * Tip: the word is the only secret (phone numbers are semi-public), so pick a
+   * memorable, non-obvious one — if forgotten, saved items can't be recovered.
+   */
+  setShopperIdentity(phone: string, magicWord: string): void {
+    if (typeof window === 'undefined') return;
+    const p = (phone || '').trim();
+    const w = (magicWord || '').trim();
+    if (p) localStorage.setItem('akropolys_user_phone', p);
+    if (w) localStorage.setItem('akropolys_user_secret', w);
+  }
+
+  /** Sign out of cross-site identity on this device (saves remain on the server). */
+  clearShopperIdentity(): void {
+    if (typeof window === 'undefined') return;
+    localStorage.removeItem('akropolys_user_phone');
+    localStorage.removeItem('akropolys_user_secret');
+  }
+
   destroy() {
+    this.contextProviders = [];
     if (typeof window !== 'undefined' && this.onlineHandler) {
       window.removeEventListener('online', this.onlineHandler);
       this.onlineHandler = null;
@@ -364,14 +436,28 @@ export class AkropolysClient {
       this.contentIndexerCleanup();
       this.contentIndexerCleanup = null;
     }
-    if (instance === this) instance = null;
+    if (getInstance() === this) setInstance(null);
   }
 
+  /** @deprecated Use ingest() instead */
   async queueIngest(rawItem: Record<string, any>): Promise<void> {
-    this.lastIngestedItem = rawItem;
+    return this.ingest(rawItem);
+  }
+
+  /** @deprecated Use ingestMany() instead */
+  async queueIngestBatch(rawItems: Record<string, any>[]): Promise<void> {
+    return this.ingestMany(rawItems);
+  }
+
+  /**
+   * Ingest a single entity.
+   * @see Entity for the contract
+   */
+  async ingest<T extends Record<string, any>>(entity: T): Promise<void> {
+    this.lastIngestedItem = entity;
     // 1. Identity resolution
-    const id = rawItem.id ?? rawItem.productId ?? rawItem.slug ?? rawItem.url ?? rawItem.name ?? '';
-    const url = rawItem.url || (typeof window !== 'undefined' ? window.location.href : '');
+    const id = entity.id ?? (entity as any).productId ?? (entity as any).slug ?? entity.url ?? (entity as any).name ?? '';
+    const url = entity.url || (typeof window !== 'undefined' ? window.location.href : '');
 
     if (!id && !url) {
       console.warn('[Akropolys] Ingestion warning: Item is missing both a stable identifier and a URL. Skipping.');
@@ -379,7 +465,7 @@ export class AkropolysClient {
     }
 
     // 2. URL deduplication
-    const fingerprint = stableStringify(rawItem);
+    const fingerprint = stableStringify(entity);
     if (url) {
       if (this.ingestedUrls.get(url) === fingerprint) {
         return;
@@ -389,25 +475,29 @@ export class AkropolysClient {
     }
 
     // 3. Enqueue raw
-    this.ingestQueue.push(rawItem);
+    this.ingestQueue.push(entity);
     this.scheduleFlush();
   }
 
-  async queueIngestBatch(rawItems: Record<string, any>[]): Promise<void> {
-    if (rawItems.length > 0) {
-      this.lastIngestedItem = rawItems[rawItems.length - 1];
+  /**
+   * Ingest multiple entities.
+   * @see Entity for the contract
+   */
+  async ingestMany<T extends Record<string, any>>(entities: T[]): Promise<void> {
+    if (entities.length > 0) {
+      this.lastIngestedItem = entities[entities.length - 1];
     }
     let hasNew = false;
-    rawItems.forEach(rawItem => {
-      const id = rawItem.id ?? rawItem.productId ?? rawItem.slug ?? rawItem.url ?? rawItem.name ?? '';
-      const url = rawItem.url || (typeof window !== 'undefined' ? window.location.href : '');
+    entities.forEach(entity => {
+      const id = entity.id ?? (entity as any).productId ?? (entity as any).slug ?? entity.url ?? (entity as any).name ?? '';
+      const url = entity.url || (typeof window !== 'undefined' ? window.location.href : '');
 
       if (!id && !url) {
         console.warn('[Akropolys] Ingestion warning: Item is missing both a stable identifier and a URL. Skipping.');
         return;
       }
 
-      const fingerprint = stableStringify(rawItem);
+      const fingerprint = stableStringify(entity);
       if (url) {
         if (this.ingestedUrls.get(url) === fingerprint) {
           return;
@@ -416,7 +506,7 @@ export class AkropolysClient {
         hasNew = true;
       }
 
-      this.ingestQueue.push(rawItem);
+      this.ingestQueue.push(entity);
     });
 
     if (hasNew) {
@@ -592,21 +682,37 @@ export class AkropolysClient {
   }
 }
 
-let instance: AkropolysClient | null = null;
+// The active client is stored on globalThis (not a module-local variable) so it
+// is shared even when a bundler/package manager ends up with multiple copies of
+// this package — e.g. an app and a UI library each resolving their own
+// @akropolys/sdk. Without this, the widget's copy can't see the client the app's
+// copy created, and every request fires with no apiUrl ("Failed to fetch").
+const GLOBAL_KEY = '__akropolys_client__';
+
+function getInstance(): AkropolysClient | null {
+  return (globalThis as any)[GLOBAL_KEY] ?? null;
+}
+
+function setInstance(c: AkropolysClient | null): void {
+  (globalThis as any)[GLOBAL_KEY] = c;
+}
 
 export function initAkropolys(config: AkropolysConfig): AkropolysClient {
-  instance = new AkropolysClient(config);
-  return instance;
+  const c = new AkropolysClient(config);
+  setInstance(c);
+  return c;
 }
 
 export function getAkropolysClient(): AkropolysClient {
+  let instance = getInstance();
   if (!instance) {
     const siteId = getEnvVar('NEXT_PUBLIC_AKROPOLYS_SITE_ID');
     const apiUrl = getEnvVar('NEXT_PUBLIC_AKROPOLYS_API_URL');
     const apiToken = getEnvVar('NEXT_PUBLIC_AKROPOLYS_API_TOKEN');
 
-    if (siteId && apiUrl && apiToken) {
+    if (siteId && apiToken) {
       instance = new AkropolysClient({ siteId, apiUrl, apiToken });
+      setInstance(instance);
     } else {
       throw new Error('[Akropolys] Call initAkropolys() or set NEXT_PUBLIC_AKROPOLYS_* environment variables before using the client.');
     }

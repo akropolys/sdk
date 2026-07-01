@@ -88,7 +88,7 @@ export function SearchBar({
     }
     ignoreNextQueryChange.current = true;
     setOpen(false);
-    setQuery(r.product.name);
+    setQuery(r.entity.title ?? r.entity.name ?? '');
     onSelect?.(r);
   };
 
@@ -174,10 +174,10 @@ export function SearchBar({
                   >
                     <span className="hsk-sb-row-icon"><SearchIcon /></span>
                     <div className="hsk-sb-row-body">
-                      <div className="hsk-sb-row-title">{r.product.name}</div>
-                      {(r.product.category || r.product.brand) && (
+                      <div className="hsk-sb-row-title">{r.entity.title ?? r.entity.name}</div>
+                      {(r.entity.category || r.entity.brand) && (
                         <div className="hsk-sb-row-sub">
-                          {r.product.category ?? r.product.brand}
+                          {r.entity.category ?? r.entity.brand}
                         </div>
                       )}
                     </div>

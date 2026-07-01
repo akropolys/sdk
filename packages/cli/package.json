@@ -1,6 +1,6 @@
 {
   "name": "@akropolys/cli",
-  "version": "1.5.8",
+  "version": "1.6.0",
   "description": "Akropolys CLI — diagnostic, workspace setup, and payload inspection utility.",
   "license": "MIT",
   "publishConfig": {

@@ -31,14 +31,12 @@ export async function runDoctor(options: { verbose?: boolean }) {
 
   const siteId = process.env.NEXT_PUBLIC_AKROPOLYS_SITE_ID || process.env.VITE_AKROPOLYS_SITE_ID || '';
   const apiToken = process.env.NEXT_PUBLIC_AKROPOLYS_API_TOKEN || process.env.VITE_AKROPOLYS_API_TOKEN || '';
-  const apiUrl = process.env.NEXT_PUBLIC_AKROPOLYS_API_URL || process.env.VITE_AKROPOLYS_API_URL || 'https://api.akropolys.io';
-  const vertical = process.env.NEXT_PUBLIC_AKROPOLYS_VERTICAL || process.env.VITE_AKROPOLYS_VERTICAL || 'commerce';
+  const apiUrl = process.env.NEXT_PUBLIC_AKROPOLYS_API_URL || process.env.VITE_AKROPOLYS_API_URL || 'https://api.akropolys.cloud/v1';
 
   if (options.verbose) {
     console.log(pc.dim(`[Verbose] Site ID: ${siteId || '<not set>'}`));
     console.log(pc.dim(`[Verbose] API Token: ${apiToken ? '********' : '<not set>'}`));
     console.log(pc.dim(`[Verbose] API URL: ${apiUrl}`));
-    console.log(pc.dim(`[Verbose] Vertical: ${vertical}`));
   }
 
   // 1. Configuration check
@@ -76,7 +74,6 @@ export async function runDoctor(options: { verbose?: boolean }) {
     }
 
     console.log(pc.green(`✓ Connection: Successfully connected to ${apiUrl} (ping: ${duration}ms)`));
-    console.log(pc.green(`✓ Integration: Site vertical configured as "${vertical}"`));
 
     console.log(pc.bold(pc.green('\nStatus: Healthy (All configuration and connectivity checks passed)')));
     process.exit(0);

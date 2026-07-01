@@ -106,9 +106,10 @@ export class KikuStream {
       let buffer = '';
       let accumulatedMessage = '';
 
+      let isDoneEvent = false;
       while (true) {
         const { done, value } = await reader.read();
-        if (done || this.aborted) break;
+        if (done || this.aborted || isDoneEvent) break;
 
         buffer += decoder.decode(value, { stream: true });
 
@@ -144,6 +145,7 @@ export class KikuStream {
           }
 
           if (event === 'done') {
+            isDoneEvent = true;
             break;
           }
 
@@ -161,6 +163,10 @@ export class KikuStream {
           const token = data.replace(/\\n/g, '\n');
           accumulatedMessage += token;
           this.emit('token', token);
+        }
+
+        if (isDoneEvent) {
+          break;
         }
       }
 

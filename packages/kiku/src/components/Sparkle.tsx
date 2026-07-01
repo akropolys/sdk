@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearch, useKiku, useAkropolysContext } from '@akropolys/sdk';
 import { renderMarkdown } from '../utils/markdown';
@@ -11,11 +11,11 @@ export interface SparkleProps {
   onResult?: (results: SearchResult[]) => void;
   /** Override the backdrop colour (any CSS colour/gradient) */
   backdropColor?: string;
-  /** Override backdrop blur — e.g. "8px" or 8 */
+  /** Override backdrop blur â€” e.g. "8px" or 8 */
   backdropBlur?: string | number;
   /** Extra classes on the trigger button */
   className?: string;
-  /** Called when user clicks a result — return false to prevent default navigation */
+  /** Called when user clicks a result â€” return false to prevent default navigation */
   onNavigate?: (result: SearchResult) => boolean | void;
   theme?: AkropolysTheme;
   classNames?: {
@@ -28,7 +28,7 @@ export interface SparkleProps {
   children?: React.ReactNode;
 }
 
-/* ── Modal ────────────────────────────────────────────────────────────────── */
+/* â”€â”€ Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 interface ModalProps extends Pick<SparkleProps, 'productName' | 'limit' | 'backdropColor' | 'backdropBlur' | 'onNavigate' | 'onResult' | 'theme' | 'classNames' | 'product'> {
   onClose: () => void;
 }
@@ -78,7 +78,7 @@ const SparkleIcon = ({ className, size = 16 }: { className?: string; size?: numb
       strokeWidth="2.5"
       strokeLinecap="round"
     />
-    {/* Smooth breathing mark (spiritus lenis) at top-left — animated */}
+    {/* Smooth breathing mark (spiritus lenis) at top-left â€” animated */}
     <path
       d="M8.5 2.5 C10 2.5, 11 3.5, 11 5 C11 7, 8.5 8.5, 7.5 9.5"
       stroke="currentColor"
@@ -104,7 +104,7 @@ const ArrowUpIcon = () => (
   </svg>
 );
 
-/* ── Modal ────────────────────────────────────────────────────────────────── */
+/* â”€â”€ Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 interface ModalProps extends Pick<SparkleProps, 'productName' | 'limit' | 'backdropColor' | 'backdropBlur' | 'onNavigate' | 'onResult' | 'theme' | 'classNames' | 'product'> {
   onClose: () => void;
 }
@@ -157,7 +157,7 @@ function SparkleModal({
       client.api.searchVector(productName, 1)
         .then(res => {
           if (res.results && res.results.length > 0) {
-            setFetchedProduct(res.results[0].product);
+            setFetchedProduct(res.results[0].entity);
           }
         })
         .catch(err => console.error('[Akropolys] Failed to fetch product details', err));
@@ -197,7 +197,7 @@ function SparkleModal({
     const prevent = onNavigate?.(r);
     if (prevent !== false) {
       onClose();
-      if (r.product.url) window.location.href = r.product.url;
+      if (r.entity.url) window.location.href = r.entity.url;
     }
   };
 
@@ -313,7 +313,7 @@ function SparkleModal({
                                   {displayProduct.images?.[0] ? (
                                     <img src={displayProduct.images[0]} alt={displayProduct.name} />
                                   ) : (
-                                    <span>🛍</span>
+                                    <span>ðŸ›</span>
                                   )}
                                 </div>
                                 <div className="hsk-sp-mobile-main-card-info">
@@ -340,8 +340,8 @@ function SparkleModal({
                               {(() => {
                                 const similarProducts = results.filter(
                                   r => {
-                                    const isSameName = !!(r.product.name && displayProduct?.name && r.product.name.toLowerCase() === displayProduct.name.toLowerCase());
-                                    const isSameSlug = r.product.slug && displayProduct?.slug && r.product.slug.toLowerCase() === displayProduct.slug.toLowerCase();
+                                    const isSameName = !!(r.entity.name && displayProduct?.name && r.entity.name.toLowerCase() === displayProduct.name.toLowerCase());
+                                    const isSameSlug = r.entity.slug && displayProduct?.slug && r.entity.slug.toLowerCase() === displayProduct.slug.toLowerCase();
                                     return !isSameName && !isSameSlug;
                                   }
                                 );
@@ -353,8 +353,8 @@ function SparkleModal({
                                     <div className="hsk-sp-mobile-similar-carousel-title">Similar Products</div>
                                     <div className="hsk-sp-mobile-similar-carousel-list">
                                       {similarProducts.map((r) => {
-                                        const price = parseFloat(r.product.price?.replace(/[^0-9.]/g, '') || '0');
-                                        const currency = r.product.currency ?? 'KES';
+                                        const price = parseFloat(r.entity.price?.replace(/[^0-9.]/g, '') || '0');
+                                        const currency = r.entity.currency ?? 'KES';
                                         return (
                                           <div
                                             key={r.id}
@@ -362,15 +362,15 @@ function SparkleModal({
                                             onClick={() => handleNav(r)}
                                           >
                                             <div className="hsk-sp-mobile-similar-carousel-img">
-                                              {r.product.images?.[0] ? (
-                                                <img src={r.product.images[0]} alt={r.product.name} />
+                                              {r.entity.images?.[0] ? (
+                                                <img src={r.entity.images[0]} alt={r.entity.name} />
                                               ) : (
-                                                <span>🛍</span>
+                                                <span>ðŸ›</span>
                                               )}
                                             </div>
                                             <div className="hsk-sp-mobile-similar-carousel-meta">
-                                              <div className="hsk-sp-mobile-similar-carousel-name" title={r.product.name}>
-                                                {r.product.name}
+                                              <div className="hsk-sp-mobile-similar-carousel-name" title={r.entity.name}>
+                                                {r.entity.name}
                                               </div>
                                               <div className="hsk-sp-mobile-similar-carousel-price">
                                                 {currency} {price.toLocaleString()}
@@ -507,7 +507,7 @@ function SparkleModal({
                     {displayProduct.images?.[0] ? (
                       <img src={displayProduct.images[0]} alt={displayProduct.name} />
                     ) : (
-                      <span className="hsk-sp-img-placeholder">🛍</span>
+                      <span className="hsk-sp-img-placeholder">ðŸ›</span>
                     )}
                   </div>
                   <div className="hsk-sp-details-meta">
@@ -530,7 +530,7 @@ function SparkleModal({
                     <div className="hsk-sp-item-meta-badges">
                       {displayProduct.rating && (
                         <span className="hsk-sp-meta-badge hsk-sp-meta-badge-rating">
-                          ★ {parseFloat(displayProduct.rating.toString()).toFixed(1)} {displayProduct.reviewCount ? `(${displayProduct.reviewCount})` : ''}
+                          â˜… {parseFloat(displayProduct.rating.toString()).toFixed(1)} {displayProduct.reviewCount ? `(${displayProduct.reviewCount})` : ''}
                         </span>
                       )}
                       {displayProduct.availability && (
@@ -574,8 +574,8 @@ function SparkleModal({
                 {(() => {
                   const similarProducts = results.filter(
                     r => {
-                      const isSameName = !!(r.product.name && displayProduct?.name && r.product.name.toLowerCase() === displayProduct.name.toLowerCase());
-                      const isSameSlug = r.product.slug && displayProduct?.slug && r.product.slug.toLowerCase() === displayProduct.slug.toLowerCase();
+                      const isSameName = !!(r.entity.name && displayProduct?.name && r.entity.name.toLowerCase() === displayProduct.name.toLowerCase());
+                      const isSameSlug = r.entity.slug && displayProduct?.slug && r.entity.slug.toLowerCase() === displayProduct.slug.toLowerCase();
                       return !isSameName && !isSameSlug;
                     }
                   );
@@ -585,8 +585,8 @@ function SparkleModal({
                   }
 
                   return similarProducts.map((r, i) => {
-                    const price = parseFloat(r.product.price?.replace(/[^0-9.]/g, '') || '0');
-                    const currency = r.product.currency ?? 'KES';
+                    const price = parseFloat(r.entity.price?.replace(/[^0-9.]/g, '') || '0');
+                    const currency = r.entity.currency ?? 'KES';
                     return (
                       <div
                         key={r.id}
@@ -595,18 +595,18 @@ function SparkleModal({
                         onClick={() => handleNav(r)}
                       >
                         <div className="hsk-sp-img-wrap">
-                          {r.product.images?.[0] ? (
-                            <img src={r.product.images[0]} alt={r.product.name} />
+                          {r.entity.images?.[0] ? (
+                            <img src={r.entity.images[0]} alt={r.entity.name} />
                           ) : (
-                            <span className="hsk-sp-img-placeholder">🛍</span>
+                            <span className="hsk-sp-img-placeholder">ðŸ›</span>
                           )}
                         </div>
                         <div className="hsk-sp-item-body">
                           <div>
-                            {r.product.category && (
-                              <div className="hsk-sp-item-cat">{r.product.category}</div>
+                            {r.entity.category && (
+                              <div className="hsk-sp-item-cat">{r.entity.category}</div>
                             )}
-                            <div className="hsk-sp-item-name" title={r.product.name}>{r.product.name}</div>
+                            <div className="hsk-sp-item-name" title={r.entity.name}>{r.entity.name}</div>
                           </div>
                           <div className="hsk-sp-item-price-row">
                             <span className="hsk-sp-item-currency">{currency}</span>
@@ -705,7 +705,7 @@ function SparkleModal({
   );
 }
 
-/* ── Exported component ───────────────────────────────────────────────────── */
+/* â”€â”€ Exported component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 export function Sparkle({ 
   productName, 
   limit = 8, 
@@ -761,3 +761,4 @@ export function Sparkle({
     </>
   );
 }
+

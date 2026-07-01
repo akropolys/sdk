@@ -4577,13 +4577,14 @@ button, [role="button"] {
 
 /* ─── Generic Entity Referencing Highlights ────────────────── */
 .hsk-cb-source--referenced {
-  border-color: #fbbf24 !important; /* Gold border glow */
-  box-shadow: 0 0 10px rgba(251, 191, 36, 0.4);
+  /* No orange/gold border — the carousel already only shows the referenced
+     products, so no extra card-border treatment is needed. */
 }
 
 .hsk-source-card--referenced {
-  border-color: #fbbf24 !important; /* Gold border glow */
-  box-shadow: 0 0 10px rgba(251, 191, 36, 0.4);
+  /* No special border treatment — referenced products are shown on their own
+     under the "Featured in response" heading, so the grouping already conveys
+     it without an orange/gold card border. */
 }
 
 .hsk-cb-source-ref-badge {

@@ -1,4 +1,4 @@
-export { initAkropolys, getAkropolysClient, AkropolysClient, setSDKDefaultVertical, resolveDisplayFields } from './client';
+export { initAkropolys, getAkropolysClient, AkropolysClient, resolveDisplayFields } from './client';
 export type { DisplayFields } from './client';
 export { AkropolysAPI } from './api';
 export { KikuStream } from './stream';
@@ -9,11 +9,10 @@ export { useIngest } from './hooks/useIngest';
 export { useListIngest } from './hooks/useListIngest';
 export { usePageIngest } from './hooks/usePageIngest';
 export { useKiku } from './hooks/useKiku';
-export { useCart } from './hooks/useCart';
-export { usePaymentPolling } from './hooks/usePaymentPolling';
-export type { UsePaymentPollingProps } from './hooks/usePaymentPolling';
+export { useLiveContext } from './hooks/useLiveContext';
 export type { ChatMessage, ChatSource, ChatMetadata } from './stream';
 export type {
+  Entity,
   Product,
   RawProductInput,
   AkropolysConfig,
@@ -26,17 +25,12 @@ export type {
   AkropolysTheme,
   CartPayload,
   CartItem,
-  CheckoutConfig,
-  PaymentInitResponse,
-  PaymentStatusResponse,
   ChatAction,
   ContentIngestPayload,
   ChatAttachment,
   StyleDNA,
   VisualSearchResponse,
 } from './types';
-
-export { pollTransactionStatus } from './utils/poll';
 
 
 

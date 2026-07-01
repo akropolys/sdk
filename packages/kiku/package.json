@@ -1,7 +1,7 @@
 {
   "name": "@akropolys/kiku",
-  "version": "1.5.8",
-  "description": "Kiku — plug-and-play React AI chat, search, and commerce UI components for Akropolys.",
+  "version": "1.6.0",
+  "description": "Ready-made React UI components for the Akropolys intent platform.",
   "license": "MIT",
   "keywords": [
     "akropolys",
@@ -44,7 +44,7 @@
   "peerDependencies": {
     "react": ">=17",
     "react-dom": ">=17",
-    "@akropolys/sdk": "^1.5.8"
+    "@akropolys/sdk": "^1.6.0"
   },
   "peerDependenciesMeta": {
     "react": {

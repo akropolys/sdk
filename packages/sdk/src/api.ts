@@ -1,4 +1,4 @@
-import { Product, SearchResponse, IngestResponse, AkropolysError, CheckoutConfig, PaymentInitResponse, PaymentStatusResponse } from './types';
+import { Product, SearchResponse, IngestResponse, AkropolysError } from './types';
 
 const MAX_RETRIES = 3;
 const RETRY_DELAYS = [500, 1000, 2000]; // ms
@@ -33,6 +33,7 @@ export class AkropolysAPI {
         'Content-Type': 'application/json',
         'X-Akropolys-Token': this.apiToken,
         'X-Akropolys-Site': this.siteId,
+        'X-Akropolys-Vertical': this.vertical || '',
       };
 
       const shopperId = this.getShopperId?.();
@@ -89,6 +90,11 @@ export class AkropolysAPI {
 
       return res.json();
     } catch (e) {
+      // Caller aborted (debounce / cleanup / a newer query superseded this one).
+      // This is expected, not a failure — never retry or log it.
+      if ((e as any)?.name === 'AbortError' || signal?.aborted) {
+        throw e;
+      }
       // Network error (offline, DNS, etc.)
       if ((e as AkropolysError).status === undefined) {
         if (attempt < MAX_RETRIES - 1) {
@@ -103,7 +109,7 @@ export class AkropolysAPI {
   }
 
   async ingest(product: Record<string, any>): Promise<IngestResponse> {
-    log('info', 'ingesting product', product.name || product.id || '');
+    log('info', 'ingesting entity', product.name || product.id || product.url || '');
     const url = product.url || '';
     const fields: Record<string, any> = {};
     for (const [k, v] of Object.entries(product)) {
@@ -123,7 +129,7 @@ export class AkropolysAPI {
   }
 
   async ingestBatch(products: Record<string, any>[]): Promise<IngestResponse> {
-    log('info', `ingesting batch of ${products.length} products`);
+    log('info', `ingesting batch of ${products.length} entities`);
     const formattedEntities = products.map(product => {
       const url = product.url || '';
       const fields: Record<string, any> = {};
@@ -167,8 +173,7 @@ export class AkropolysAPI {
   // LLM chat — conversational search with history context.
   async chat(query: string, history: Array<{ role: 'user' | 'assistant'; content: string }> = [], currentContext?: any): Promise<{ answer: string; sources: any[]; intent?: string; checkout?: import('./types').CartPayload; action?: any }> {
     log('info', 'chat query', query);
-    const path = !this.vertical || this.vertical === 'commerce' ? '/chat' : `/chat/${this.vertical}`;
-    return this.post(path, { query, siteId: this.siteId, history, currentContext });
+    return this.post('/chat', { query, siteId: this.siteId, history, currentContext });
   }
 
   // Streaming variant — returns the raw fetch Response.
@@ -179,6 +184,7 @@ export class AkropolysAPI {
       'Content-Type': 'application/json',
       'X-Akropolys-Token': this.apiToken,
       'X-Akropolys-Site': this.siteId,
+      'X-Akropolys-Vertical': this.vertical || '',
     };
     const shopperId = this.getShopperId?.();
     if (shopperId) headers['X-Akropolys-Shopper-Id'] = shopperId;
@@ -186,10 +192,18 @@ export class AkropolysAPI {
     if (sessionId) headers['X-Akropolys-Session-Id'] = sessionId;
     const deviceId = this.getDeviceId?.();
     if (deviceId) headers['X-Akropolys-Device-Id'] = deviceId;
-    const path = !this.vertical || this.vertical === 'commerce' ? '/chat/stream' : `/chat/stream/${this.vertical}`;
+    // Cross-site identity: phone + chosen "magic word". Same phone+word on any
+    // site = same saved-items/memory namespace; a wrong word = a different empty
+    // one. The device id above is only an anonymous within-site fallback.
+    if (typeof window !== 'undefined') {
+      const phone = localStorage.getItem('akropolys_user_phone');
+      if (phone) headers['X-Akropolys-Shopper-Phone'] = phone;
+      const secret = localStorage.getItem('akropolys_user_secret');
+      if (secret) headers['X-Akropolys-Shopper-Secret'] = secret;
+    }
     const body: Record<string, any> = { query, siteId: this.siteId, history, currentContext };
     if (attachments && attachments.length > 0) body.attachments = attachments;
-    const res = await fetch(`${this.apiUrl}${path}`, {
+    const res = await fetch(`${this.apiUrl}/chat/stream`, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
@@ -225,92 +239,5 @@ export class AkropolysAPI {
   ): Promise<{ answer: string }> {
     log('info', 'analyzeImage query', query ?? '(describe)');
     return this.post('/chat/vision', { siteId: this.siteId, image, query });
-  }
-
-  // --- Cart System ---
-  private buildHeaders(): Record<string, string> {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'X-Akropolys-Token': this.apiToken,
-      'X-Akropolys-Site': this.siteId,
-    };
-    const shopperId = this.getShopperId?.();
-    if (shopperId) headers['X-Akropolys-Shopper-Id'] = shopperId;
-    const sessionId = this.getSessionId?.();
-    if (sessionId) headers['X-Akropolys-Session-Id'] = sessionId;
-    const deviceId = this.getDeviceId?.();
-    if (deviceId) headers['X-Akropolys-Device-Id'] = deviceId;
-    if (typeof window !== 'undefined') {
-      // Phone is only needed for M-Pesa checkout — not for Kiku device identity
-      const phone = localStorage.getItem('akropolys_user_phone');
-      if (phone) {
-        headers['X-Akropolys-Shopper-Phone'] = phone;
-      }
-    }
-    return headers;
-  }
-
-  async getCart(): Promise<import('./types').CartPayload> {
-    const res = await fetch(`${this.apiUrl}/cart?siteId=${this.siteId}`, {
-      headers: this.buildHeaders()
-    });
-    if (!res.ok) throw new Error('Failed to fetch cart');
-    return res.json();
-  }
-
-  async clearCart(): Promise<import('./types').CartPayload> {
-    const res = await fetch(`${this.apiUrl}/cart?siteId=${this.siteId}`, {
-      method: 'DELETE',
-      headers: this.buildHeaders()
-    });
-    if (!res.ok) throw new Error('Failed to clear cart');
-    return res.json();
-  }
-
-  async checkoutCart(): Promise<import('./types').CartPayload> {
-    const res = await fetch(`${this.apiUrl}/cart/checkout`, {
-      method: 'POST',
-      headers: this.buildHeaders(),
-      body: JSON.stringify({ siteId: this.siteId })
-    });
-    if (!res.ok) throw new Error('Failed to checkout cart');
-    return res.json();
-  }
-
-  async getCheckoutConfig(): Promise<CheckoutConfig> {
-    const res = await fetch(`${this.apiUrl}/checkout/config?site_id=${this.siteId}`, {
-      method: 'GET',
-      headers: this.buildHeaders()
-    });
-    if (!res.ok) throw new Error('Failed to fetch checkout config');
-    return res.json();
-  }
-
-  async initiatePayment(phoneNumber: string, email?: string, firstName?: string, lastName?: string): Promise<PaymentInitResponse> {
-    const res = await fetch(`${this.apiUrl}/payment/initiate`, {
-      method: 'POST',
-      headers: this.buildHeaders(),
-      body: JSON.stringify({
-        siteId: this.siteId,
-        phoneNumber,
-        email,
-        firstName,
-        lastName
-      })
-    });
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error('Failed to initiate payment: ' + errText);
-    }
-    return res.json();
-  }
-
-  async getPaymentStatus(ref: string): Promise<PaymentStatusResponse> {
-    const res = await fetch(`${this.apiUrl}/payment/status?ref=${ref}`, {
-      method: 'GET',
-      headers: this.buildHeaders()
-    });
-    if (!res.ok) throw new Error('Failed to get payment status');
-    return res.json();
   }
 }

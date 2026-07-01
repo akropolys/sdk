@@ -8,9 +8,6 @@ export type { ChatWidgetProps, ChatWidgetProps as KikuChatProps } from './compon
 export { KikuButton } from './components/KikuButton';
 export type { KikuButtonProps } from './components/KikuButton';
 export { Sparkle } from './components/Sparkle';
-export { CartBadge } from './components/CartBadge';
-export { CartDrawer } from './components/CartDrawer';
-export { CheckoutModal } from './components/CheckoutModal';
 export { ComparisonMatrix } from './components/ComparisonMatrix';
 
 // Voice & Vision — free AI input modalities

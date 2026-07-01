@@ -318,9 +318,17 @@ export function ChatWidget({
                   );
                 }
 
-                // Streaming finished: Group into Featured in Response vs All matches
+                // Streaming finished: show the products the answer actually
+                // references. Only fall back to the full candidate list when the
+                // answer referenced none — showing unrelated matches (a kids'
+                // sandal for a "heels to match my dress" query) reads as a bug.
                 const featured = sources.filter(src => src.id && referencedIds.includes(src.id));
-                const general = sources.filter(src => !src.id || !referencedIds.includes(src.id));
+                // Only fall back to the candidate list when the answer referenced
+                // nothing at all. If it referenced specific items, show just those —
+                // never dump unrelated matches (e.g. phones for a sofa question).
+                const general = referencedIds.length > 0
+                  ? []
+                  : sources.filter(src => !src.id || !referencedIds.includes(src.id));
 
                 return (
                   <div className="hsk-sources-container">

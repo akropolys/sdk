@@ -18,22 +18,11 @@ export async function runInit() {
   try {
     const siteId = await question(rl, pc.cyan('? Enter your Akropolys Site ID: '));
     const apiToken = await question(rl, pc.cyan('? Enter your Akropolys API Token: '));
-    const apiUrlInput = await question(rl, pc.cyan('? Enter your Akropolys API URL (default: https://api.akropolys.io): '));
-    const apiUrl = apiUrlInput.trim() || 'https://api.akropolys.io';
 
-    console.log(pc.cyan('? Select your vertical:'));
-    console.log('  1. commerce');
-    console.log('  2. property');
-    console.log('  3. motor');
-    const verticalIndex = await question(rl, pc.cyan('  Select (1-3, default: 1): '));
-    let vertical = 'commerce';
-    if (verticalIndex === '2') vertical = 'property';
-    else if (verticalIndex === '3') vertical = 'motor';
-
+    // apiUrl is optional — the SDK defaults to the shared managed backend
+    // (https://api.akropolys.cloud/v1). Only self-hosted/local dev needs to set it.
     const envContent = `NEXT_PUBLIC_AKROPOLYS_SITE_ID=${siteId.trim()}
 NEXT_PUBLIC_AKROPOLYS_API_TOKEN=${apiToken.trim()}
-NEXT_PUBLIC_AKROPOLYS_API_URL=${apiUrl.trim()}
-NEXT_PUBLIC_AKROPOLYS_VERTICAL=${vertical}
 `;
 
     fs.writeFileSync('.env', envContent, 'utf-8');

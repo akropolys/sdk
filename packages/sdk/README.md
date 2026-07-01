@@ -1,127 +1,65 @@
 # @akropolys/sdk
 
-> Headless AI search, chat, and commerce SDK — the engine behind Kiku.
+[![npm](https://img.shields.io/npm/v/@akropolys/sdk?color=orange)](https://www.npmjs.com/package/@akropolys/sdk) [![License](https://img.shields.io/npm/l/@akropolys/sdk)](https://github.com/akropolys/sdk/blob/main/LICENSE) [![TypeScript](https://img.shields.io/badge/types-included-blue)](https://www.typescriptlang.org/)
 
-`@akropolys/sdk` is the zero-UI core of the Akropolys platform. It gives you raw data streams, React hooks, and a typed API client that you wire up however you like — chat bubbles, spreadsheets, Remotion videos, analytics pipelines. Your call.
+**[Docs](https://akropolys.io/docs)** &nbsp;•&nbsp; **[GitHub](https://github.com/akropolys/sdk)**
 
 ---
+
+## Search bar just got smarter — for any website.
+
+Drop this on a product page and people can search your catalog by typing what they actually want — "family SUV under £28k, not diesel" — instead of clicking through filters. AI agents can search it the same way. There's no search index to build and no product feed to upload: the SDK watches pages as people browse and builds the index itself.
+
+Seven lines of code:
+
+```tsx
+import { usePageIngest, useKiku } from '@akropolys/sdk';
+
+// Index this page as the visitor lands on it
+usePageIngest({
+  id:     product.id,
+  title:  product.title,
+  url:    window.location.href,
+  fields: { price: product.price, category: product.category },
+});
+
+// Search the catalog in plain language
+const { send, messages } = useKiku();
+send('family SUV under £28k, not diesel');
+```
+
+## What you get
+
+Every page visited gets indexed automatically, so there's no batch job or sync pipeline to maintain. Search understands plain language rather than matching exact keywords, so "cheap running shoes for flat feet" actually returns something useful. AI agents like Claude can query the same catalog through MCP, using the same interface a shopper would. There's a built-in LLM to get started with, or bring your own provider. Everything is typed, and it works with React hooks or plain JS if you're not on React.
 
 ## Install
 
 ```bash
 npm install @akropolys/sdk
-# or
-pnpm add @akropolys/sdk
 ```
 
-React and react-dom are optional peer dependencies. Only required if you use the React hooks or `<AkropolysProvider>`.
+`react` and `react-dom` are optional peer dependencies — only needed if you use the hooks.
 
----
-
-## Quick start (React)
+## Setup
 
 ```tsx
-import { AkropolysProvider, useKiku } from '@akropolys/sdk';
+import { AkropolysProvider } from '@akropolys/sdk';
 
-function App() {
+export default function App({ children }) {
   return (
     <AkropolysProvider
-      siteId="your-site-id"
-      apiUrl="https://api.akropolys.io"
-      apiToken="your-api-token"
+      siteId={process.env.NEXT_PUBLIC_AKROPOLYS_SITE_ID}
+      apiToken={process.env.NEXT_PUBLIC_AKROPOLYS_API_TOKEN}
     >
-      <Chat />
+      {children}
     </AkropolysProvider>
   );
 }
-
-function Chat() {
-  const { send, messages, loading } = useKiku();
-
-  return (
-    <div>
-      {messages.map((m, i) => <p key={i}><b>{m.role}:</b> {m.content}</p>)}
-      <button onClick={() => send('What is the cheapest phone?')} disabled={loading}>
-        Ask
-      </button>
-    </div>
-  );
-}
 ```
 
----
+That's the whole setup — no API URL to look up, it points at the managed backend by default.
 
-## Vanilla JS — event-driven streaming
-
-```ts
-import { AkropolysClient } from '@akropolys/sdk';
-
-const client = new AkropolysClient({
-  siteId: 'your-site-id',
-  apiUrl: 'https://api.akropolys.io',
-  apiToken: 'your-api-token',
-});
-
-const stream = client.chat('Best laptop under KSh 80,000?');
-
-stream
-  .on('token', (token: string) => process.stdout.write(token))
-  .on('meta', (meta) => console.log('Sources:', meta.sources))
-  .on('done', (full: string) => console.log('\nFinished:', full))
-  .on('error', (err: Error) => console.error(err));
-```
-
----
-
-## Hooks
-
-| Hook | Description |
-|---|---|
-| `useKiku(options?)` | Chat hook — streams AI responses, manages message history |
-| `useSearch()` | Real-time vector product search |
-| `useIngest()` | Fire-and-forget product ingestion |
-| `usePageIngest(product)` | Auto-ingest current product page on mount |
-| `useListIngest(products)` | Auto-ingest a catalog list on mount |
-| `useCart()` | Read shopper cart state |
-| `usePaymentPolling(props)` | Poll for M-Pesa / payment confirmation |
-| `useAkropolysContext()` | Access the `AkropolysClient` from context |
-
----
-
-## Environment variables
-
-Set these instead of passing props to `<AkropolysProvider>`:
-
-```env
-NEXT_PUBLIC_AKROPOLYS_SITE_ID=your-site-id
-NEXT_PUBLIC_AKROPOLYS_API_URL=https://api.akropolys.io
-NEXT_PUBLIC_AKROPOLYS_API_TOKEN=your-api-token
-```
-
-Vite equivalents (`VITE_AKROPOLYS_*`) are also supported.
-
----
-
-## Sub-paths
-
-```ts
-// Commerce-specific helpers
-import { ... } from '@akropolys/sdk/commerce';
-
-// Property vertical helpers
-import { ... } from '@akropolys/sdk/property';
-```
-
----
-
-## KikuStream events
-
-| Event | Payload | Description |
-|---|---|---|
-| `token` | `string` | Each word/token as it streams |
-| `meta` | `ChatMetadata` | Sources, intent, cart updates |
-| `done` | `string` | Full assembled message |
-| `error` | `Error` | Stream or network error |
+[Read the full docs →](https://akropolys.io/docs)
 
 ---
 

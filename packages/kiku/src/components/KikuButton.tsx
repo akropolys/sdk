@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useKiku, ChatMessage, ChatSource } from '@akropolys/sdk';
-import { usePaymentPolling } from '@akropolys/sdk';
 import { useAkropolysContext } from '@akropolys/sdk';
 import { renderMarkdown } from '../utils/markdown';
 import { AkropolysTheme, CartPayload, CartItem, ChatAttachment } from '@akropolys/sdk';
@@ -383,10 +382,21 @@ function SourcesCarousel({ sources, defaultCurrency, onSelectSource, referencedI
     railRef.current?.scrollBy({ left: 170, behavior: 'smooth' });
   };
 
+  // Ground the carousel to the products the answer actually references. Showing
+  // every retrieval candidate (e.g. a kids' sandal when the user asked for heels
+  // to match a dress) reads as a bug to shoppers. Fall back to all candidates
+  // only when the answer referenced none (e.g. a plain "show me phones" listing,
+  // or while refs are still streaming in).
+  const referenced = sources.filter(s => s.id && referencedIds.includes(s.id));
+  // Only fall back to all candidates when the answer referenced nothing at all.
+  // If it referenced specific items, show just those — never dump unrelated
+  // matches (e.g. phones for a question about a sofa).
+  const display = referencedIds.length > 0 ? referenced : sources;
+
   return (
     <div className="hsk-cb-sources-wrap">
       <div className="hsk-cb-sources" ref={railRef}>
-        {sources.map((src, si) => {
+        {display.map((src, si) => {
           const isReferenced = !!(src.id && referencedIds.includes(src.id));
           return (
             <div
@@ -621,6 +631,22 @@ const getFriendlyError = (err: any) => {
   }
 };
 
+// Memory-key helper: a phone + an auto-generated word = the shopper's portable
+// identity (e.g. "0111466235flyingthunder"). parseMemoryKey accepts either a
+// bare phone (new user → we generate the word) or a full key (returning user).
+const MK_ADJ = ['flying', 'silent', 'golden', 'lucky', 'brave', 'swift', 'royal', 'cosmic'];
+const MK_NOUN = ['thunder', 'falcon', 'river', 'ember', 'tiger', 'comet', 'willow', 'onyx'];
+function generateMagicWord(): string {
+  return MK_ADJ[Math.floor(Math.random() * MK_ADJ.length)] + MK_NOUN[Math.floor(Math.random() * MK_NOUN.length)];
+}
+function parseMemoryKey(raw: string): { phone: string; word: string } {
+  const cleaned = raw.trim().replace(/\s+/g, '');
+  const m = cleaned.match(/^(\d{6,})([a-zA-Z].*)?$/);
+  const phone = m?.[1] || cleaned.replace(/\D/g, '');
+  const word = (m?.[2] || '').toLowerCase() || generateMagicWord();
+  return { phone, word };
+}
+
 // ─── ChatModal Props ───────────────────────────────────────────────────────────
 
 interface ChatModalProps extends Pick<KikuButtonProps, 'title' | 'placeholder' | 'backdropColor' | 'backdropBlur' | 'onSelectSource' | 'defaultCurrency' | 'chips' | 'theme' | 'classNames' | 'enableVoice' | 'enableVision' | 'visionCategoryHint'> {
@@ -794,18 +820,41 @@ function ChatModal({
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     const recognition = new SR();
     recognition.lang = 'en-US';
-    recognition.interimResults = false;
+    // Stream partial results so the user SEES words appear as they speak —
+    // without this there's no feedback that anything was captured until the end.
+    recognition.interimResults = true;
     recognition.maxAlternatives = 1;
     recognitionRef.current = recognition;
 
     recognition.onstart = () => setVoiceState('listening');
     recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript;
-      setInput(transcript);
-      pendingVoiceRef.current = transcript; // handleSend reads this in its effect
-      setVoiceState('processing');
+      let finalText = '';
+      let interimText = '';
+      for (let i = 0; i < event.results.length; i++) {
+        const seg = event.results[i][0].transcript;
+        if (event.results[i].isFinal) finalText += seg;
+        else interimText += seg;
+      }
+      // Live feedback: show the (final + in-progress) text in the input box.
+      const live = (finalText + ' ' + interimText).trim();
+      if (live) setInput(live);
+      // Only auto-send once we have a finalized transcript.
+      if (finalText.trim()) {
+        pendingVoiceRef.current = finalText.trim();
+        setVoiceState('processing');
+      }
     };
-    recognition.onerror = () => setVoiceState('idle');
+    recognition.onerror = (event: any) => {
+      // Surface the cause (most often denied mic permission or no speech) so the
+      // user isn't left guessing whether it worked.
+      const err = event?.error;
+      if (err === 'not-allowed' || err === 'service-not-allowed') {
+        setInput('Microphone access was blocked — enable it in your browser to use voice.');
+      } else if (err === 'no-speech') {
+        setInput("Didn't catch that — tap the mic and try again.");
+      }
+      setVoiceState('idle');
+    };
     recognition.onend = () => {
       // Only reset if we didn't already move to processing
       setVoiceState(prev => prev === 'listening' ? 'idle' : prev);
@@ -840,36 +889,19 @@ function ChatModal({
     }
     return '';
   });
-  const [merchantRef, setMerchantRef] = useState<string | null>(null);
-  const [paymentPhase, setPaymentPhase] = useState<'idle' | 'prompt_phone' | 'awaiting' | 'done' | 'failed'>('idle');
+  const [paymentPhase, setPaymentPhase] = useState<'idle' | 'prompt_phone'>('idle');
+  const [memoryKey, setMemoryKey] = useState<string | null>(null); // shown after first capture sign-up
 
   // ── History sidebar ──────────────────────────────────────────────────────────
   const [sessions, setSessions] = useState<ChatSession[]>(() => loadSessions());
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [replayMessages, setReplayMessages] = useState<ChatMessage[] | null>(null); // null = live session
 
-  // ── Payment polling ──────────────────────────────────────────────────────────
-  const { status: pollStatus } = usePaymentPolling({
-    client: client.api,
-    merchantReference: merchantRef,
-    onSuccess: () => {
-      setPaymentPhase('done');
-      setMerchantRef(null);
-    },
-    onFailure: () => {
-      setPaymentPhase('failed');
-      setMerchantRef(null);
-    },
-  });
-
   // React to lastAction from chat
   useEffect(() => {
     if (!lastAction) return;
     if (lastAction.type === 'request_phone') {
       setPaymentPhase('prompt_phone');
-    } else if (lastAction.type === 'awaiting_payment') {
-      setMerchantRef(lastAction.merchantReference ?? null);
-      setPaymentPhase('awaiting');
     }
   }, [lastAction]);
 
@@ -886,28 +918,17 @@ function ChatModal({
 
   const handlePhoneSubmit = async () => {
     if (!phoneInput.trim()) return;
-    try {
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('akropolys_user_phone', phoneInput.trim());
-      }
-
-      const isHistoryIntent = lastIntent === 'capture' || lastIntent === 'delete' || lastIntent === 'view_history';
-      if (isHistoryIntent) {
-        setPaymentPhase('idle');
-        const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
-        if (lastUserMsg) {
-          await send(lastUserMsg.content);
-        }
-        return;
-      }
-
-      const res = await client.api.initiatePayment(phoneInput.trim());
-      setMerchantRef(res.merchantReference);
-      setPaymentPhase('awaiting');
-    } catch (e: any) {
-      console.error('[Akropolys] initiatePayment error', e);
-      setPaymentPhase('failed');
-    }
+    // request_phone is only the capture/memory flow now (payments were removed),
+    // so this NEVER triggers M-Pesa. Phone (new user → we generate a word) or a
+    // full memory key (returning user) → store identity, show the key, retry.
+    const { phone, word } = parseMemoryKey(phoneInput);
+    if (!phone) return;
+    if (typeof window !== 'undefined') localStorage.setItem('akropolys_user_phone', phone);
+    client.setShopperIdentity(phone, word);
+    setMemoryKey(phone + word);
+    setPaymentPhase('idle');
+    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+    if (lastUserMsg) await send(lastUserMsg.content); // retry under the new identity
   };
 
   // Auto-scroll: only when the user is already pinned near the bottom (within 120px).
@@ -948,7 +969,6 @@ function ChatModal({
     reset();
     setReplayMessages(null);
     setPaymentPhase('idle');
-    setMerchantRef(null);
   }, [reset, saveCurrentSession]);
 
   const handleSourceClick = (src: ChatSource) => {
@@ -1177,7 +1197,12 @@ function ChatModal({
                                   <ThinkingBlock text={thinking} isComplete={isComplete} />
                                 )}
                                 {content && (
-                                  <div className="hsk-cb-ai-text">{renderMarkdown(content)}</div>
+                                  <div className="hsk-cb-ai-text">
+                                    {renderMarkdown(content)}
+                                    {isLast && streaming && (
+                                      <span style={{ display: 'inline-block', width: '0.5em', height: '1.05em', marginLeft: '2px', verticalAlign: 'text-bottom', background: 'currentColor', opacity: 0.55, borderRadius: '1px' }} />
+                                    )}
+                                  </div>
                                 )}
                               </>
                             );
@@ -1269,7 +1294,7 @@ function ChatModal({
                     }
                   `}</style>
                   <div style={{ fontSize: '0.85rem', color: '#6b7280', fontStyle: 'italic', animation: 'hsk-pulse 1.5s infinite ease-in-out' }}>
-                    {isProperty ? 'Analyzing listings...' : 'Searching catalog...'}
+                    Thinking…
                   </div>
                   <div className="hsk-cb-typing" style={{ margin: 0, alignSelf: 'flex-start' }}>
                     <div className="hsk-cb-dot" />
@@ -1282,92 +1307,52 @@ function ChatModal({
 
             {error && <div className="hsk-cb-error">{getFriendlyError(error)}</div>}
 
-            {/* Payment phase UIs */}
-            {!replayMessages && paymentPhase === 'prompt_phone' && (() => {
-              const isHistoryIntent = lastIntent === 'capture' || lastIntent === 'delete' || lastIntent === 'view_history';
-
-              if (isHistoryIntent) {
-                // Kiku capture uses device identity — no phone needed.
-                // This branch is now unreachable but kept as a safety fallback.
-                return null;
-              }
-
-              // M-Pesa checkout phone prompt — plain inline form, no card
-              return (
-                <div className="hsk-cb-ai-msg">
-                  <div className="hsk-cb-ai-icon" style={{ display: 'flex', alignItems: 'center' }}>
-                    <SparkleIcon />
-                  </div>
-                  <div className="hsk-cb-ai-body">
-                    <div className="hsk-cb-ai-text">
-                      <div className="hsk-cb-phone-form">
-                        <label className="hsk-cb-phone-label">Enter your M-Pesa number to pay</label>
-                        <input
-                          type="tel"
-                          className="hsk-cb-phone-input"
-                          placeholder="0712 345 678"
-                          value={phoneInput}
-                          onChange={e => setPhoneInput(e.target.value.replace(/\D/g, ''))}
-                          onKeyDown={e => e.key === 'Enter' && handlePhoneSubmit()}
-                          autoFocus
-                        />
-                        <button className="hsk-cb-phone-submit" onClick={handlePhoneSubmit}>
-                          Send STK push
-                        </button>
-                      </div>
+            {/* Carry-your-items prompt: one field takes a phone (new user → we
+                auto-make the word) OR a full memory key (returning user). This is
+                the ONLY thing request_phone does now — no payments. */}
+            {!replayMessages && paymentPhase === 'prompt_phone' && (
+              <div className="hsk-cb-ai-msg">
+                <div className="hsk-cb-ai-icon" style={{ display: 'flex', alignItems: 'center' }}>
+                  <SparkleIcon />
+                </div>
+                <div className="hsk-cb-ai-body">
+                  <div className="hsk-cb-ai-text">
+                    <div className="hsk-cb-phone-form">
+                      <label className="hsk-cb-phone-label">Your phone number — or paste your memory key</label>
+                      <input
+                        type="text"
+                        className="hsk-cb-phone-input"
+                        placeholder="0712345678  or  0712345678flyingthunder"
+                        value={phoneInput}
+                        onChange={e => setPhoneInput(e.target.value.replace(/[^0-9a-zA-Z]/g, ''))}
+                        onKeyDown={e => e.key === 'Enter' && handlePhoneSubmit()}
+                        autoFocus
+                      />
+                      <button className="hsk-cb-phone-submit" onClick={handlePhoneSubmit}>
+                        Save &amp; sync my items
+                      </button>
                     </div>
                   </div>
                 </div>
-              );
-            })()}
-
-            {!replayMessages && paymentPhase === 'awaiting' && (
-              <div className="hsk-cb-payment-prompt hsk-cb-payment-prompt--awaiting">
-                <div className="hsk-cb-payment-pulse-ring" />
-                <div className="hsk-cb-payment-icon-wrap">
-                  <span style={{fontSize: '2rem'}}>📱</span>
-                </div>
-                <p className="hsk-cb-payment-label" style={{fontWeight: 600}}>Check your phone</p>
-                <p className="hsk-cb-payment-sub">An M-Pesa STK push has been sent.<br/>Enter your PIN to complete payment.</p>
-                <div className="hsk-cb-payment-dots">
-                  <div className="hsk-cb-dot hsk-cb-dot--amber" />
-                  <div className="hsk-cb-dot hsk-cb-dot--amber" />
-                  <div className="hsk-cb-dot hsk-cb-dot--amber" />
-                </div>
               </div>
             )}
 
-            {!replayMessages && paymentPhase === 'done' && (
-              <div className="hsk-cb-payment-prompt hsk-cb-payment-prompt--success">
-                <div className="hsk-cb-payment-success-ring" />
-                <div className="hsk-cb-payment-icon-wrap">
-                  <span style={{fontSize: '2.5rem'}}>✅</span>
+            {!replayMessages && memoryKey && (
+              <div className="hsk-cb-ai-msg">
+                <div className="hsk-cb-ai-icon" style={{ display: 'flex', alignItems: 'center' }}>
+                  <SparkleIcon />
                 </div>
-                <p className="hsk-cb-payment-label">Payment complete!</p>
-                <p className="hsk-cb-payment-sub">Thank you for your order. A confirmation has been sent.</p>
-              </div>
-            )}
-
-            {!replayMessages && paymentPhase === 'failed' && (
-              <div className="hsk-cb-payment-prompt hsk-cb-payment-prompt--failed">
-                <div className="hsk-cb-payment-icon-wrap">
-                  <span style={{fontSize: '2.5rem'}}>❌</span>
-                </div>
-                <p className="hsk-cb-payment-label">Payment failed or timed out</p>
-                <p className="hsk-cb-payment-sub">Please check your M-Pesa PIN and try again, or contact support.</p>
-                <div className="hsk-cb-payment-actions">
-                  <button
-                    className="hsk-cb-pay-submit"
-                    onClick={() => { setPaymentPhase('prompt_phone'); setMerchantRef(null); }}
-                  >
-                    Try again
-                  </button>
-                  <button
-                    className="hsk-cb-pay-secondary"
-                    onClick={() => { setPaymentPhase('idle'); setMerchantRef(null); }}
-                  >
-                    Cancel
-                  </button>
+                <div className="hsk-cb-ai-body">
+                  <div className="hsk-cb-ai-text">
+                    <div style={{ padding: '10px 12px', border: '1px solid var(--hsk-border, #e5e5e5)', borderRadius: 8 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>🔑 Your memory key</div>
+                      <code style={{ display: 'block', fontSize: 14, fontWeight: 700, marginBottom: 6, wordBreak: 'break-all' }}>{memoryKey}</code>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <button className="hsk-cb-phone-submit" style={{ padding: '4px 10px' }} onClick={() => { try { navigator.clipboard?.writeText(memoryKey); } catch { /* ignore */ } }}>Copy</button>
+                        <span style={{ fontSize: 11, opacity: 0.7 }}>Save it — enter it on any site to get your items back.</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -1423,7 +1408,11 @@ function ChatModal({
                   value={input}
                   onChange={handleInput}
                   onKeyDown={handleKeyDown}
-                  placeholder={activePlaceholder}
+                  placeholder={
+                    voiceState === 'listening' ? '🎙️ Listening… tap the mic to stop'
+                    : voiceState === 'processing' ? 'Got it — sending…'
+                    : activePlaceholder
+                  }
                   rows={1}
                   disabled={loading}
                   autoFocus

@@ -1,20 +1,23 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { SearchResult } from '../types';
-import { useAkropolysContext } from '../Provider';
+import { useAkropolys } from './useAkropolys';
 
 interface UseSearchReturn {
   results: SearchResult[];
   loading: boolean;
-  error: string | null;
+  error: any;
   search: (query: string, limit?: number) => void;
+  searchStream: (query: string) => Promise<void>;
+  output: string;
   clear: () => void;
 }
 
 export function useSearch(options?: { type?: 'autocomplete' | 'vector' }): UseSearchReturn {
-  const client = useAkropolysContext();
+  const client = useAkropolys();
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<any>(null);
+  const [output, setOutput] = useState('');
 
   const abortRef = useRef<AbortController | null>(null);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -69,12 +72,52 @@ export function useSearch(options?: { type?: 'autocomplete' | 'vector' }): UseSe
     }, 300);
   }, [client, searchType]);
 
+  const searchStream = useCallback(async (query: string) => {
+    if (!query.trim()) return;
+
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    if (abortRef.current) {
+      abortRef.current.abort();
+    }
+
+    const abortController = new AbortController();
+    abortRef.current = abortController;
+
+    setLoading(true);
+    setError(null);
+    setOutput(''); // Flush viewport
+
+    try {
+      // Pass an immediate delta consumer directly into the agnostic core
+      await client.entities.query(
+        { q: query },
+        {
+          signal: abortController.signal,
+          onToken: (token: string) => {
+            setOutput((prev) => prev + token); // Append token chunks the millisecond they hit the wire
+          }
+        }
+      );
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        setError(err instanceof Error ? err : new Error(String(err)));
+      }
+    } finally {
+      if (!abortController.signal.aborted) {
+        setLoading(false);
+      }
+    }
+  }, [client]);
+
   const clear = useCallback(() => {
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
     }
     abortRef.current?.abort();
     setResults([]);
+    setOutput('');
     setError(null);
     setLoading(false);
   }, []);
@@ -89,5 +132,5 @@ export function useSearch(options?: { type?: 'autocomplete' | 'vector' }): UseSe
     };
   }, []);
 
-  return { results, loading, error, search, clear };
+  return { results, loading, error, search, searchStream, output, clear };
 }
