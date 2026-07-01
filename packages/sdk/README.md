@@ -30,7 +30,7 @@ send('family SUV under £28k, not diesel');
 
 ## What you get
 
-Every page visited gets indexed automatically, so there's no batch job or sync pipeline to maintain. Search understands plain language rather than matching exact keywords, so "cheap running shoes for flat feet" actually returns something useful. AI agents like Claude can query the same catalog through MCP, using the same interface a shopper would. There's a built-in LLM to get started with, or bring your own provider. Everything is typed, and it works with React hooks or plain JS if you're not on React.
+Every page visited gets indexed automatically, so there's no batch job or sync pipeline to maintain. Search understands plain language rather than matching exact keywords, so "cheap running shoes for flat feet" actually returns something useful. Enable agent access and a shopper's own personal AI agent can search, add to cart, and check out on their behalf. There's a built-in LLM to get started with, or bring your own provider. Everything is typed, and it works with React hooks or plain JS if you're not on React.
 
 ## Install
 
