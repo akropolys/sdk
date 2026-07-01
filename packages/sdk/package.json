@@ -1,6 +1,6 @@
 {
   "name": "@akropolys/sdk",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Intent infrastructure for the web. Auto-ingest, natural language search, and personal AI agent access to your catalog.",
   "license": "MIT",
   "keywords": [
