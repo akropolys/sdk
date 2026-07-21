@@ -66,10 +66,32 @@ const parseInline = (text: string, keyPrefix: string): React.ReactNode => {
   });
 };
 
-export function renderMarkdown(content: string): React.ReactNode {
+// A table can only START on a line beginning with "|"; continuations just need a "|".
+function isTableLine(line: string, inTable: boolean): boolean {
+  const t = line.trim();
+  if (inTable) return t.includes('|');
+  return t.startsWith('|');
+}
+
+// Strips at most one leading + one trailing pipe, so a missing closing pipe never drops the last cell.
+function splitTableCells(rowLine: string): string[] {
+  let t = rowLine.trim();
+  if (t.startsWith('|')) t = t.slice(1);
+  if (t.endsWith('|')) t = t.slice(0, -1);
+  return t.split('|').map(c => c.trim());
+}
+
+export function renderMarkdown(content: string, streaming = false): React.ReactNode {
   const lines = content.split('\n');
+  // While streaming, hold back a trailing table row whose closing pipe hasn't arrived yet.
+  if (streaming && lines.length > 0) {
+    const last = lines[lines.length - 1];
+    if (last.trim().startsWith('|') && !last.trim().endsWith('|')) {
+      lines.pop();
+    }
+  }
   const elements: React.ReactNode[] = [];
-  
+
   let i = 0;
   while (i < lines.length) {
     const line = lines[i];
@@ -126,24 +148,35 @@ export function renderMarkdown(content: string): React.ReactNode {
       continue;
     }
 
-    // 5. Tables
-    if (line.trim().startsWith('|')) {
+    // 5. Ordered Lists
+    if (line.match(/^\d+[.)]\s+/)) {
+      const listItems: React.ReactNode[] = [];
+      while (i < lines.length && lines[i].match(/^\d+[.)]\s+/)) {
+        const itemText = lines[i].replace(/^\d+[.)]\s+/, '');
+        listItems.push(<li key={`li-${i}`}>{parseInline(itemText, `li-${i}`)}</li>);
+        i++;
+      }
+      elements.push(<ol key={`ol-${key}`} className="hsk-markdown-list">{listItems}</ol>);
+      continue;
+    }
+
+    // 6. Tables
+    if (isTableLine(line, false)) {
       const tableRows: React.ReactNode[] = [];
       let isHeader = true;
 
-      while (i < lines.length && lines[i].trim().startsWith('|')) {
+      while (i < lines.length && isTableLine(lines[i], true)) {
         const rowLine = lines[i].trim();
-        // Skip markdown table separator (e.g., |---|---|)
-        if (rowLine.match(/^\|[-:| ]+\|$/)) {
+        // Skip markdown table separator (e.g., |---|---| or |---|---)
+        if (rowLine.match(/^\|?[-:| ]+\|?$/) && rowLine.includes('-')) {
           i++;
           isHeader = false;
           continue;
         }
 
-        // Slice to remove outer pipes and map trim to handle empty cells properly
-        const cells = rowLine.split('|').slice(1, -1).map(c => c.trim());
+        const cells = splitTableCells(rowLine);
         const Tag = isHeader ? 'th' : 'td';
-        
+
         tableRows.push(
           <tr key={`tr-${i}`}>
             {cells.map((cell, cIdx) => (
@@ -164,7 +197,7 @@ export function renderMarkdown(content: string): React.ReactNode {
       continue;
     }
 
-    // 6. Default Paragraph
+    // 7. Default Paragraph
     elements.push(
       <p key={key} className="hsk-markdown-p">
         {parseInline(line, key)}

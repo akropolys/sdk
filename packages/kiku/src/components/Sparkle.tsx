@@ -4,6 +4,7 @@ import { useSearch, useKiku, useAkropolysContext } from '@akropolys/sdk';
 import { renderMarkdown } from '../utils/markdown';
 import { SearchResult, Product, AkropolysTheme } from '@akropolys/sdk';
 import { cn } from '../utils/cn';
+import { ArrowUpIcon } from '../utils/icons';
 
 export interface SparkleProps {
   productName: string;
@@ -35,58 +36,17 @@ interface ModalProps extends Pick<SparkleProps, 'productName' | 'limit' | 'backd
 
 const SparkleIcon = ({ className, size = 16 }: { className?: string; size?: number }) => (
   <svg
-    className={cn("hsk-brand-a", className)}
+    className={cn("hsk-brand-mark", className)}
     width={size}
     height={size}
-    viewBox="0 0 28 30"
-    fill="none"
+    viewBox="0 0 100 100"
     xmlns="http://www.w3.org/2000/svg"
-    aria-label="Akropolys"
+    aria-label="kiku"
   >
-    {/* Left leg: elegant thin stroke */}
-    <path
-      d="M14.5 4.5 L6.5 25"
-      stroke="currentColor"
-      strokeWidth="2.2"
-      strokeLinecap="round"
-    />
-    {/* Right leg: bold ancient serif thick stroke */}
-    <path
-      d="M14.5 4.5 L22.5 25"
-      stroke="currentColor"
-      strokeWidth="4.2"
-      strokeLinecap="round"
-    />
-    {/* Crossbar */}
-    <path
-      d="M9.5 17 H19.5"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-    />
-    {/* Left base serif */}
-    <path
-      d="M3 25 H10"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-    />
-    {/* Right base serif */}
-    <path
-      d="M19 25 H26"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-    />
-    {/* Smooth breathing mark (spiritus lenis) at top-left â€” animated */}
-    <path
-      d="M8.5 2.5 C10 2.5, 11 3.5, 11 5 C11 7, 8.5 8.5, 7.5 9.5"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      fill="none"
-      className="hsk-akr-breath"
-    />
+    <g transform="translate(22.7 19) scale(0.62)" fill="currentColor" fillRule="evenodd">
+      <path d="M39.4 10.4 Q44 0 48.6 10.4 L86.1 95.8 Q88 100 83.4 100 L4.6 100 Q0 100 1.9 95.8 Z M24 100 L24 65 Q24 60 27.4 56.3 Q44 38 60.6 56.3 Q64 60 64 65 L64 100 Z" />
+      <circle cx="55" cy="82" r="3.4" />
+    </g>
   </svg>
 );
 
@@ -97,12 +57,6 @@ const CloseIcon = () => (
   </svg>
 );
 
-const ArrowUpIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="m5 12 7-7 7 7"/>
-    <path d="M12 19V5"/>
-  </svg>
-);
 
 /* â”€â”€ Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 interface ModalProps extends Pick<SparkleProps, 'productName' | 'limit' | 'backdropColor' | 'backdropBlur' | 'onNavigate' | 'onResult' | 'theme' | 'classNames' | 'product'> {
@@ -276,7 +230,7 @@ function SparkleModal({
                   </button>
                 )}
               </div>
-              <div className="hsk-sp-header-sub">Akropolys AI Shopping Assistant</div>
+              <div className="hsk-sp-header-sub">kiku</div>
             </div>
             <button className="hsk-sp-close" onClick={onClose} aria-label="Close">
               <CloseIcon />

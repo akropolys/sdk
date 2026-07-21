@@ -23,13 +23,12 @@ export type {
   IngestResponse,
   AkropolysError,
   AkropolysTheme,
-  CartPayload,
-  CartItem,
   ChatAction,
   ContentIngestPayload,
   ChatAttachment,
   StyleDNA,
   VisualSearchResponse,
+  CaptureTarget,
 } from './types';
 
 

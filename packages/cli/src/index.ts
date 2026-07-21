@@ -2,13 +2,14 @@ import { Command } from 'commander';
 import { runInit } from './commands/init';
 import { runDoctor } from './commands/doctor';
 import { runInspect } from './commands/inspect';
+import pkg from '../package.json';
 
 const program = new Command();
 
 program
   .name('akropolys')
   .description('Akropolys Command Line Tool — Developer diagnostics, setup helper, and structural inspector.')
-  .version('1.0.0');
+  .version(pkg.version);
 
 program
   .command('init')

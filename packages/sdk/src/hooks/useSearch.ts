@@ -12,7 +12,7 @@ interface UseSearchReturn {
   clear: () => void;
 }
 
-export function useSearch(options?: { type?: 'autocomplete' | 'vector' }): UseSearchReturn {
+export function useSearch(options?: { type?: 'autocomplete' | 'vector'; debounceMs?: number }): UseSearchReturn {
   const client = useAkropolys();
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -23,6 +23,7 @@ export function useSearch(options?: { type?: 'autocomplete' | 'vector' }): UseSe
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const searchType = options?.type ?? 'autocomplete';
+  const debounceMs = options?.debounceMs ?? 300;
 
   const search = useCallback((query: string, limit = 8) => {
     if (debounceTimerRef.current) {
@@ -69,8 +70,8 @@ export function useSearch(options?: { type?: 'autocomplete' | 'vector' }): UseSe
           setLoading(false);
         }
       }
-    }, 300);
-  }, [client, searchType]);
+    }, debounceMs);
+  }, [client, searchType, debounceMs]);
 
   const searchStream = useCallback(async (query: string) => {
     if (!query.trim()) return;

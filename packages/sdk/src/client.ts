@@ -1,4 +1,4 @@
-import { AkropolysConfig, ContentIngestPayload, ChatAttachment } from './types';
+import { AkropolysConfig, ContentIngestPayload, ChatAttachment, CaptureTarget } from './types';
 import { AkropolysAPI } from './api';
 import { KikuStream } from './stream';
 import { initContentIndexer } from './content/contentIndexer';
@@ -142,8 +142,12 @@ export class AkropolysClient {
   private shopperId?: string;
   private sessionId: string = '';
   private deviceId: string = '';
+  private kikuPub: string | null = null;
+  private shopperName: string | null = null;
   private authLoading?: boolean;
-  public onCheckout?: (cart: import('./types').CartPayload) => void;
+  public onAction?: (action: import('./types').ChatAction) => void;
+  public onAddToCart?: (items: import('./stream').ChatSource[]) => void;
+  public getCart?: () => unknown;
   public onError?: (error: import('./types').AkropolysError) => void;
 
   private contextProviders: Array<(signal?: AbortSignal) => Promise<Record<string, any>>> = [];
@@ -195,18 +199,21 @@ export class AkropolysClient {
     const apiUrl = config.apiUrl || getEnvVar('NEXT_PUBLIC_AKROPOLYS_API_URL') || AkropolysClient.DEFAULT_API_URL;
     const apiToken = config.apiToken || getEnvVar('NEXT_PUBLIC_AKROPOLYS_API_TOKEN') || '';
 
-    // Runtime validation — fail loudly so misconfiguration is never silent
-    if (!siteId) console.error('[Akropolys] Missing siteId. Set it via <AkropolysProvider siteId="..."> or NEXT_PUBLIC_AKROPOLYS_SITE_ID.');
-    if (!apiToken) console.error('[Akropolys] Missing apiToken. Set it via <AkropolysProvider apiToken="..."> or NEXT_PUBLIC_AKROPOLYS_API_TOKEN.');
+    if (!siteId) console.error('[Akropolys] Missing siteId — pass <AkropolysProvider siteId=…> or set NEXT_PUBLIC_AKROPOLYS_SITE_ID.');
+    if (!apiToken) console.error('[Akropolys] Missing apiToken — pass <AkropolysProvider apiToken=…> or set NEXT_PUBLIC_AKROPOLYS_API_TOKEN.');
 
     this.shopperId = config.shopperId;
     this.authLoading = config.authLoading;
-    this.onCheckout = config.onCheckout;
+    this.onAction = config.onAction;
+    this.onAddToCart = config.onAddToCart;
+    this.getCart = config.getCart;
     this.onError = config.onError;
     this.vertical = config.vertical || 'commerce';
     this.display = config.display;
     this.initSession();
     this.initDevice();
+    this.initKikuKey();
+    this.initShopperName();
     this.loadIngestedCache();
 
     this.api = new AkropolysAPI(
@@ -216,13 +223,16 @@ export class AkropolysClient {
       () => this.getShopperId(),
       () => this.sessionId,
       this.vertical,
-      () => this.deviceId
+      () => this.deviceId,
+      () => this.kikuPub ?? undefined,
+      () => this.shopperName ?? undefined,
+      () => { try { return this.getCart?.(); } catch { return undefined; } }
     );
     setInstance(this);
 
     if (typeof window !== 'undefined') {
       this.onlineHandler = () => {
-        console.log('[Akropolys] Connectivity restored, flushing queued ingestions.');
+        console.debug('[Akropolys] Connectivity restored, flushing queued ingestions.');
         this.flushQueue();
         this.flushContentQueue();
       };
@@ -299,10 +309,10 @@ export class AkropolysClient {
     return ctx;
   }
 
-  chat(query: string, history: Array<{ role: 'user' | 'assistant'; content: string }> = [], attachments?: ChatAttachment[]): KikuStream {
+  chat(query: string, history: Array<{ role: 'user' | 'assistant'; content: string }> = [], attachments?: ChatAttachment[], forcedIntent?: string, captureTargets?: CaptureTarget[]): KikuStream {
     const abortController = new AbortController();
     const responsePromise = this.getCurrentContextAsync(abortController.signal).then(ctx =>
-      this.api.chatStream(query, history, abortController.signal, ctx, attachments)
+      this.api.chatStream(query, history, abortController.signal, ctx, attachments, forcedIntent, captureTargets)
     );
     return new KikuStream(responsePromise, abortController);
   }
@@ -310,7 +320,10 @@ export class AkropolysClient {
   reRegister() {
     setInstance(this);
     if (typeof window !== 'undefined' && !this.onlineHandler) {
-      this.onlineHandler = () => this.flushQueue();
+      this.onlineHandler = () => {
+        this.flushQueue();
+        this.flushContentQueue();
+      };
       window.addEventListener('online', this.onlineHandler);
     }
   }
@@ -332,6 +345,7 @@ export class AkropolysClient {
     this.shopperId = id;
     if (!this.authLoading) {
       this.flushQueue();
+      this.flushContentQueue();
     }
   }
 
@@ -340,6 +354,7 @@ export class AkropolysClient {
     this.authLoading = loading;
     if (wasLoading && !loading) {
       this.flushQueue();
+      this.flushContentQueue();
     }
   }
 
@@ -372,7 +387,7 @@ export class AkropolysClient {
    * Persistent device identity — survives reloads, but is scoped to THIS origin
    * only (localStorage is partitioned per site by the browser). It gives
    * anonymous within-site continuity. For capture/memory that follows the
-   * shopper ACROSS sites and devices, use setShopperIdentity(phone, magicWord).
+   * shopper ACROSS sites and devices, use mintKikuKey()/setKikuPub().
    */
   private initDevice() {
     if (typeof window === 'undefined') {
@@ -396,26 +411,81 @@ export class AkropolysClient {
   }
 
   /**
-   * Enable cross-site Kiku capture/memory. The phone + magic word together form
-   * the shopper's identity: enter the SAME pair on any site/device to recall
-   * what was saved. The word is never sent or stored in plaintext server-side —
-   * it's folded into a hash; a wrong word simply opens a different empty space.
-   * Tip: the word is the only secret (phone numbers are semi-public), so pick a
-   * memorable, non-obvious one — if forgotten, saved items can't be recovered.
+   * Mint the shopper's kiku key — a portable, anonymous identity. No phone,
+   * no email, no account. The key is server-minted (128-bit entropy), stored
+   * on this device, and returned so the UI can show it EXACTLY ONCE. Its hash
+   * is the memory namespace: entering the same key on any site or handing it
+   * to an AI agent opens the same memory. If lost, the memory is lost with it.
    */
-  setShopperIdentity(phone: string, magicWord: string): void {
-    if (typeof window === 'undefined') return;
-    const p = (phone || '').trim();
-    const w = (magicWord || '').trim();
-    if (p) localStorage.setItem('akropolys_user_phone', p);
-    if (w) localStorage.setItem('akropolys_user_secret', w);
+  async mintKikuKey(): Promise<{ secret: string; publicId: string }> {
+    const res = await this.api.mintKikuKey();
+    this.setKikuPub(res.publicId);
+    return res;
   }
 
-  /** Sign out of cross-site identity on this device (saves remain on the server). */
-  clearShopperIdentity(): void {
+  private initKikuKey() {
     if (typeof window === 'undefined') return;
-    localStorage.removeItem('akropolys_user_phone');
-    localStorage.removeItem('akropolys_user_secret');
+    try { localStorage.removeItem('akropolys_kiku_key'); } catch { /* ignore */ }
+    try {
+      const p = sessionStorage.getItem('akropolys_kiku_pub');
+      if (p) this.kikuPub = p;
+    } catch { /* ignore */ }
+  }
+
+  /** The active public id, if any. */
+  getKikuPub(): string | undefined {
+    return this.kikuPub ?? undefined;
+  }
+
+  private initShopperName() {
+    if (typeof window === 'undefined') return;
+    try {
+      const n = localStorage.getItem('akropolys_shopper_name');
+      if (n) this.shopperName = n;
+    } catch { /* ignore */ }
+  }
+
+  /** The shopper's display name, if they gave one during onboarding. */
+  getShopperName(): string | undefined {
+    return this.shopperName ?? undefined;
+  }
+
+  /** Remember the shopper's display name (used to address them in replies). */
+  setShopperName(name: string): void {
+    const n = (name || '').trim().slice(0, 40);
+    if (!n) return;
+    this.shopperName = n;
+    if (typeof window === 'undefined') return;
+    try { localStorage.setItem('akropolys_shopper_name', n); } catch { /* ignore */ }
+  }
+
+  /** Forget the shopper's display name. */
+  clearShopperName(): void {
+    this.shopperName = null;
+    if (typeof window === 'undefined') return;
+    try { localStorage.removeItem('akropolys_shopper_name'); } catch { /* ignore */ }
+  }
+
+  /** Activate an existing public id on this device (returning shopper). */
+  setKikuPub(pub: string): void {
+    const p = (pub || '').trim();
+    if (!p) return;
+    this.kikuPub = p;
+    if (typeof window === 'undefined') return;
+    try { sessionStorage.setItem('akropolys_kiku_pub', p); } catch { /* ignore */ }
+  }
+
+  /** Whether a public id is active on this device. */
+  hasKikuKey(): boolean {
+    return !!this.kikuPub;
+  }
+
+  /** Sign out on this device (saves remain on the server). */
+  clearKikuKey(): void {
+    this.kikuPub = null;
+    if (typeof window === 'undefined') return;
+    try { sessionStorage.removeItem('akropolys_kiku_pub'); } catch { /* ignore */ }
+    try { localStorage.removeItem('akropolys_kiku_key'); } catch { /* ignore */ }
   }
 
   destroy() {
@@ -455,9 +525,10 @@ export class AkropolysClient {
    */
   async ingest<T extends Record<string, any>>(entity: T): Promise<void> {
     this.lastIngestedItem = entity;
+    const target = (entity as any).envelope?.entity || entity;
     // 1. Identity resolution
-    const id = entity.id ?? (entity as any).productId ?? (entity as any).slug ?? entity.url ?? (entity as any).name ?? '';
-    const url = entity.url || (typeof window !== 'undefined' ? window.location.href : '');
+    const id = target.id ?? target.productId ?? target.slug ?? target.url ?? target.name ?? '';
+    const url = target.url || (typeof window !== 'undefined' ? window.location.href : '');
 
     if (!id && !url) {
       console.warn('[Akropolys] Ingestion warning: Item is missing both a stable identifier and a URL. Skipping.');
@@ -489,8 +560,9 @@ export class AkropolysClient {
     }
     let hasNew = false;
     entities.forEach(entity => {
-      const id = entity.id ?? (entity as any).productId ?? (entity as any).slug ?? entity.url ?? (entity as any).name ?? '';
-      const url = entity.url || (typeof window !== 'undefined' ? window.location.href : '');
+      const target = (entity as any).envelope?.entity || entity;
+      const id = target.id ?? target.productId ?? target.slug ?? target.url ?? target.name ?? '';
+      const url = target.url || (typeof window !== 'undefined' ? window.location.href : '');
 
       if (!id && !url) {
         console.warn('[Akropolys] Ingestion warning: Item is missing both a stable identifier and a URL. Skipping.');
@@ -534,7 +606,7 @@ export class AkropolysClient {
     }
 
     if (this.authLoading) {
-      console.log('[Akropolys] Authentication is loading. Deferring ingestion flush.');
+      console.debug('[Akropolys] Authentication is loading. Deferring ingestion flush.');
       this.isFlushing = false;
       return;
     }
@@ -619,7 +691,7 @@ export class AkropolysClient {
     }
 
     if (this.authLoading) {
-      console.log('[Akropolys] Authentication is loading. Deferring content ingestion flush.');
+      console.debug('[Akropolys] Authentication is loading. Deferring content ingestion flush.');
       this.isContentFlushing = false;
       return;
     }

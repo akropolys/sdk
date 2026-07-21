@@ -1,11 +1,34 @@
-import { CartPayload, ChatAction } from './types';
+import { ChatAction } from './types';
+
+export interface KnowledgeImage {
+  url: string;
+  note?: string;
+  caption?: string;
+}
+
+// One directed-knowledge entry's images, delivered as a structured
+// knowledge_images SSE event — rendered like a card, never model-pasted.
+export interface KnowledgeImageRef {
+  entryId: string;
+  title?: string;
+  images: KnowledgeImage[];
+}
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   images?: string[]; // base64 data URLs attached by the user
-  cartSnapshot?: CartPayload;
+  knowledgeImages?: KnowledgeImageRef[]; // owner-authored reference images backing this answer
   actionType?: string;
+  sources?: ChatSource[]; // this turn's candidate entities, for rendering referenced products
+  referencedIds?: string[]; // ids from `sources` this specific answer actually mentioned
+  intent?: string;
+  visualization?: string; // generated product-in-scene image URL
+  visualizing?: boolean; // true while the visualization is being generated
+  visualizationType?: 'image' | 'video';
+  visualizingText?: string;
+  thinking?: string; // the model's reasoning, delivered separately from the answer
+  thoughtForSeconds?: number; // wall-clock time from send until the answer began
 }
 
 export interface ChatSource {
@@ -25,8 +48,13 @@ export interface ChatMetadata {
   intent: string;
   sources: ChatSource[];
   action?: ChatAction;
-  checkout?: CartPayload;
 }
+
+export type VizEvent =
+  | { status: 'generating' }
+  | { status: 'generating_video' }
+  | { status: 'done'; url: string; id: string; mediaType?: 'image' | 'video' }
+  | { status: 'failed'; reason?: string };
 
 interface SSEFrame {
   event: string;
@@ -61,7 +89,7 @@ export class KikuStream {
     this.startReading();
   }
 
-  on(event: 'token' | 'meta' | 'done' | 'error' | 'entity_ref', callback: Function): this {
+  on(event: 'token' | 'meta' | 'done' | 'error' | 'entity_ref' | 'viz' | 'thinking' | 'knowledge_images', callback: Function): this {
     if (!this.listeners[event]) {
       this.listeners[event] = [];
     }
@@ -69,7 +97,7 @@ export class KikuStream {
     return this;
   }
 
-  off(event: 'token' | 'meta' | 'done' | 'error' | 'entity_ref', callback: Function): this {
+  off(event: 'token' | 'meta' | 'done' | 'error' | 'entity_ref' | 'viz' | 'thinking' | 'knowledge_images', callback: Function): this {
     if (!this.listeners[event]) return this;
     this.listeners[event] = this.listeners[event].filter(cb => cb !== callback);
     return this;
@@ -138,6 +166,38 @@ export class KikuStream {
             try {
               const ref = JSON.parse(data);
               this.emit('entity_ref', ref);
+            } catch {
+              // ignore parse errors
+            }
+            continue;
+          }
+
+          if (event === 'knowledge_images') {
+            try {
+              const payload = JSON.parse(data);
+              if (Array.isArray(payload?.refs) && payload.refs.length > 0) {
+                this.emit('knowledge_images', payload.refs as KnowledgeImageRef[]);
+              }
+            } catch {
+              // ignore parse errors
+            }
+            continue;
+          }
+
+          if (event === 'thinking') {
+            try {
+              const { text } = JSON.parse(data);
+              if (text) this.emit('thinking', text);
+            } catch {
+              // ignore parse errors
+            }
+            continue;
+          }
+
+          if (event === 'viz') {
+            try {
+              const viz: VizEvent = JSON.parse(data);
+              this.emit('viz', viz);
             } catch {
               // ignore parse errors
             }

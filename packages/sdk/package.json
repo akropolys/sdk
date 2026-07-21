@@ -1,7 +1,7 @@
 {
   "name": "@akropolys/sdk",
-  "version": "1.6.1",
-  "description": "Intent infrastructure for the web. Auto-ingest, natural language search, and personal AI agent access to your catalog.",
+  "version": "1.8.2",
+  "description": "Natural language search for users and AI agents on any website.",
   "license": "MIT",
   "keywords": [
     "akropolys",
@@ -30,6 +30,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.mjs",
+      "require": "./dist/server.js"
     }
   },
   "files": [

@@ -5,7 +5,7 @@ import { cn } from '../utils/cn';
 export interface SearchBarProps {
   placeholder?: string;
   limit?: number;
-  /** Debounce in ms — default 300 for smooth type-ahead */
+  /** Debounce in ms — default 150 for instant type-ahead */
   debounceMs?: number;
   onSelect?: (result: SearchResult) => void;
   className?: string;
@@ -32,7 +32,7 @@ const SearchIcon = () => (
 export function SearchBar({
   placeholder = 'Search products…',
   limit = 10,
-  debounceMs = 300,
+  debounceMs = 150,
   onSelect,
   className,
   inputClassName,
@@ -43,33 +43,24 @@ export function SearchBar({
 }: SearchBarProps) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
-  const [isDebouncing, setIsDebouncing] = useState(false);
-  const { results, loading, search, clear } = useSearch();
+  const { results, loading, search, clear } = useSearch({ debounceMs });
   const client = useAkropolysContext();
-  const timer = useRef<ReturnType<typeof setTimeout>>();
   const wrap = useRef<HTMLDivElement>(null);
   const ignoreNextQueryChange = useRef(false);
 
-  /* Debounce search — but keep stale results visible between calls */
+  /* useSearch debounces internally — fire on every keystroke, keep stale results visible */
   useEffect(() => {
     if (ignoreNextQueryChange.current) {
       ignoreNextQueryChange.current = false;
       return;
     }
-    clearTimeout(timer.current);
     if (!query.trim()) {
       clear();
       setOpen(false);
-      setIsDebouncing(false);
       return;
     }
     setOpen(true);   // open immediately (stale results show while fetching)
-    setIsDebouncing(true);
-    timer.current = setTimeout(() => {
-      setIsDebouncing(false);
-      search(query, limit);
-    }, debounceMs);
-    return () => clearTimeout(timer.current);
+    search(query, limit);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
 
@@ -84,7 +75,9 @@ export function SearchBar({
 
   const handleSelect = (r: SearchResult) => {
     if (query.trim()) {
-      client.api.searchVector(query, 1).catch(() => {});
+      // keepalive: onSelect commonly navigates the page right after this call —
+      // without it the browser aborts the in-flight log request mid-navigation.
+      client.api.searchVector(query, 1, undefined, true).catch(() => {});
     }
     ignoreNextQueryChange.current = true;
     setOpen(false);
@@ -94,7 +87,7 @@ export function SearchBar({
 
   const handleCommitSearch = () => {
     if (!query.trim()) return;
-    client.api.searchVector(query, 1).catch(() => {});
+    client.api.searchVector(query, 1, undefined, true).catch(() => {});
     if (results.length > 0) {
       handleSelect(results[0]);
     }
@@ -130,9 +123,9 @@ export function SearchBar({
       />
       {showDrop && (
         <div className={cn("hsk-sb-drop", classNames.dropdown, dropdownClassName)} style={{ position: 'absolute' }}>
-          {(loading || isDebouncing) && <div className="hsk-sb-loading-bar" />}
+          {loading && <div className="hsk-sb-loading-bar" />}
 
-          {(loading || isDebouncing) && results.length === 0 ? (
+          {loading && results.length === 0 ? (
             <>
               <div className="hsk-sb-skeleton-row">
                 <span className="hsk-sb-skeleton-icon" />
@@ -151,28 +144,43 @@ export function SearchBar({
             </>
           ) : (
             <>
-              {results.length === 0 && !loading && !isDebouncing && (
+              {results.length === 0 && !loading && (
                 <div className="hsk-sb-empty">No results for &ldquo;{query}&rdquo;</div>
               )}
 
-              {results.map((r, i) => (
-                renderResult ? (
-                  <div
-                    key={r.id}
-                    onClick={() => handleSelect(r)}
-                    className="hsk-sb-fade"
-                    style={{ animationDelay: `${i * 18}ms` }}
-                  >
-                    {renderResult(r)}
-                  </div>
-                ) : (
+              {results.map((r, i) => {
+                if (renderResult) {
+                  return (
+                    <div
+                      key={r.id}
+                      onClick={() => handleSelect(r)}
+                      className="hsk-sb-fade"
+                      style={{ animationDelay: `${i * 18}ms` }}
+                    >
+                      {renderResult(r)}
+                    </div>
+                  );
+                }
+                const thumb = r.entity.image ?? r.entity.thumbnail ?? r.entity.images?.[0];
+                return (
                   <div
                     key={r.id}
                     className={cn("hsk-sb-row hsk-sb-fade", classNames.row)}
                     style={{ animationDelay: `${i * 18}ms` }}
                     onClick={() => handleSelect(r)}
                   >
-                    <span className="hsk-sb-row-icon"><SearchIcon /></span>
+                    <span className="hsk-sb-row-thumb">
+                      {thumb ? (
+                        <img
+                          src={thumb}
+                          alt=""
+                          loading="lazy"
+                          onError={e => { e.currentTarget.style.display = 'none'; }}
+                        />
+                      ) : (
+                        <SearchIcon />
+                      )}
+                    </span>
                     <div className="hsk-sb-row-body">
                       <div className="hsk-sb-row-title">{r.entity.title ?? r.entity.name}</div>
                       {(r.entity.category || r.entity.brand) && (
@@ -182,8 +190,8 @@ export function SearchBar({
                       )}
                     </div>
                   </div>
-                )
-              ))}
+                );
+              })}
             </>
           )}
         </div>

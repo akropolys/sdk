@@ -4,10 +4,14 @@ import { AkropolysConfig } from './types';
 
 export const AkropolysContext = createContext<AkropolysClient | null>(null);
 
-interface AkropolysProviderProps extends AkropolysConfig {
+export interface AkropolysProviderProps extends AkropolysConfig {
   children: React.ReactNode;
 }
 
+/**
+ * Initialises the Akropolys client for your app. Supply `siteId` and `apiToken`
+ * as props or via `NEXT_PUBLIC_AKROPOLYS_*` env vars — props take precedence.
+ */
 export function AkropolysProvider({
   siteId,
   apiUrl,
@@ -15,7 +19,9 @@ export function AkropolysProvider({
   shopperId,
   vertical,
   authLoading,
-  onCheckout,
+  onAction,
+  onAddToCart,
+  getCart,
   onError,
   display,
   children
@@ -30,7 +36,9 @@ export function AkropolysProvider({
       shopperId,
       vertical,
       authLoading,
-      onCheckout,
+      onAction,
+      onAddToCart,
+      getCart,
       onError,
       display
     });
@@ -59,9 +67,11 @@ export function AkropolysProvider({
   useEffect(() => {
     if (clientRef.current) {
       clientRef.current.onError = onError;
-      clientRef.current.onCheckout = onCheckout;
+      clientRef.current.onAction = onAction;
+      clientRef.current.onAddToCart = onAddToCart;
+      clientRef.current.getCart = getCart;
     }
-  }, [onError, onCheckout]);
+  }, [onError, onAction, onAddToCart, getCart]);
 
   // Ensure active instance is registered on mount
   useEffect(() => {

@@ -1,16 +1,29 @@
 import { defineConfig } from 'tsup';
 
-export default defineConfig({
-  entry: {
-    index: 'src/index.ts',
+export default defineConfig([
+  {
+    entry: {
+      index: 'src/index.ts',
+    },
+    format: ['cjs', 'esm'],
+    dts: true,
+    splitting: false,
+    clean: true,
+    banner: {
+      js: "'use client';",
+    },
+    external: ['react', 'react-dom'],
+    sourcemap: true,
   },
-  format: ['cjs', 'esm'],
-  dts: true,
-  splitting: false,
-  clean: true,
-  banner: {
-    js: "'use client';",
+  {
+    entry: {
+      server: 'src/server.ts',
+    },
+    format: ['cjs', 'esm'],
+    dts: true,
+    splitting: false,
+    clean: false,
+    external: ['react', 'react-dom'],
+    sourcemap: true,
   },
-  external: ['react', 'react-dom'],
-  sourcemap: true,
-});
+]);

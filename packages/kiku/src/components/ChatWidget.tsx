@@ -3,10 +3,12 @@ import { useKiku, ChatMessage, ChatSource } from '@akropolys/sdk';
 import { renderMarkdown } from '../utils/markdown';
 import { AkropolysTheme } from '@akropolys/sdk';
 import { cn } from '../utils/cn';
+import { ArrowUpIcon } from '../utils/icons';
+import { resolveTheme } from '../utils/theme';
 import { VoiceButton } from './VoiceButton';
 import { VisualSearch } from './VisualSearch';
 
-// Better Prop Interface for SDKs
+
 export interface ChatWidgetProps {
   title?: string;
   placeholder?: string;
@@ -36,17 +38,10 @@ export interface ChatWidgetProps {
   visionCategoryHint?: string;
 }
 
-// Simple SVG Icons instead of text characters
+
 const SparkleIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
-  </svg>
-);
-
-const ArrowUpIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="m5 12 7-7 7 7"/>
-    <path d="M12 19V5"/>
   </svg>
 );
 
@@ -89,7 +84,7 @@ interface ChatMessageWithVisual extends ChatMessage {
 }
 
 export function ChatWidget({ 
-  title = 'AI Shopping Assistant',
+  title = 'kiku',
   placeholder = 'Ask about anything in our store…', 
   emptyStateText = 'Ask me anything about our products',
   emptyStateSuggestions = '"Find me headphones under KSh 5,000" · "Gift ideas"',
@@ -137,7 +132,6 @@ export function ChatWidget({
             next[historyIdx] = {
               ...next[historyIdx],
               content: messages[hookIdx].content,
-              cartSnapshot: messages[hookIdx].cartSnapshot,
               actionType: messages[hookIdx].actionType,
             };
             break;
@@ -222,18 +216,11 @@ export function ChatWidget({
     setChatHistory(prev => [...prev, userMsg, assistantMsg]);
   };
 
-  // Apply custom CSS variables inline to the root wrapper
-  const customStyles = {
-    ...(theme?.primaryColor && { '--hsk-primary': theme.primaryColor }),
-    ...(theme?.backgroundColor && { '--hsk-bg': theme.backgroundColor }),
-    ...(theme?.textColor && { '--hsk-text': theme.textColor }),
-    ...(theme?.fontFamily && { '--hsk-font': theme.fontFamily }),
-    ...(theme?.borderRadius && { '--hsk-border-radius': theme.borderRadius }),
-  } as React.CSSProperties;
+  const { vars: customStyles } = resolveTheme(theme);
 
   return (
-    <div 
-      className={cn("hsk-chat-widget", classNames.root, className)} 
+    <div
+      className={cn("hsk-chat-widget", classNames.root, className)}
       style={customStyles}
     >
       <div className={cn("hsk-chat-header", classNames.header)}>

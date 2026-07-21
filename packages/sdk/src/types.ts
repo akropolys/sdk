@@ -63,44 +63,32 @@ export type RawProductInput<T extends Record<string, any> = Record<string, any>>
   metadata?: Record<string, any>;
 } & T;
 
-export interface CartItem {
-  id: string;
-  cart_id: string;
-  external_id?: string;
-  product_url: string;
-  name: string;
-  price: string;
-  price_numeric: number;
-  currency: string;
-  image: string;
-  brand: string;
-  category: string;
-  quantity: number;
-}
-
-export interface CartPayload {
-  cart_id: string;
-  shopper_id: string;
-  site_id: string;
-  status: string;
-  items: CartItem[];
-  total: number;
-  currency: string;
-  item_count: number;
-}
-
 export type DisplayConfig = Record<string, string>;
 
 export interface AkropolysConfig {
+  /** Site identifier from the dashboard. Falls back to `NEXT_PUBLIC_AKROPOLYS_SITE_ID`. */
   siteId?: string;
+  /** API base URL. Defaults to the managed backend; override for self-hosted. Falls back to `NEXT_PUBLIC_AKROPOLYS_API_URL`. */
   apiUrl?: string;
+  /** Publishable token from the dashboard. Falls back to `NEXT_PUBLIC_AKROPOLYS_API_TOKEN`. */
   apiToken?: string;
+  /** Signed-in shopper id; enables per-user memory. Omit for anonymous visitors. */
   shopperId?: string;
+  /** Domain preset that tunes query interpretation. Defaults to `'commerce'`. */
   vertical?: 'commerce' | 'property' | 'motor' | 'blog' | string;
-  onCheckout?: (cart: CartPayload) => void;
+  /** Invoked when the assistant resolves a registered action (also dispatched as the `akropolys:action` DOM event). */
+  onAction?: (action: ChatAction) => void;
+  /** Invoked when the assistant resolves an add-to-cart intent. You add the items to YOUR store, however you like — the SDK never touches it. Items are the entities you already ingested; no new fields. */
+  onAddToCart?: (items: import('./stream').ChatSource[]) => void;
+  /** Optional read-through to your live cart so the assistant can reason over it. Return your cart items in any shape; the SDK only reads what you hand back. */
+  getCart?: () => unknown;
+  /** Invoked on ingestion, search, or chat errors. */
   onError?: (error: AkropolysError) => void;
+  /** Defer ingestion until auth resolves so events aren't attributed to a guest. */
   authLoading?: boolean;
+  /** Auto-index readable page text as the visitor scrolls. */
   indexContent?: boolean;
+  /** Override display-slot field mapping, e.g. `{ cardTitle: 'headline' }`. */
   display?: DisplayConfig;
 }
 
@@ -137,23 +125,36 @@ export interface AkropolysTheme {
   backgroundColor?: string;
   textColor?: string;
   fontFamily?: string;
+  /** Base font size for chat message text, e.g. "15px" or "1rem". */
+  fontSize?: string;
   borderRadius?: string;
 }
 
+/**
+ * An action resolved from the shopper's intent. `request_kiku_key` is the only
+ * built-in the widget handles itself; every other type is a developer-registered
+ * action name (dashboard → Actions) carrying its registered `url`. The platform
+ * interprets and routes — the site executes.
+ */
 export type ChatAction =
-  | { type: 'add_to_cart'; [key: string]: any }
-  | { type: 'remove_from_cart'; [key: string]: any }
-  | { type: 'clear_cart'; [key: string]: any }
-  | { type: 'view_cart'; [key: string]: any }
-  | { type: 'checkout'; [key: string]: any }
-  | { type: 'request_phone'; [key: string]: any }
-  | { type: 'awaiting_payment'; merchantReference?: string | null; [key: string]: any }
-  | { type: string; [key: string]: any };
+  | { type: 'request_kiku_key'; [key: string]: any }
+  | { type: string; url?: string; [key: string]: any };
 
 export interface ChatAttachment {
   type: 'image';
   /** base64 data URL, e.g. "data:image/jpeg;base64,..." */
   data: string;
+  /** true when the image is the current scene marked up by the shopper to show WHERE an edit goes */
+  annotated?: boolean;
+}
+
+/** A single product to be captured via @kiku capture_all. */
+export interface CaptureTarget {
+  name: string;
+  url: string;
+  image?: string;
+  price?: string;
+  currency?: string;
 }
 
 export interface ContentIngestPayload {

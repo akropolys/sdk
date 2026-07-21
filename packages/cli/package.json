@@ -1,6 +1,6 @@
 {
   "name": "@akropolys/cli",
-  "version": "1.6.0",
+  "version": "1.6.2",
   "description": "Akropolys CLI — diagnostic, workspace setup, and payload inspection utility.",
   "license": "MIT",
   "publishConfig": {
@@ -10,6 +10,10 @@
   "bin": {
     "akropolys": "dist/index.js"
   },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch"
