@@ -1,6 +1,6 @@
 {
   "name": "@akropolys/kiku",
-  "version": "1.7.12",
+  "version": "1.7.17",
   "description": "The chat and search widgets for Akropolys — the interface your users and their AI agents actually talk to.",
   "license": "MIT",
   "keywords": [
@@ -44,7 +44,7 @@
   "peerDependencies": {
     "react": ">=17",
     "react-dom": ">=17",
-    "@akropolys/sdk": "^1.7.8"
+    "@akropolys/sdk": "^1.8.7"
   },
   "peerDependenciesMeta": {
     "react": {

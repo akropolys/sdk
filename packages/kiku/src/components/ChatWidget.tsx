@@ -133,6 +133,9 @@ export function ChatWidget({
               ...next[historyIdx],
               content: messages[hookIdx].content,
               actionType: messages[hookIdx].actionType,
+              thinking: messages[hookIdx].thinking,
+              thoughtForSeconds: messages[hookIdx].thoughtForSeconds,
+              statusMessage: messages[hookIdx].statusMessage,
             };
             break;
           }
@@ -252,7 +255,24 @@ export function ChatWidget({
                       <img src={msg.imagePreview} alt="Uploaded Preview" className="kiku-vs-preview-bubble-img" style={{ maxWidth: '200px', borderRadius: '8px' }} />
                     </div>
                   )}
+                  {msg.thinking && (
+                    <details className="hsk-thinking-details" open={streaming && idx === chatHistory.length - 1 && !msg.content}>
+                      <summary className="hsk-thinking-summary">
+                        Thought for {msg.thoughtForSeconds ?? 1}s
+                      </summary>
+                      <div className="hsk-thinking-text">{msg.thinking}</div>
+                    </details>
+                  )}
+                  {(!msg.content && !msg.thinking && msg.role === 'assistant' && idx === chatHistory.length - 1) && (
+                    <div className="hsk-status-live">
+                      <span className="hsk-status-dot" />
+                      <span>{msg.statusMessage || 'Thinking...'}</span>
+                    </div>
+                  )}
                   {renderMarkdown(msg.content)}
+                  {streaming && idx === chatHistory.length - 1 && msg.role === 'assistant' && (
+                    <span className="hsk-streaming-cursor" />
+                  )}
                   {msg.styleDNA && (
                     <div className="kiku-vs-preview-banner" style={{ marginTop: '10px' }}>
                       {chatHistory[idx - 1]?.imagePreview && (

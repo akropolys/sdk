@@ -1274,12 +1274,10 @@ function ChatModal({
                             const parsed = parseThinking(displayContent);
                             const thinking = msg.thinking || parsed.thinking;
                             const content = parsed.content;
-                            const isComplete = msg.thinking
-                              ? (content.length > 0 || !(isLast && streaming))
-                              : parsed.isComplete;
+                            const isComplete = msg.thoughtForSeconds != null || content.length > 0 || !(isLast && (streaming || loading));
                             return (
                               <>
-                                {(thinking || msg.thoughtForSeconds != null) && (
+                                {(thinking || msg.thoughtForSeconds != null || (isLast && (streaming || loading))) && (
                                   <ThinkingBlock text={thinking} isComplete={isComplete} seconds={msg.thoughtForSeconds} />
                                 )}
                                 {content && (

@@ -29,6 +29,7 @@ export interface ChatMessage {
   visualizingText?: string;
   thinking?: string; // the model's reasoning, delivered separately from the answer
   thoughtForSeconds?: number; // wall-clock time from send until the answer began
+  statusMessage?: string; // live status update (e.g. "Searching 2,431 products...")
 }
 
 export interface ChatSource {
@@ -188,6 +189,16 @@ export class KikuStream {
             try {
               const { text } = JSON.parse(data);
               if (text) this.emit('thinking', text);
+            } catch {
+              // ignore parse errors
+            }
+            continue;
+          }
+
+          if (event === 'status') {
+            try {
+              const status = JSON.parse(data);
+              this.emit('status', status);
             } catch {
               // ignore parse errors
             }

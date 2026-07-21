@@ -169,6 +169,20 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
       onMetaRef.current?.(meta);
     });
 
+    stream.on('status', (st: any) => {
+      if (st?.message) {
+        ensureAssistantMessage();
+        setMessages(prev => {
+          const next = [...prev];
+          const last = next[next.length - 1];
+          if (last?.role === 'assistant') {
+            next[next.length - 1] = { ...last, statusMessage: st.message };
+          }
+          return next;
+        });
+      }
+    });
+
     stream.on('entity_ref', (ref: any) => {
       if (ref?.id) {
         if (!turnRefs.includes(ref.id)) turnRefs.push(ref.id);
