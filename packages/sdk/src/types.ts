@@ -125,6 +125,14 @@ export interface AkropolysTheme {
   backgroundColor?: string;
   textColor?: string;
   fontFamily?: string;
+  /**
+   * Web font for the first family in `fontFamily`, loaded by the widget itself.
+   * Without this, `fontFamily` only resolves if the host page already loaded
+   * that font — which is the common reason a non-Latin font silently does not
+   * apply. Pass both weights where you have them: a single file leaves bold
+   * text to be synthesised, which looks smeared in scripts that stack marks.
+   */
+  fontUrl?: string | { normal?: string; bold?: string };
   /** Base font size for chat message text on desktop, e.g. "15px" or "1rem". */
   fontSize?: string;
   /** Base font size for chat message text on mobile screens, e.g. "13.5px" or "0.9rem". */

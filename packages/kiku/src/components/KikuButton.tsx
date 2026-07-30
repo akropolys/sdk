@@ -8,6 +8,7 @@ import { renderMarkdown } from '../utils/markdown';
 import { AkropolysTheme, ChatAttachment, CaptureTarget } from '@akropolys/sdk';
 import { cn } from '../utils/cn';
 import { resolveTheme } from '../utils/theme';
+import { useHostFontFace } from '../utils/hostFont';
 import { ComparisonMatrix } from './ComparisonMatrix';
 import { MarkupEditor } from './MarkupEditor';
 import { ArrowUpIcon } from '../utils/icons';
@@ -1204,6 +1205,51 @@ function ChatModal({
     return other > latin;
   }, [chromeStrings]);
 
+  // Whether the font the developer passed can actually draw this script. The
+  // non-Latin rules used to swap in a system stack unconditionally, which threw
+  // away a perfectly good font from, say, a Persian developer who passed one
+  // that covers Persian — the host's font is supposed to win wherever it can.
+  // Measured, not asked: render the sample in `family, <absent family>` and in
+  // the absent family alone. Equal widths mean the family contributed nothing
+  // and the browser fell through both to the same default. Spaces are stripped
+  // because a Latin-only font supplies those and would mask a total gap.
+  // A webfont is not measurable until it has loaded, so a first pass would
+  // always report a gap and latch the fallback in. Re-measure when fonts settle.
+  const [fontEpoch, setFontEpoch] = useState(0);
+  useEffect(() => {
+    const fonts = typeof document !== 'undefined' ? (document as any).fonts : null;
+    if (!fonts) return;
+    const bump = () => setFontEpoch(e => e + 1);
+    fonts.ready?.then(bump).catch(() => {});
+    fonts.addEventListener?.('loadingdone', bump);
+    return () => fonts.removeEventListener?.('loadingdone', bump);
+  }, []);
+
+  const hostFontCovers = React.useMemo(() => {
+    void fontEpoch;
+    if (!isNonLatin) return true;
+    const declared = typeof theme === 'object' && theme ? theme.fontFamily : undefined;
+    if (!declared || typeof document === 'undefined') return false;
+    const family = declared.split(',')[0].trim();
+    if (!family) return false;
+    let sample = '';
+    for (const v of Object.values(chromeStrings)) {
+      for (const ch of v) {
+        if ((ch.codePointAt(0) ?? 0) > 0x024f) sample += ch;
+        if (sample.length >= 24) break;
+      }
+      if (sample.length >= 24) break;
+    }
+    if (!sample) return false;
+    try {
+      const cx = document.createElement('canvas').getContext('2d');
+      if (!cx) return false;
+      const absent = '"__hsk_no_such_family__"';
+      const width = (ff: string) => { cx.font = `32px ${ff}`; return cx.measureText(sample).width; };
+      return Math.abs(width(`${family}, ${absent}`) - width(absent)) > 0.5;
+    } catch { return false; }
+  }, [isNonLatin, theme, chromeStrings, fontEpoch]);
+
   const t = useCallback((key: keyof typeof DEFAULT_UI_STRINGS, vars?: Record<string, string>) => {
     let s = chromeStrings[key] || DEFAULT_UI_STRINGS[key];
     if (vars) {
@@ -1460,6 +1506,7 @@ function ChatModal({
   }, [mintedKey]);
 
   const { themeAttr: hskThemeAttr, vars: customStyles } = resolveTheme(theme);
+  useHostFontFace(theme);
 
   // Retry the interrupted request (e.g. the capture) under the new identity.
   // Goes through handleSend so an "@kiku …" prefix is re-parsed back into a
@@ -1885,6 +1932,7 @@ function ChatModal({
         className={cn("hsk-cb-panel", classNames.panel)}
         dir={isRTL ? 'rtl' : 'ltr'}
         data-script={isNonLatin ? 'nonlatin' : 'latin'}
+        data-host-font={hostFontCovers ? 'covers' : 'gap'}
         onClick={e => {
           e.stopPropagation();
           const target = e.target as HTMLElement;
@@ -2693,6 +2741,7 @@ export function KikuButton({
   }, []);
 
   const { themeAttr: hskThemeAttr, vars: customStyles } = resolveTheme(theme);
+  useHostFontFace(theme);
 
   return (
     <>

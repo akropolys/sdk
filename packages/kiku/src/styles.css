@@ -5115,11 +5115,16 @@
    them keep the brand font's advance width. Mixing two sets of metrics in one
    line is what shows up as uneven little gaps between words. Handing the whole
    run to the system stack keeps one font for glyphs and spaces alike. */
-/* No per-script font names. `system-ui` plus the generic `sans-serif` keyword is
-   what triggers the platform's own script fallback, which already knows every
-   script the OS can render — naming families here would mean one entry per
-   script forever, and would still miss whatever the user has installed. */
-.hsk-cb-panel[data-script="nonlatin"] {
+/* Only when the developer's font cannot draw this script (data-host-font="gap").
+   A font that covers it keeps precedence — this used to fire unconditionally and
+   discarded, for instance, a Persian developer's Persian-capable font.
+
+   No per-script font names in the fallback. `system-ui` plus the generic
+   `sans-serif` keyword is what triggers the platform's own script fallback,
+   which already knows every script the OS can render — naming families here
+   would mean one entry per script forever, and would still miss whatever the
+   user has installed. */
+.hsk-cb-panel[data-script="nonlatin"][data-host-font="gap"] {
   --hsk-font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
 }
 
