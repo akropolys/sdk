@@ -1,10 +1,22 @@
 import React from 'react';
 
+// Helper to normalize double spaces, stray spaces before punctuation, and units
+const normalizeSpacing = (text: string): string => {
+  if (!text) return text;
+  return text
+    .replace(/[ \t]{2,}/g, ' ')                          // Collapse double/multiple spaces to a single space
+    .replace(/ ([.,!?:;])/g, '$1')                        // Remove space before punctuation ("word ." -> "word.")
+    .replace(/\(([ \t]+)/g, '(')                          // Remove space after open parenthesis
+    .replace(/([ \t]+)\)/g, ')')                          // Remove space before close parenthesis
+    .replace(/(\d+)\s+(MP|mAh|W|GB|MB|KHz|Hz|KSh|KES|USD|EUR)\b/gi, '$1 $2'); // Normalize unit spacing
+};
+
 // Helper to parse inline styles (bold, images, links, and inline code) safely into React nodes
 const parseInline = (text: string, keyPrefix: string): React.ReactNode => {
+  const normalizedText = normalizeSpacing(text);
   // Regex matches: images ![alt](url), links [text](url), bold **text**, inline code `code`
   const tokenRegex = /(!\[[^\]]*\]\([^)]+\)|\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*|`[^`]+`)/g;
-  const parts = text.split(tokenRegex);
+  const parts = normalizedText.split(tokenRegex);
 
   return parts.map((part, index) => {
     if (!part) return null;
@@ -48,17 +60,21 @@ const parseInline = (text: string, keyPrefix: string): React.ReactNode => {
     // Handle Links: [text](url)
     const linkMatch = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
     if (linkMatch) {
-      // Basic sanitization: ensure the URL doesn't contain javascript:
+      const linkText = linkMatch[1];
       const url = linkMatch[2];
+      // Suppress inline memory links so only the single primary memory button below is rendered
+      if (/memory|mimi/i.test(linkText) || /mimi\.akropolys/i.test(url)) {
+        return null;
+      }
       const isSafeUrl = /^(https?|mailto|tel):/i.test(url) || url.startsWith('/');
       if (isSafeUrl) {
         return (
           <a key={key} href={url} target="_blank" rel="noopener noreferrer" className="hsk-markdown-link">
-            {parseInline(linkMatch[1], key)}
+            {parseInline(linkText, key)}
           </a>
         );
       }
-      return <span key={key}>{parseInline(linkMatch[1], key)}</span>; // Fallback to plain text if unsafe
+      return <span key={key}>{parseInline(linkText, key)}</span>; // Fallback to plain text if unsafe
     }
 
     // Return standard text
@@ -81,7 +97,22 @@ function splitTableCells(rowLine: string): string[] {
   return t.split('|').map(c => c.trim());
 }
 
+// Returning the identical element reference lets React skip reconciling the
+// subtree — without this every streamed token re-parses the whole history.
+const cache = new Map<string, React.ReactNode>();
+const CACHE_MAX = 200;
+
 export function renderMarkdown(content: string, streaming = false): React.ReactNode {
+  const cacheKey = `${streaming ? 1 : 0}:${content}`;
+  const cached = cache.get(cacheKey);
+  if (cached !== undefined) return cached;
+  const rendered = buildMarkdown(content, streaming);
+  if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value as string);
+  cache.set(cacheKey, rendered);
+  return rendered;
+}
+
+function buildMarkdown(content: string, streaming: boolean): React.ReactNode {
   const lines = content.split('\n');
   // While streaming, hold back a trailing table row whose closing pipe hasn't arrived yet.
   if (streaming && lines.length > 0) {
@@ -90,14 +121,31 @@ export function renderMarkdown(content: string, streaming = false): React.ReactN
       lines.pop();
     }
   }
-  const elements: React.ReactNode[] = [];
+
+  const blocks: React.ReactNode[] = [];
+  let currentTextNodes: React.ReactNode[] = [];
+  let bubbleIndex = 0;
+
+  const flushTextBubble = () => {
+    if (currentTextNodes.length > 0) {
+      blocks.push(
+        <div key={`text-bubble-${bubbleIndex++}`} className="hsk-cb-ai-text">
+          {currentTextNodes}
+        </div>
+      );
+      currentTextNodes = [];
+    }
+  };
 
   let i = 0;
   while (i < lines.length) {
     const line = lines[i];
     const key = `md-line-${i}`;
 
-    // 1. Empty lines (spacing)
+    // 1. Empty lines. A blank line is a paragraph break, not a new bubble —
+    // flushing on every one shattered a normal answer (lead-in, list, closing
+    // remark) into three or four stacked bubbles. Blocks that genuinely leave
+    // the bubble (tables, images) still flush below.
     if (!line.trim()) {
       i++;
       continue;
@@ -106,11 +154,12 @@ export function renderMarkdown(content: string, streaming = false): React.ReactN
     // 2. Standalone image lines: ![alt](url)
     const standaloneImageMatch = line.trim().match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
     if (standaloneImageMatch) {
+      flushTextBubble();
       const alt = standaloneImageMatch[1];
       const url = standaloneImageMatch[2];
       const isSafeUrl = /^(https?|data:image):/i.test(url);
       if (isSafeUrl) {
-        elements.push(
+        blocks.push(
           <div key={key} className="hsk-markdown-img-block">
             <img
               src={url}
@@ -131,37 +180,39 @@ export function renderMarkdown(content: string, streaming = false): React.ReactN
     if (headerMatch) {
       const level = headerMatch[1].length;
       const Tag = `h${level + 3}` as keyof JSX.IntrinsicElements; // Maps # to h4, ## to h5 to avoid messing up host page hierarchy
-      elements.push(<Tag key={key} className={`hsk-markdown-h${level}`}>{parseInline(headerMatch[2], key)}</Tag>);
+      currentTextNodes.push(<Tag key={key} className={`hsk-markdown-h${level}`}>{parseInline(headerMatch[2], key)}</Tag>);
       i++;
       continue;
     }
 
-    // 4. Unordered Lists
-    if (line.match(/^[-*]\s+/)) {
+    // 4. Unordered Lists (supports -, *, +, and • bullets with optional leading spaces)
+    if (line.match(/^[\s]*[-*+•]\s+/)) {
       const listItems: React.ReactNode[] = [];
-      while (i < lines.length && lines[i].match(/^[-*]\s+/)) {
-        const itemText = lines[i].replace(/^[-*]\s+/, '');
+      while (i < lines.length && lines[i].match(/^[\s]*[-*+•]\s+/)) {
+        const itemText = lines[i].replace(/^[\s]*[-*+•]\s+/, '');
         listItems.push(<li key={`li-${i}`}>{parseInline(itemText, `li-${i}`)}</li>);
         i++;
       }
-      elements.push(<ul key={`ul-${key}`} className="hsk-markdown-list">{listItems}</ul>);
+      currentTextNodes.push(<ul key={`ul-${key}`} className="hsk-markdown-list hsk-markdown-ul">{listItems}</ul>);
       continue;
     }
 
-    // 5. Ordered Lists
-    if (line.match(/^\d+[.)]\s+/)) {
+    // 5. Ordered Lists (supports 1., 1), 2., 2) with optional leading spaces)
+    if (line.match(/^[\s]*\d+[\.\)]\s+/)) {
       const listItems: React.ReactNode[] = [];
-      while (i < lines.length && lines[i].match(/^\d+[.)]\s+/)) {
-        const itemText = lines[i].replace(/^\d+[.)]\s+/, '');
+      while (i < lines.length && lines[i].match(/^[\s]*\d+[\.\)]\s+/)) {
+        const itemText = lines[i].replace(/^[\s]*\d+[\.\)]\s+/, '');
         listItems.push(<li key={`li-${i}`}>{parseInline(itemText, `li-${i}`)}</li>);
         i++;
       }
-      elements.push(<ol key={`ol-${key}`} className="hsk-markdown-list">{listItems}</ol>);
+      currentTextNodes.push(<ol key={`ol-${key}`} className="hsk-markdown-list hsk-markdown-ol">{listItems}</ol>);
       continue;
     }
 
-    // 6. Tables
+    // 6. Tables (Render 100% full width OUTSIDE text speech bubbles)
     if (isTableLine(line, false)) {
+      flushTextBubble();
+
       const tableRows: React.ReactNode[] = [];
       let isHeader = true;
 
@@ -180,14 +231,14 @@ export function renderMarkdown(content: string, streaming = false): React.ReactN
         tableRows.push(
           <tr key={`tr-${i}`}>
             {cells.map((cell, cIdx) => (
-              <Tag key={`td-${i}-${cIdx}`}>{parseInline(cell, `td-${i}-${cIdx}`)}</Tag>
+              <Tag key={`td-${i}-${cIdx}`} dir="auto">{parseInline(cell, `td-${i}-${cIdx}`)}</Tag>
             ))}
           </tr>
         );
         i++;
       }
       
-      elements.push(
+      blocks.push(
         <div key={`table-wrapper-${key}`} className="hsk-table-wrapper">
           <table className="hsk-markdown-table">
             <tbody>{tableRows}</tbody>
@@ -198,7 +249,7 @@ export function renderMarkdown(content: string, streaming = false): React.ReactN
     }
 
     // 7. Default Paragraph
-    elements.push(
+    currentTextNodes.push(
       <p key={key} className="hsk-markdown-p">
         {parseInline(line, key)}
       </p>
@@ -206,5 +257,7 @@ export function renderMarkdown(content: string, streaming = false): React.ReactN
     i++;
   }
 
-  return <>{elements}</>;
+  flushTextBubble();
+
+  return <>{blocks}</>;
 }

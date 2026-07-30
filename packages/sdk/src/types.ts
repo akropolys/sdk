@@ -125,8 +125,10 @@ export interface AkropolysTheme {
   backgroundColor?: string;
   textColor?: string;
   fontFamily?: string;
-  /** Base font size for chat message text, e.g. "15px" or "1rem". */
+  /** Base font size for chat message text on desktop, e.g. "15px" or "1rem". */
   fontSize?: string;
+  /** Base font size for chat message text on mobile screens, e.g. "13.5px" or "0.9rem". */
+  mobileFontSize?: string;
   borderRadius?: string;
 }
 
@@ -184,6 +186,21 @@ export interface StyleDNA {
 export interface VisualSearchResponse extends SearchResponse {
   style_dna?: StyleDNA;
   match_query?: string;
+}
+
+export interface SignedEnvelope<T = Record<string, any>> {
+  v: 1;
+  alg: 'PS256';
+  kid: string;
+  nonce: string;
+  timestamp: number;
+  entity: T;
+}
+
+export interface SignedPayload<T = Record<string, any>> {
+  siteId?: string;
+  envelope: SignedEnvelope<T>;
+  sig: string;
 }
 
 

@@ -29,6 +29,8 @@ export type {
   StyleDNA,
   VisualSearchResponse,
   CaptureTarget,
+  SignedPayload,
+  SignedEnvelope,
 } from './types';
 
 

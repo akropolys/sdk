@@ -1,5 +1,20 @@
 import { Product, SearchResponse, IngestResponse, AkropolysError, CaptureTarget } from './types';
 
+/**
+ * A translated chrome dictionary plus the writing direction resolved from it.
+ * `dir` is decided server-side from the translated text so the widget can set
+ * direction on its first paint instead of rendering LTR and flipping.
+ * `complete` is false when the set is unusable — callers render English rather
+ * than a mix of the two languages.
+ */
+export interface UIStrings {
+  strings: Record<string, string>;
+  complete: boolean;
+  dir: 'ltr' | 'rtl';
+  /** BCP-47 tag for speech recognition, e.g. 'sw-KE'. Empty when unresolved. */
+  bcp47: string;
+}
+
 const MAX_RETRIES = 3;
 const RETRY_DELAYS = [500, 1000, 2000]; // ms
 
@@ -47,8 +62,56 @@ export class AkropolysAPI {
     private getDeviceId?: () => string | undefined,
     private getKikuPub?: () => string | undefined,
     private getShopperName?: () => string | undefined,
-    private getCart?: () => unknown
+    private getCart?: () => unknown,
+    private getShopperLanguage?: () => string | undefined,
+    private getEntityLanguageMode?: () => string | undefined
   ) {}
+
+  /**
+   * A representative entity from this site, returned both as written and
+   * translated, so onboarding can show the choice rather than describe it.
+   */
+  async entityPreview(language: string): Promise<{ original?: any; translated?: any } | null> {
+    try {
+      const res = await fetch(`${this.apiUrl}/entity-preview`, {
+        method: 'POST',
+        headers: this.buildHeaders(),
+        body: JSON.stringify({ siteId: this.siteId, language }),
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Fetches the widget's chrome (onboarding copy, placeholder, footer) in
+   * language. The server owns the canonical dictionary and translates it on
+   * the platform's credits, once per language for every site combined — the
+   * client sends nothing but the language and merges the result over its own
+   * built-in English defaults.
+   */
+  async uiStrings(language: string): Promise<UIStrings | null> {
+    try {
+      const res = await fetch(`${this.apiUrl}/ui-strings`, {
+        method: 'POST',
+        headers: this.buildHeaders(),
+        body: JSON.stringify({ siteId: this.siteId, language }),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data?.strings) return null;
+      return {
+        strings: data.strings,
+        complete: data.complete !== false,
+        dir: data.dir === 'rtl' ? 'rtl' : 'ltr',
+        bcp47: typeof data.bcp47 === 'string' ? data.bcp47 : '',
+      };
+    } catch {
+      return null;
+    }
+  }
 
   // Common request headers: auth + the shopper/session/device identity trio.
   // includeKikuPub adds the cross-site memory id, which only chat needs.
@@ -219,6 +282,10 @@ export class AkropolysAPI {
     const body: Record<string, any> = { query, siteId: this.siteId, history, currentContext };
     const shopperName = this.getShopperName?.();
     if (shopperName) body.shopperName = shopperName;
+    const shopperLanguage = this.getShopperLanguage?.();
+    if (shopperLanguage) body.shopperLanguage = shopperLanguage;
+    const entityLanguageMode = this.getEntityLanguageMode?.();
+    if (entityLanguageMode) body.entityLanguageMode = entityLanguageMode;
     // Read-through to the developer's cart, if they exposed one. Only sent when
     // it's a non-empty array; the SDK reads what they hand back, nothing more.
     const cart = this.getCart?.();

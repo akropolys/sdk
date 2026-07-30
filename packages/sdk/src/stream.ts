@@ -49,6 +49,10 @@ export interface ChatMetadata {
   intent: string;
   sources: ChatSource[];
   action?: ChatAction;
+  /** Present when this turn switched the shopper's preferred reply language. */
+  language?: string;
+  /** Action tags this site+plan permits, resolved server-side each turn. */
+  allowedActions?: string[];
 }
 
 export type VizEvent =
@@ -71,9 +75,19 @@ function parseSSEChunk(raw: string): SSEFrame[] {
     let data = '';
     for (const line of block.split('\n')) {
       if (line.startsWith('event:')) event = line.slice(6).trim();
-      else if (line.startsWith('data:')) data = line.slice(5);
+      else if (line.startsWith('data:')) {
+        data = line.slice(5);
+        // Per the SSE spec a single space after the colon is a delimiter, not
+        // content. Keeping it prepended a space to EVERY token: in Latin text
+        // the duplicates collapsed in HTML and went unnoticed, but in Tamil,
+        // Thai and other complex scripts a token boundary falls inside a
+        // grapheme, so the space landed between a consonant and its vowel sign
+        // and split the ligature apart.
+        if (data.startsWith(' ')) data = data.slice(1);
+      }
     }
-    if (data !== '') frames.push({ event, data });
+    // An event with empty data is still a frame — `done` carries no payload.
+    if (data !== '' || event !== '') frames.push({ event, data });
   }
   return frames;
 }
@@ -222,12 +236,20 @@ export class KikuStream {
 
           if (event === 'error') {
             let msg = 'Stream error';
+            let code: string | undefined;
             try {
-              msg = JSON.parse(data).error ?? msg;
+              const parsed = JSON.parse(data);
+              msg = parsed.error ?? msg;
+              code = parsed.code;
             } catch {
               msg = data;
             }
-            throw new Error(msg);
+            const err = new Error(msg);
+            // Stable machine-readable code, when the server sent one, so the
+            // UI can render this in the shopper's language instead of the
+            // English fallback message.
+            if (code) (err as Error & { code?: string }).code = code;
+            throw err;
           }
 
           // Plain token — convert literal \n to actual newline

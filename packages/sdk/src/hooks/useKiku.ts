@@ -21,6 +21,7 @@ interface UseKikuReturn {
   error: string | null;
   lastAction: ChatAction | null;
   lastIntent: string | null;
+  allowedActions: string[] | null;
   send: (query: string, displayQuery?: string, attachments?: ChatAttachment[], forcedIntent?: string, captureTargets?: CaptureTarget[]) => Promise<void>;
   stop: () => void;
   stopped: boolean;
@@ -44,7 +45,15 @@ function enrichSources(sources: ChatSource[], display?: import('../types').Displ
       price: s.price || d.price,
       image: s.image || d.image,
       brand: s.brand || d.subtitle,
-      currency: s.currency || (typeof d.price === 'string' && d.price.match(/[A-Za-z]{3}/)?.[0]) || 'KES',
+      // No hardcoded fallback: labelling a USD listing as KES misstates the
+      // price. Prefer the entity's own currency field, then a code embedded in
+      // the price string, then nothing — the card renders the bare number
+      // rather than inventing a denomination.
+      currency:
+        s.currency ||
+        (typeof (s.fields as any)?.currency === 'string' ? (s.fields as any).currency : '') ||
+        (typeof d.price === 'string' ? d.price.match(/[A-Z]{3}/)?.[0] : '') ||
+        undefined,
     };
   });
 }
@@ -61,6 +70,9 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
   const [error, setError] = useState<string | null>(null);
   const [lastAction, setLastAction] = useState<ChatAction | null>(null);
   const [lastIntent, setLastIntent] = useState<string | null>(null);
+  // Which action tags this site+plan actually permits, as resolved by the
+  // server each turn. null = not yet known (before the first reply).
+  const [allowedActions, setAllowedActions] = useState<string[] | null>(null);
   const activeStreamRef = useRef<any | null>(null);
 
   // Streaming pace buffer — decouples on-screen typing speed from how fast (or
@@ -69,6 +81,8 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
   const displayedLenRef = useRef(0);
   const rafRef = useRef<number | null>(null);
   const streamDoneRef = useRef(false);
+  const paceClockRef = useRef(0);
+  const paceCarryRef = useRef(0);
 
   const stopPacing = useCallback(() => {
     if (rafRef.current != null) {
@@ -98,16 +112,33 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     };
   }, [stopPacing]);
 
-  // Reveal buffered text a little each animation frame. Speed scales with the
-  // backlog so it never lags far behind, but always reads as deliberate typing.
+  // Reveal buffered text at a steady characters-per-second rate rather than a
+  // fraction of the backlog: a proportional step decays exponentially, which
+  // dumps each network slab in a few frames and then crawls. Rate is chosen to
+  // clear the current backlog over PACE_CATCHUP seconds, clamped either side so
+  // it never crawls and never flashes.
   const startPacing = useCallback(() => {
     if (rafRef.current != null) return;
-    const tick = () => {
+    const PACE_CATCHUP = 0.4;   // seconds to absorb the current backlog
+    const PACE_MIN = 140;       // chars/sec floor — a readable typing pace
+    const PACE_MAX = 1400;      // chars/sec ceiling for a big backlog
+    paceClockRef.current = 0;
+    paceCarryRef.current = 0;
+    const tick = (now: number) => {
       const target = targetTextRef.current;
       const remaining = target.length - displayedLenRef.current;
+      const dt = paceClockRef.current === 0 ? 1 / 60 : Math.min(0.05, (now - paceClockRef.current) / 1000);
+      paceClockRef.current = now;
       if (remaining > 0) {
-        const step = Math.max(2, Math.ceil(remaining * 0.15));
-        displayedLenRef.current = Math.min(target.length, displayedLenRef.current + step);
+        const rate = Math.min(PACE_MAX, Math.max(PACE_MIN, remaining / PACE_CATCHUP));
+        const advance = paceCarryRef.current + rate * dt;
+        const whole = Math.floor(advance);
+        paceCarryRef.current = advance - whole;
+        if (whole < 1) {
+          rafRef.current = requestAnimationFrame(tick);
+          return;
+        }
+        displayedLenRef.current = Math.min(target.length, displayedLenRef.current + whole);
         const shown = target.slice(0, displayedLenRef.current);
         setMessages(prev => {
           const next = [...prev];
@@ -151,7 +182,6 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
         targetTextRef.current = '';
         displayedLenRef.current = 0;
         streamDoneRef.current = false;
-        setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
         messageInitialized = true;
         startPacing();
       } else if (continuing) {
@@ -165,6 +195,7 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
       lastMeta = meta;
       setSources(meta.sources ?? []);
       if (meta.intent) setLastIntent(meta.intent);
+      if (Array.isArray(meta.allowedActions)) setAllowedActions(meta.allowedActions);
       if (meta.action) setLastAction(meta.action);
       onMetaRef.current?.(meta);
     });
@@ -341,24 +372,31 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     // Abort previous stream if any
     activeStreamRef.current?.destroy();
 
-    // Optimistically add user message (with image thumbnails if provided)
+    // Optimistically add user message and assistant message container
     const userMsg: ChatMessage = {
       role: 'user',
       content: displayQuery ?? query,
       images: attachments?.filter(a => a.type === 'image').map(a => a.data),
     };
-    setMessages(prev => [...prev, userMsg]);
+    const assistantMsg: ChatMessage = {
+      role: 'assistant',
+      content: '',
+      thinking: '',
+    };
+    setMessages(prev => [...prev, userMsg, assistantMsg]);
     setLoading(true);
-    setStreaming(false);
+    setStreaming(true);
     setStopped(false);
     setInterrupted(false);
     setError(null);
     setReferencedIds([]);
+    setLastAction(null);
+    setLastIntent(null);
     targetTextRef.current = '';
     displayedLenRef.current = 0;
 
     try {
-      // History excludes the message we just added
+      // History excludes the user message and assistant placeholder we just added
       const history = messages.map(m => ({ role: m.role, content: m.content }));
       const stream = client.chat(query, history, attachments, forcedIntent, captureTargets);
       activeStreamRef.current = stream;
@@ -367,7 +405,7 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
       setLoading(false);
       setStreaming(false);
       setError(err?.message ?? 'Chat request failed');
-      setMessages(prev => prev.slice(0, -1));
+      setMessages(prev => prev.slice(0, -2));
       onErrorRef.current?.(err);
     }
   }, [client, messages, loading, consumeStream]);
@@ -452,6 +490,6 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     [sources, client?.display]
   );
 
-  return { messages, sources: resolvedSources, referencedIds, loading, streaming, error, lastAction, lastIntent, send, stop, stopped, interrupted, continueGenerating, reset };
+  return { messages, sources: resolvedSources, referencedIds, loading, streaming, error, lastAction, lastIntent, allowedActions, send, stop, stopped, interrupted, continueGenerating, reset };
 }
 

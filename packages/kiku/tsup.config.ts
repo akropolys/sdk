@@ -7,6 +7,7 @@ export default defineConfig({
   },
   format: ['cjs', 'esm'],
   dts: true,
+  minify: true,
   banner: {
     js: "'use client';",
   },

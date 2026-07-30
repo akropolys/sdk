@@ -1,12 +1,14 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 
 export interface VoiceButtonProps {
   onTranscript: (text: string) => void;
   onInterim?: (text: string) => void;
-  /** BCP-47 language tag. Defaults to 'en-US'. */
+  /** BCP-47 tag. Defaults to the page's <html lang>, then the browser language. */
   lang?: string;
   className?: string;
   disabled?: boolean;
+  /** Raw SpeechRecognition error code — 'not-allowed', 'audio-capture', etc. */
+  onError?: (code: string) => void;
 }
 
 const MicIcon = ({ active }: { active: boolean }) => (
@@ -28,16 +30,20 @@ const MicIcon = ({ active }: { active: boolean }) => (
 export function VoiceButton({
   onTranscript,
   onInterim,
-  lang = 'en-US',
+  lang,
   className = '',
   disabled = false,
+  onError,
 }: VoiceButtonProps) {
   const [listening, setListening] = useState(false);
   const recognitionRef = useRef<any>(null);
 
-  const isSupported =
-    typeof window !== 'undefined' &&
-    ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
+  // Resolved after mount, never during render: the server has no window, so
+  // deciding at render time makes SSR and hydration disagree about the button.
+  const [isSupported, setIsSupported] = useState(false);
+  useEffect(() => {
+    setIsSupported('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
+  }, []);
 
   const start = useCallback(() => {
     if (!isSupported || listening) return;
@@ -45,14 +51,20 @@ export function VoiceButton({
     const SR: any =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     const recognition = new SR();
-    recognition.lang = lang;
+    // Never hardcode English: the page declares its language, the browser knows
+    // the user's. A fixed 'en-US' transcribed every other language as gibberish.
+    recognition.lang =
+      lang || document.documentElement.lang || navigator.language || 'en-US';
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
     recognitionRef.current = recognition;
 
     recognition.onstart = () => setListening(true);
     recognition.onend = () => setListening(false);
-    recognition.onerror = () => setListening(false);
+    recognition.onerror = (e: any) => {
+      setListening(false);
+      if (e?.error && e.error !== 'aborted') onError?.(e.error);
+    };
 
     recognition.onresult = (e: any) => {
       const results = Array.from(e.results as any[]);
@@ -66,8 +78,13 @@ export function VoiceButton({
       }
     };
 
-    recognition.start();
-  }, [isSupported, listening, lang, onTranscript, onInterim]);
+    try {
+      recognition.start();
+    } catch {
+      setListening(false);
+      onError?.('failed-to-start');
+    }
+  }, [isSupported, listening, lang, onTranscript, onInterim, onError]);
 
   const stop = useCallback(() => {
     recognitionRef.current?.stop();

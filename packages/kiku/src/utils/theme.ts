@@ -27,6 +27,7 @@ export function resolveTheme(theme: ThemeProp): {
   }
   if (theme.fontFamily) vars['--hsk-font'] = theme.fontFamily;
   if (theme.fontSize) vars['--hsk-font-size'] = theme.fontSize;
+  if (theme.mobileFontSize) vars['--hsk-mobile-font-size'] = theme.mobileFontSize;
   if (theme.borderRadius) vars['--hsk-border-radius'] = theme.borderRadius;
   return { themeAttr: undefined, vars: vars as CSSProperties };
 }

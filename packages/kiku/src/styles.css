@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+
 @layer components {
 /* ==========================================================================
    kiku SDK Styles
@@ -6,6 +8,8 @@
 :root {
   --hsk-border-radius: 0px;
   --hsk-brand-green: #2D7A4B;
+  --hsk-default-font: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --hsk-default-font-size: 16px;
 }
 
 /* ─── Mobile Touch Fixes ────────────────────────────────────────────────────
@@ -23,14 +27,23 @@
 .hsk-chat-reset,
 .hsk-close-btn,
 .hsk-cb-overlay {
-  --hsk-font-size: 14.5px;
+  --hsk-font-size: 16px;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+  /* Set once at the root so every descendant inherits the integrator's font;
+     rules that only set font-size used to fall through to the host page's. */
+  font-family: var(--hsk-font, var(--hsk-default-font));
 }
 
-button, [role="button"] {
+/* Scoped to kiku's own trees. Unscoped, this restyled every button and input
+   on the host page — the integrator's own controls changed font. */
+.hsk-cb-overlay :is(button, [role="button"], input, textarea, select),
+.hsk-chat :is(button, [role="button"], input, textarea, select),
+.hsk-cb-btn,
+.hsk-search :is(button, [role="button"], input, textarea, select) {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+  font-family: var(--hsk-font, var(--hsk-default-font));
 }
 
 /* ─── ChatWidget ─── */
@@ -38,8 +51,8 @@ button, [role="button"] {
   --hsk-bg: var(--chat-bg-color, #ffffff);
   --hsk-text: var(--chat-text-color, #1f1f1f);
   --hsk-primary: var(--chat-primary-color, #ff6a33);
-  --hsk-font: var(--chat-font-family, inherit);
-  --hsk-font-size: 13px;
+  --hsk-font: var(--chat-font-family, var(--hsk-default-font));
+  --hsk-font-size: var(--chat-font-size, 16px);
 
   display: flex;
   flex-direction: column;
@@ -107,7 +120,7 @@ button, [role="button"] {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  scroll-behavior: smooth;
+  overscroll-behavior: contain;
 }
 
 .hsk-chat-empty {
@@ -620,13 +633,22 @@ button, [role="button"] {
 
 .hsk-cb-overlay {
   --hsk-primary: var(--chat-primary-color, #ff6a33);
-  position: fixed;
-  inset: 0;
-  z-index: 99999;
-  display: flex;
-  flex-direction: column;
+  --hsk-font-size: var(--hsk-desktop-font-size, 15px);
+  --hsk-mobile-font-size: 13.5px;
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  z-index: 2147483647 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
   animation: hsk-overlay-in .2s ease-out both;
   background: var(--hsk-chat-bg, #ffffff) !important;
+  box-sizing: border-box !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 @keyframes hsk-overlay-in {
@@ -645,6 +667,15 @@ button, [role="button"] {
   animation: hsk-panel-in .28s cubic-bezier(.34,1.2,.64,1) both;
 }
 
+.hsk-cb-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
 @keyframes hsk-panel-in {
   from { opacity: 0; transform: translateY(24px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -656,6 +687,9 @@ button, [role="button"] {
   justify-content: space-between;
   padding: 20px 28px 12px;
   flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+  background: linear-gradient(to bottom, var(--hsk-chat-bg, #ffffff) 70%, color-mix(in srgb, var(--hsk-chat-bg, #ffffff) 60%, transparent) 88%, transparent 100%);
 }
 
 .hsk-cb-topbar-left {
@@ -728,15 +762,32 @@ button, [role="button"] {
 .hsk-cb-close:hover { border-color: var(--hsk-primary); color: var(--hsk-primary); }
 
 .hsk-cb-msgs {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  overscroll-behavior-y: contain;
   padding: 8px 28px 0;
   display: flex;
   flex-direction: column;
   gap: 0;
-  scroll-behavior: smooth;
   scrollbar-width: thin;
   scrollbar-color: var(--hsk-chat-divide, rgba(0,0,0,.1)) transparent;
+}
+
+/* While the list is in motion, cards sliding under a stationary cursor would
+   each fire their hover lift and drop again. Suppress hover on the children
+   only — the scroller itself stays hit-testable so wheel events still land. */
+.hsk-cb-msgs.hsk-scrolling > * {
+  pointer-events: none;
+}
+
+.hsk-cb-msgs::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 .hsk-cb-empty {
@@ -750,46 +801,290 @@ button, [role="button"] {
   text-align: left;
 }
 
+.hsk-cb-hello-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 4px 0;
+  width: 100%;
+}
+
 /* Big, sparse greeting that fills the panel — the first thing a new shopper sees. */
 .hsk-cb-hello {
   margin: 0;
-  font-size: clamp(30px, 6.5vw, 48px);
-  font-weight: 400;
-  line-height: 1.04;
-  letter-spacing: -0.025em;
+  font-size: clamp(22px, 5vw, 32px);
+  font-weight: 500;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
   color: var(--hsk-chat-text, #111);
 }
 .hsk-cb-hello b {
-  font-weight: 600;
-  color: var(--hsk-primary, #ff6a33);
+  font-weight: 700;
+  color: var(--hsk-primary, #007aff);
 }
 
 .hsk-cb-hello-lead {
   margin: 0;
-  font-size: 16px;
-  line-height: 1.6;
+  font-size: 14px;
+  line-height: 1.5;
   color: var(--hsk-chat-muted, #5f6368);
-  max-width: 34ch;
+  max-width: 36ch;
 }
 
 .hsk-cb-hello-ask {
-  margin: 6px 0 0;
-  font-size: 17px;
+  margin: 4px 0 2px;
+  font-size: 15px;
   font-weight: 500;
   color: var(--hsk-chat-text, #111);
 }
 
 .hsk-cb-hello-skip {
-  padding: 0;
-  font-size: 13px;
+  padding: 2px 0;
+  font-size: 12px;
   color: var(--hsk-chat-muted, #888);
   background: transparent;
   border: none;
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 3px;
+  margin-top: 4px;
 }
 .hsk-cb-hello-skip:hover { color: var(--hsk-chat-text, #111); }
+
+.hsk-cb-step {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hsk-chat-muted, #9aa0a6);
+}
+
+.hsk-cb-hello-hint {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--hsk-chat-muted, #888);
+}
+
+/* Two side-by-side previews of a real entity, so the shopper picks by seeing
+   rather than by reading a description. */
+/* Matches the real result cards (.hsk-cb-source): square image, no border, no
+   card chrome. These previews exist to look like an actual result, so they
+   should be built from the same parts rather than a bespoke bordered box. */
+.hsk-cb-entlang-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 188px));
+  gap: 14px;
+  justify-content: start;
+  margin: 10px 0 2px;
+}
+
+.hsk-cb-entlang-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0;
+  text-align: left;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+.hsk-cb-entlang-card:hover {
+  transform: translateY(-2px);
+}
+
+.hsk-cb-entlang-card:hover .hsk-cb-entlang-img {
+  transform: scale(1.05);
+}
+
+.hsk-cb-entlang-tag {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--hsk-primary, #ff6a33);
+}
+
+.hsk-cb-entlang-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Square, like the real result cards — the grid caps the column at 188px, so
+   aspect-ratio 1 gives the same 188x188 tile rather than a wide letterbox. */
+.hsk-cb-entlang-img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: var(--hsk-border-radius, 0px);
+  display: block;
+  transition: transform 0.22s;
+}
+
+.hsk-cb-entlang-img--empty {
+  background: var(--hsk-chat-divide, rgba(0, 0, 0, 0.06));
+}
+
+/* Clips the hover zoom, matching .hsk-cb-src-imgwrap. Must wrap ONLY the
+   image — putting overflow on the preview would clip the text under it. */
+.hsk-cb-entlang-imgwrap {
+  display: block;
+  overflow: hidden;
+  border-radius: var(--hsk-border-radius, 0px);
+  background: var(--hsk-chat-source-bg, #f8f9fa);
+}
+
+.hsk-cb-entlang-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--hsk-chat-text, #111);
+}
+
+.hsk-cb-entlang-detail {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--hsk-chat-muted, #5f6368);
+}
+
+.hsk-cb-entlang-price {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--hsk-primary, #ff6a33);
+}
+
+.hsk-cb-entlang-note {
+  font-size: 10.5px;
+  line-height: 1.35;
+  color: var(--hsk-chat-muted, #8a8f98);
+}
+
+/* Shown while the preview round trip is in flight — an empty grey square with
+   no text reads as broken, a pulsing skeleton reads as loading. */
+.hsk-cb-entlang-skeleton {
+  background: var(--hsk-chat-divide, rgba(0, 0, 0, 0.06));
+  animation: hsk-entlang-pulse 1.4s ease-in-out infinite;
+}
+
+.hsk-cb-entlang-line {
+  display: block;
+  height: 9px;
+  border-radius: 4px;
+}
+
+.hsk-cb-entlang-line--short {
+  width: 60%;
+}
+
+@keyframes hsk-entlang-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+.hsk-cb-entlang-card:disabled {
+  cursor: default;
+}
+
+.hsk-cb-entlang-card:disabled:hover {
+  transform: none;
+}
+
+/* ── RTL ──────────────────────────────────────────────────────────────────
+   dir="rtl" on the panel flips anything expressed logically (flex alignment,
+   text-align), but not physical properties. These are the ones that would
+   otherwise strand a shopper's own bubble on the wrong side in Arabic,
+   Hebrew, Farsi or Urdu. */
+/* Keep the scrollbar on the right even in RTL. A scroll container inherits
+   direction, which moves its scrollbar to the left edge — technically correct
+   for RTL, but jarring inside an otherwise-normal page. The container stays
+   LTR and its children are flipped back. */
+.hsk-cb-panel[dir="rtl"] .hsk-cb-msgs {
+  direction: ltr;
+}
+
+.hsk-cb-panel[dir="rtl"] .hsk-cb-msgs > * {
+  direction: rtl;
+}
+
+.hsk-cb-panel[dir="rtl"] .hsk-cb-user-msg {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+.hsk-cb-panel[dir="rtl"] .hsk-cb-user-bubble {
+  border-radius: 20px 20px 20px 4px;
+}
+
+.hsk-cb-panel[dir="rtl"] .hsk-cb-ai-text {
+  border-radius: 20px 20px 4px 20px;
+}
+
+.hsk-cb-panel[dir="rtl"] .hsk-cb-user-imgs {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+/* Tooltips and the @kiku picker anchor off the left edge in LTR. */
+.hsk-cb-panel[dir="rtl"] .hsk-cb-entlang-cards {
+  justify-content: end;
+}
+
+.hsk-cb-lang-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 2px;
+}
+
+.hsk-cb-lang-chip {
+  padding: 5px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--hsk-chat-text, #111);
+  background: var(--hsk-chat-source-bg, rgba(0, 0, 0, 0.04));
+  border: 1px solid var(--hsk-chat-border, rgba(0, 0, 0, 0.08));
+  border-radius: 18px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+/* Wordless placeholder held while a freshly chosen language is being fetched.
+   Sized to the copy it replaces so the step doesn't resize when text lands. */
+.hsk-cb-chrome-loading {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 320px;
+  margin: 6px 0 2px;
+}
+
+.hsk-cb-chrome-loading-bar {
+  height: 13px;
+  border-radius: 7px;
+  background: var(--hsk-chat-source-bg, rgba(0, 0, 0, 0.06));
+  animation: hsk-chrome-pulse 1.3s ease-in-out infinite;
+}
+
+.hsk-cb-chrome-loading-bar:first-child { height: 22px; width: 62%; }
+.hsk-cb-chrome-loading-bar:last-child { width: 74%; }
+
+@keyframes hsk-chrome-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-cb-chrome-loading-bar { animation: none; }
+}
+
+.hsk-cb-lang-chip:hover {
+  background: var(--hsk-primary, #007aff);
+  color: #ffffff;
+  border-color: var(--hsk-primary, #007aff);
+}
 
 /* Splendorous self-reveal: each line rises, sharpens from a soft blur, and
    settles — staggered so the greeting unfurls on its own when the chat opens. */
@@ -843,8 +1138,8 @@ button, [role="button"] {
 }
 
 .hsk-cb-msg-group {
-  padding: 20px 0;
-  border-bottom: 1px solid var(--hsk-chat-divide, rgba(0,0,0,.05));
+  padding: 16px 0;
+  border-bottom: none;
   animation: hsk-msg-in .22s ease-out both;
 }
 
@@ -859,8 +1154,20 @@ button, [role="button"] {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
+  align-self: flex-end;
+  /* iMessage-style cap: percentage alone let bubbles span nearly the whole
+     panel on a laptop. Bubbles hug their text; long ones stop at a column a
+     human can actually scan. */
+  max-width: min(75%, 420px);
+  margin-left: auto;
   gap: 6px;
   margin-bottom: 20px;
+}
+
+@media (max-width: 640px) {
+  .hsk-cb-user-msg {
+    max-width: 84%;
+  }
 }
 
 .hsk-cb-user-msg.hsk-sent {
@@ -880,41 +1187,201 @@ button, [role="button"] {
 }
 
 .hsk-cb-user-bubble {
-  background: var(--hsk-primary);
-  color: #fff;
-  padding: 10px 16px;
-  border-radius: var(--hsk-border-radius, 0px);
-  font-size: var(--hsk-font-size, 14.5px);
-  line-height: 1.55;
-  max-width: 72%;
+  background: linear-gradient(135deg, #007aff 0%, #0056b3 100%);
+  color: #ffffff;
+  padding: 10px 18px;
+  border-radius: 20px;
+  position: relative;
+  font-size: var(--hsk-font-size, 15.5px);
+  font-family: var(--hsk-font, var(--hsk-default-font));
+  line-height: 1.45;
+  max-width: 100%;
   font-weight: 500;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  box-shadow: 0 4px 16px -3px rgba(0, 122, 255, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  letter-spacing: -0.01em;
 }
+
+/* Tail drawn as one masked shape in the bubble's own colour. The earlier version
+   carved a square using a second shape painted in the panel background, so every
+   theme had to re-state that colour and any mismatch showed as a pale blob. This
+   needs only the bubble colour. The mask is short (starts ~78% down the bubble,
+   not from the top) and hugs the bubble's own bottom-right corner rather than
+   spanning it, which is what keeps it looking fused instead of clipped on. The
+   outer sweep lands ON the baseline at a steep angle instead of tapering past
+   it — a taper leaves sub-pixel mass that antialiases into a stray whisker
+   poking out past the corner, which is what read as a nub. */
+.hsk-cb-user-bubble::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  bottom: 0;
+  right: -4px;
+  width: 10px;
+  height: 15px;
+  background: var(--hsk-user-bubble-tail, #0056b3);
+  -webkit-mask-image: var(--hsk-tail-mask);
+  mask-image: var(--hsk-tail-mask);
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+.hsk-cb-user-bubble {
+  --hsk-tail-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 15' preserveAspectRatio='none'%3E%3Cpath d='M0,0 L5.4,0 C5.4,7 6.2,11 7.8,13.2 C8.3,13.9 8.7,14.4 8.9,15 L0,15 Z' fill='%23000'/%3E%3C/svg%3E");
+  border-bottom-right-radius: 6px;
+}
+
+.hsk-cb-panel[dir="rtl"] .hsk-cb-user-bubble {
+  border-bottom-right-radius: 20px;
+  border-bottom-left-radius: 6px;
+}
+
+.hsk-cb-panel[dir="rtl"] .hsk-cb-user-bubble::after {
+  right: auto;
+  left: -4px;
+  transform: scaleX(-1);
+}
+
+/* Middle bubbles in a consecutive run: same tightened corner as the tailed
+   bubble, but no tail drawn — this is what actually reads as "grouped" rather
+   than the tail itself. */
+.hsk-cb-user-bubble--grouped {
+  border-bottom-right-radius: 6px;
+}
+
+.hsk-cb-user-bubble--grouped::after {
+  content: none;
+}
+
+.hsk-cb-panel[dir="rtl"] .hsk-cb-user-bubble--grouped {
+  border-bottom-right-radius: 20px;
+  border-bottom-left-radius: 6px;
+}
+
 
 .hsk-cb-ai-msg {
   display: flex;
   align-items: flex-start;
-  gap: 14px;
+  gap: 8px;
 }
 
 .hsk-cb-ai-icon {
-  width: 28px; height: 28px;
-  border-radius: var(--hsk-border-radius, 0px);
-  background: rgba(255,106,51,.12);
-  border: 1px solid rgba(255,106,51,.25);
-  color: var(--hsk-primary);
-  font-size: 13px;
-  display: flex; align-items: center; justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 0px;
+  background: transparent !important;
+  border: none !important;
+  color: var(--hsk-primary, #ff6a33);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
-  margin-top: 2px;
+  margin-top: -2px;
+}
+
+.hsk-cb-ai-icon .hsk-cb-thinking-icon,
+.hsk-cb-ai-icon svg {
+  width: 30px !important;
+  height: 30px !important;
 }
 
 .hsk-cb-ai-body { flex: 1; min-width: 0; }
 
+.hsk-cb-ai-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+  width: 100%;
+}
+
 .hsk-cb-ai-text {
-  font-size: var(--hsk-font-size, 14.5px);
-  line-height: 1.65;
-  color: var(--hsk-chat-text, #111);
-  white-space: pre-wrap;
+  font-size: var(--hsk-font-size, 15.5px);
+  font-family: var(--hsk-font, var(--hsk-default-font));
+  line-height: 1.55;
+  color: var(--hsk-chat-text, #111827);
+  background: var(--hsk-chat-ai-bg, #f3f4f6);
+  border: 1px solid var(--hsk-chat-ai-border, rgba(0, 0, 0, 0.05));
+  padding: 14px 18px;
+  border-radius: 20px;
+  position: relative;
+  display: inline-block;
+  /* Assistant prose gets more room than the shopper's short asks, but still a
+     readable column (~65ch at this size), not the whole panel. */
+  max-width: min(88%, 560px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  margin-top: 4px;
+}
+
+/* Assistant tail — same masked shape as the shopper's bubble, mirrored onto the
+   left corner and filled in the assistant background colour. Selector is
+   ":no following text bubble" rather than :last-of-type, which is type-based:
+   markdown emits image and table blocks as sibling divs, so a reply ending in a
+   product image left the text bubble not-last-of-type and tail-less. */
+.hsk-cb-ai-text:not(:has(~ .hsk-cb-ai-text))::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  bottom: 0;
+  left: -4px;
+  width: 10px;
+  height: 15px;
+  background: var(--hsk-chat-ai-bg, #f3f4f6);
+  -webkit-mask-image: var(--hsk-tail-mask);
+  mask-image: var(--hsk-tail-mask);
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  transform: scaleX(-1);
+}
+
+.hsk-cb-ai-text:not(:has(~ .hsk-cb-ai-text)) {
+  --hsk-tail-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 15' preserveAspectRatio='none'%3E%3Cpath d='M0,0 L5.4,0 C5.4,7 6.2,11 7.8,13.2 C8.3,13.9 8.7,14.4 8.9,15 L0,15 Z' fill='%23000'/%3E%3C/svg%3E");
+  border-bottom-left-radius: 6px;
+}
+
+.hsk-cb-panel[dir="rtl"] .hsk-cb-ai-text:not(:has(~ .hsk-cb-ai-text))::after {
+  left: auto;
+  right: -4px;
+  transform: none;
+}
+
+.hsk-cb-panel[dir="rtl"] .hsk-cb-ai-text:not(:has(~ .hsk-cb-ai-text)) {
+  border-bottom-left-radius: 20px;
+  border-bottom-right-radius: 6px;
+}
+
+
+/* Delivery status under the shopper's most recent message. */
+.hsk-cb-sent-status {
+  font-size: 10.5px;
+  line-height: 1;
+  color: var(--hsk-chat-muted, #8a8f98);
+  padding: 4px 6px 0 0;
+  animation: hsk-sent-in 0.2s ease-out both;
+}
+
+@keyframes hsk-sent-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-color-scheme: dark) {
+  /* Set the TOKEN, not the property: bubble and tail both read
+     --hsk-chat-ai-bg, so a theme can never leave them mismatched. */
+  .hsk-cb-ai-text {
+    --hsk-chat-ai-bg: #1c1c1e;
+    background: var(--hsk-chat-ai-bg);
+    border-color: rgba(255, 255, 255, 0.08);
+    color: #f9fafb;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+  }
 }
 
 .hsk-cb-sources-wrap {
@@ -935,34 +1402,78 @@ button, [role="button"] {
 
 .hsk-cb-sources::-webkit-scrollbar { display: none; }
 
-.hsk-cb-sources-fade {
+.hsk-cb-sources-fade-left {
+  position: absolute;
+  left: 0; top: 0; bottom: 4px;
+  width: 48px;
+  pointer-events: none;
+  background: linear-gradient(to right, var(--hsk-fade-bg, var(--hsk-chat-bg, #0e0e0f)), transparent);
+  z-index: 2;
+}
+
+.hsk-cb-sources-fade-right {
   position: absolute;
   right: 0; top: 0; bottom: 4px;
-  width: 90px;
+  width: 48px;
   pointer-events: none;
+  background: linear-gradient(to left, var(--hsk-fade-bg, var(--hsk-chat-bg, #0e0e0f)), transparent);
+  z-index: 2;
 }
 
-.hsk-cb-sources-next {
+.hsk-cb-sources-next,
+.hsk-cb-sources-prev {
   position: absolute;
-  right: 10px;
-  top: 50%;
+  top: 42%;
   transform: translateY(-50%);
-  width: 30px; height: 30px;
-  border-radius: var(--hsk-border-radius, 0px);
-  border: 1px solid var(--hsk-chat-divide, rgba(0,0,0,.12));
-  background: var(--hsk-chat-bg, #ffffff);
-  color: var(--hsk-chat-text, #333);
+  width: 34px;
+  height: 34px;
+  border-radius: 50% !important;
+  background: var(--hsk-chat-bg, #ffffff) !important;
+  border: 1px solid var(--hsk-chat-divide, rgba(0, 0, 0, 0.12)) !important;
+  color: var(--hsk-primary, #ff6a33) !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+  z-index: 10;
   cursor: pointer;
-  font-size: 16px;
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 2px 12px rgba(0,0,0,.1);
-  transition: all .15s;
-  z-index: 3;
-  font-family: inherit;
-  line-height: 1;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
 }
 
-.hsk-cb-sources-next:hover { border-color: var(--hsk-primary); color: var(--hsk-primary); }
+.hsk-cb-sources-next:hover,
+.hsk-cb-sources-prev:hover {
+  background: var(--hsk-primary, #ff6a33) !important;
+  color: #ffffff !important;
+  border-color: var(--hsk-primary, #ff6a33) !important;
+  transform: translateY(-50%) scale(1.1);
+  box-shadow: 0 6px 18px rgba(255, 106, 51, 0.35);
+}
+
+.hsk-cb-sources-next { right: 2px; }
+.hsk-cb-sources-prev { left: 2px; }
+
+.hsk-cb-carousel-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.hsk-cb-dot-item {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(150, 150, 150, 0.35);
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  cursor: pointer;
+}
+
+.hsk-cb-dot-item--active {
+  width: 18px;
+  border-radius: 999px;
+  background: var(--hsk-primary, #ff6a33);
+}
 
 .hsk-cb-source {
   flex: 0 0 188px;
@@ -1137,6 +1648,54 @@ button, [role="button"] {
   100% { -webkit-mask-position: -30% 0; mask-position: -30% 0; }
 }
 
+.hsk-arch-glow {
+  position: absolute;
+  left: 37.58%;
+  top: 42.56%;
+  width: 24.8%;
+  height: 38.44%;
+  border-radius: 4px 4px 0 0;
+  overflow: hidden;
+  pointer-events: none;
+  transform-origin: 0% 50%;
+  animation: hsk-arch-door-knock 2.8s infinite;
+  z-index: 1;
+}
+
+.hsk-arch-noise {
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(ellipse at 80% 80%, rgba(255, 120, 60, 0.95) 0%, rgba(255, 80, 20, 0.6) 50%, transparent 85%),
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.35'/%3E%3C/svg%3E");
+  background-size: cover;
+}
+
+@keyframes hsk-arch-door-knock {
+  0% {
+    opacity: 0.85;
+    transform: scaleX(1);
+    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  14%, 74% {
+    opacity: 0;
+    transform: scaleX(0);
+  }
+  84% {
+    opacity: 1;
+    transform: scaleX(1);
+    animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  92% {
+    opacity: 0.75;
+    transform: scaleX(0.85);
+  }
+  100% {
+    opacity: 0.85;
+    transform: scaleX(1);
+  }
+}
+
 /* Positioned at the real handle's coordinates: (22.7 + 55*0.62)%, (19 + 82*0.62)% of the 100x100 glyph box. */
 .hsk-handle-orbit {
   position: absolute;
@@ -1234,22 +1793,186 @@ button, [role="button"] {
   position: relative;
   padding: 16px 28px 28px;
   flex-shrink: 0;
+  background: var(--hsk-chat-bg, #ffffff);
+  z-index: 10;
+}
+
+.hsk-cb-input-wrap::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: 300px;
+  background: var(--hsk-chat-bg, #ffffff);
+  z-index: -1;
+  pointer-events: none;
+}
+
+.hsk-cb-input-card {
+  border-radius: 20px;
+  background: var(--hsk-chat-input-bg, #ffffff);
+  border: none !important;
+  outline: none !important;
+  box-shadow: 0 3px 14px -1px rgba(0, 0, 0, 0.05), 0 1px 4px rgba(0, 0, 0, 0.03) !important;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+  transition: background-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.hsk-cb-input-card:focus-within {
+  border: none !important;
+  outline: none !important;
+  box-shadow: 0 4px 18px -1px rgba(0, 0, 0, 0.07), 0 2px 6px rgba(0, 0, 0, 0.04) !important;
+}
+
+.hsk-cb-docked-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px 6px;
+  background: transparent;
+  border-bottom: none !important;
+  user-select: none;
+}
+
+.hsk-cb-docked-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: var(--hsk-primary, #ff6a33);
+}
+
+.hsk-cb-docked-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--hsk-primary, #ff6a33);
+  letter-spacing: -0.01em;
+}
+
+.hsk-cb-docked-sub {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--hsk-chat-text, #1f1f1f);
+  flex: 1;
+}
+
+.hsk-cb-docked-close {
+  background: none;
+  border: none;
+  color: var(--hsk-chat-muted, rgba(0, 0, 0, 0.4));
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 50%;
+  transition: background 0.12s, color 0.12s;
+}
+
+.hsk-cb-docked-close:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--hsk-chat-text, #111111);
+}
+
+/* ─── Docked Options List (INSIDE .hsk-cb-input-card) ────────────────────── */
+
+.hsk-cb-docked-options {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 6px;
+  background: transparent;
+  border-bottom: none !important;
+  max-height: 220px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.hsk-cb-docked-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent !important;
+  border-radius: 10px;
+  color: var(--hsk-chat-text, #1f1f1f);
+  font-family: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.hsk-cb-docked-option:hover,
+.hsk-cb-docked-option:focus {
+  background: transparent !important;
+  color: var(--hsk-primary, #ff6a33);
+}
+
+.hsk-cb-docked-option-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--hsk-primary, #ff6a33) 12%, transparent);
+  color: var(--hsk-primary, #ff6a33);
+  flex-shrink: 0;
+  overflow: hidden;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.18s ease;
+}
+
+.hsk-cb-docked-option:hover .hsk-cb-docked-option-icon,
+.hsk-cb-docked-option:focus .hsk-cb-docked-option-icon {
+  background: color-mix(in srgb, var(--hsk-primary, #ff6a33) 22%, transparent);
+  transform: scale(1.15) rotate(4deg);
+}
+
+.hsk-cb-docked-option-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.hsk-cb-docked-option-title {
+  font-weight: 500;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.15s ease;
+}
+
+.hsk-cb-docked-option-desc {
+  font-size: 12px;
+  color: var(--hsk-chat-muted, #6b7280);
+  font-weight: 400;
+}
+
+.hsk-cb-docked-option-price {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--hsk-chat-muted, #6b7280);
 }
 
 .hsk-cb-input-box {
+  position: relative;
   display: flex;
   align-items: flex-end;
   gap: 10px;
-  background: var(--hsk-chat-input-bg, rgba(0,0,0,.04));
-  border: 1.5px solid var(--hsk-chat-divide, rgba(0,0,0,.1));
-  border-radius: var(--hsk-border-radius, 0px);
-  padding: 14px 14px 14px 20px;
-  transition: border-color .15s, box-shadow .15s;
-}
-
-.hsk-cb-input-box:focus-within {
-  border-color: var(--hsk-primary);
-  box-shadow: 0 0 0 3px rgba(255,106,51,.1);
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  border-radius: 0 !important;
+  padding: 12px 14px 12px 18px;
+  box-shadow: none !important;
 }
 
 .hsk-cb-textarea {
@@ -1258,44 +1981,146 @@ button, [role="button"] {
   border: none;
   outline: none;
   resize: none;
-  font-size: 13px;
+  font-size: 16px;
+  font-family: var(--hsk-font, var(--hsk-default-font));
   color: var(--hsk-chat-text, #111);
-  min-height: 24px;
+  min-height: 28px;
   max-height: 140px;
-  line-height: 1.5;
-  font-family: inherit;
+  line-height: 1.55;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(155, 155, 155, 0.3) transparent;
 }
 
-.hsk-cb-textarea::placeholder { color: var(--hsk-chat-muted, #aaa); }
+.hsk-cb-textarea::-webkit-scrollbar {
+  width: 4px;
+}
 
-.hsk-cb-send {
-  width: 38px; height: 38px;
-  border-radius: var(--hsk-border-radius, 0px);
-  background: var(--hsk-primary);
-  border: none;
-  color: #fff;
-  cursor: pointer;
-  font-size: 18px;
-  display: flex; align-items: center; justify-content: center;
+.hsk-cb-textarea::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.hsk-cb-textarea::-webkit-scrollbar-thumb {
+  background: rgba(155, 155, 155, 0.3);
+  border-radius: 999px;
+}
+
+.hsk-cb-textarea::-webkit-scrollbar-thumb:hover {
+  background: rgba(155, 155, 155, 0.5);
+}
+
+.hsk-cb-textarea::placeholder {
+  color: var(--hsk-chat-muted, #9ca3af);
+  font-family: var(--hsk-font, var(--hsk-default-font));
+  font-size: 16px;
+}
+
+.hsk-cb-attach-btn,
+.hsk-cb-mic-btn,
+.hsk-cb-send,
+.hsk-chat-send {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
-  transition: opacity .15s, transform .1s, background .15s;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
   font-family: inherit;
+  margin: 0;
+  padding: 0;
 }
 
-.hsk-cb-send:hover { opacity: .88; }
+.hsk-cb-send,
+.hsk-chat-send {
+  background: linear-gradient(135deg, #007aff 0%, #0056b3 100%);
+  color: #ffffff;
+  border-radius: 12px !important;
+  box-shadow: 0 4px 14px rgba(0, 122, 255, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  position: relative;
+  overflow: hidden;
+}
 
-.hsk-cb-send:active { transform: scale(.9); }
+.hsk-cb-send .hsk-telegram-icon,
+.hsk-chat-send .hsk-telegram-icon {
+  transition: transform .25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
 
-.hsk-cb-send:disabled { opacity: .3; cursor: not-allowed; background: var(--hsk-chat-muted, #ccc); }
+.hsk-cb-send:hover:not(:disabled),
+.hsk-chat-send:hover:not(:disabled) {
+  opacity: 1;
+  transform: translateY(-1px) scale(1.05);
+  box-shadow: 0 6px 18px rgba(0, 122, 255, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
 
-.hsk-cb-send--stop { background: #e5342a; }
-.hsk-cb-send--stop:hover { background: #c92a21; opacity: 1; }
+.hsk-cb-send:hover:not(:disabled) .hsk-telegram-icon,
+.hsk-chat-send:hover:not(:disabled) .hsk-telegram-icon {
+  transform: translate(2px, -2px) rotate(-10deg) scale(1.1);
+}
+
+.hsk-cb-send:active:not(:disabled),
+.hsk-chat-send:active:not(:disabled) {
+  transform: translateY(0) scale(0.94);
+  box-shadow: 0 1px 4px rgba(0, 122, 255, 0.3);
+}
+
+.hsk-cb-send:disabled,
+.hsk-chat-send:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+  background: var(--hsk-chat-muted, #ccc);
+  box-shadow: none;
+}
+
+.hsk-cb-send--stop { background: #e5342a !important; }
+.hsk-cb-send--stop:hover { background: #c92a21 !important; opacity: 1; }
 
 .hsk-cb-hint {
   text-align: center;
   font-size: 10px;
   color: var(--hsk-chat-muted, #bbb);
   margin-top: 10px;
+}
+
+/* The textarea's own slot, so the listening wave can sit exactly over it
+   instead of spanning the whole row and colliding with the attach button. */
+.hsk-cb-field {
+  position: relative;
+  flex: 1;
+  display: flex;
+  min-width: 0;
+}
+
+/* Listening wave — heights are written per-frame from an AnalyserNode, so
+   there is no keyframe here on purpose: silence must look like silence. */
+.hsk-cb-listening {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.hsk-cb-listening span {
+  width: 2px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--hsk-primary, #ff6a33);
+  opacity: .3;
+  transform-origin: center;
+  will-change: transform, opacity;
+  transition: transform 90ms linear, opacity 90ms linear;
+}
+
+.hsk-cb-voice-error {
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #e5484d;
+  margin-top: 8px;
 }
 
 /* ── Image attachment strip ──────────────────────────────────────────────── */
@@ -1348,25 +2173,26 @@ button, [role="button"] {
 
 /* ── Attach button ───────────────────────────────────────────────────────── */
 .hsk-cb-attach-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--hsk-border-radius, 0px);
-  border: 1.5px solid var(--hsk-chat-divide, rgba(0,0,0,.12));
-  background: none;
-  color: var(--hsk-chat-muted, #888);
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--hsk-chat-muted, #71717a);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: border-color .15s, color .15s, background .15s;
+  transition: all .2s cubic-bezier(0.34, 1.56, 0.64, 1);
   font-family: inherit;
 }
 
-.hsk-cb-attach-btn:hover {
-  border-color: var(--hsk-primary);
-  color: var(--hsk-primary);
-  background: rgba(255,106,51,.06);
+.hsk-cb-attach-btn:hover:not(:disabled) {
+  border-color: rgba(255, 106, 51, 0.25);
+  color: var(--hsk-primary, #ff6a33);
+  background: rgba(255, 106, 51, 0.08);
+  transform: translateY(-1px);
 }
 
 .hsk-cb-attach-btn:disabled {
@@ -1377,26 +2203,27 @@ button, [role="button"] {
 /* ── Mic / voice button ──────────────────────────────────────────────────── */
 .hsk-cb-mic-btn {
   position: relative;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--hsk-border-radius, 0px);
-  border: 1.5px solid var(--hsk-chat-divide, rgba(0,0,0,.12));
-  background: none;
-  color: var(--hsk-chat-muted, #888);
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--hsk-chat-muted, #71717a);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: border-color .15s, color .15s, background .15s;
+  transition: all .2s cubic-bezier(0.34, 1.56, 0.64, 1);
   font-family: inherit;
   overflow: visible;
 }
 
-.hsk-cb-mic-btn:hover {
-  border-color: var(--hsk-primary);
-  color: var(--hsk-primary);
-  background: rgba(255,106,51,.06);
+.hsk-cb-mic-btn:hover:not(:disabled) {
+  border-color: rgba(255, 106, 51, 0.25);
+  color: var(--hsk-primary, #ff6a33);
+  background: rgba(255, 106, 51, 0.08);
+  transform: translateY(-1px);
 }
 
 .hsk-cb-mic-btn:disabled {
@@ -1417,38 +2244,76 @@ button, [role="button"] {
   opacity: .7;
 }
 
-/* Pulsing ring that expands outward when recording */
-.hsk-cb-mic-pulse {
-  position: absolute;
-  inset: -4px;
-  border-radius: inherit;
-  border: 2px solid #ef4444;
-  animation: hsk-mic-pulse 1.1s ease-out infinite;
-  pointer-events: none;
-}
-
-@keyframes hsk-mic-pulse {
-  0%   { transform: scale(1);    opacity: .8; }
-  100% { transform: scale(1.55); opacity: 0;  }
-}
-
-
 /* ── User message image grid ─────────────────────────────────────────────── */
+/* Telegram-style album: tiles butt together as one block with a single rounded
+   outline, rather than floating as separate rounded thumbnails. */
 .hsk-cb-user-imgs {
+  display: grid;
+  gap: 2px;
+  width: fit-content;
+  max-width: min(78%, 320px);
+  margin-bottom: 4px;
+  margin-left: auto;
+  border-radius: 18px 18px 4px 18px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16);
+}
+
+.hsk-cb-user-imgs[data-count="1"] { grid-template-columns: 1fr; }
+.hsk-cb-user-imgs[data-count="2"] { grid-template-columns: 1fr 1fr; }
+/* Three reads best as one tall hero beside two stacked squares. */
+.hsk-cb-user-imgs[data-count="3"] {
+  grid-template-columns: 2fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+.hsk-cb-user-imgs[data-count="3"] > :first-child { grid-row: span 2; }
+.hsk-cb-user-imgs[data-count="4"] { grid-template-columns: 1fr 1fr; }
+
+.hsk-cb-user-img-cell {
+  position: relative;
+  display: block;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  overflow: hidden;
+  min-width: 0;
+  line-height: 0;
+}
+
+.hsk-cb-user-imgs[data-count="1"] .hsk-cb-user-img-cell { aspect-ratio: auto; }
+.hsk-cb-user-imgs:not([data-count="1"]) .hsk-cb-user-img-cell { aspect-ratio: 1; }
+
+.hsk-cb-user-img-more {
+  position: absolute;
+  inset: 0;
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  justify-content: flex-end;
-  max-width: 72%;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1;
 }
 
 .hsk-cb-user-img-thumb {
-  width: 80px;
-  height: 80px;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
-  border-radius: var(--hsk-border-radius, 0px);
-  border: 2px solid rgba(255,255,255,.3);
   display: block;
+  cursor: pointer;
+}
+
+/* A lone image keeps a natural, uncropped shape. */
+.hsk-cb-user-imgs[data-count="1"] .hsk-cb-user-img-thumb {
+  height: auto;
+  max-height: 300px;
+  object-fit: contain;
+}
+
+.hsk-cb-user-img-cell:hover .hsk-cb-user-img-thumb {
+  filter: brightness(0.93);
 }
 
 
@@ -1462,44 +2327,68 @@ button, [role="button"] {
   font-size: 13px;
 }
 
+.hsk-kiku-badge {
+  display: inline-block;
+  font-size: var(--hsk-font-size, 16px);
+  font-family: var(--hsk-font, var(--hsk-default-font));
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: #ffffff;
+  padding: 1px 7px;
+  border-radius: 6px;
+  margin-right: 6px;
+}
+
 .hsk-cb-memory-pill {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 10px;
   align-self: flex-start;
-  margin: 4px 0 10px;
-  padding: 9px 14px;
-  font-size: 13px;
+  margin: 12px 0 6px 0;
+  padding: 12px 22px;
+  font-size: 14.5px;
   font-weight: 600;
   text-decoration: none;
-  color: #fff;
-  background: var(--hsk-primary, #ff6a33);
+  color: #ffffff;
+  background: linear-gradient(135deg, #007aff 0%, #0056b3 100%);
   border: none;
-  border-radius: var(--hsk-border-radius, 0px);
-  transition: opacity .15s;
+  border-radius: 18px 18px 18px 4px !important;
+  box-shadow: 0 4px 16px -2px rgba(0, 122, 255, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.15s, box-shadow 0.18s ease;
+  cursor: pointer;
 }
-.hsk-cb-memory-pill:hover { opacity: .88; }
+
+.hsk-cb-memory-pill:hover {
+  opacity: 0.96;
+  transform: translateY(-1px) scale(1.02);
+  box-shadow: 0 6px 20px rgba(0, 122, 255, 0.48);
+}
 
 .hsk-cb-think {
-  margin-bottom: 10px;
-  font-size: 12.5px;
+  margin-bottom: 12px;
+  font-size: 14px;
+  font-family: var(--hsk-font, var(--hsk-default-font));
 }
 .hsk-cb-think-head {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  height: 28px;
   padding: 0;
   border: none;
   background: none;
-  font: inherit;
+  font-family: var(--hsk-font, var(--hsk-default-font));
+  font-size: 14px;
   font-weight: 500;
-  color: var(--hsk-chat-muted, #888);
+  color: var(--hsk-chat-muted, #6b7280);
   cursor: pointer;
   user-select: none;
+  line-height: 28px;
 }
-.hsk-cb-think-head:hover { color: var(--hsk-chat-text, #111); }
+.hsk-cb-think-head:hover { color: var(--hsk-chat-text, #111827); }
 .hsk-cb-think-head--static { cursor: default; }
-.hsk-cb-think-head--static:hover { color: var(--hsk-chat-muted, #888); }
+.hsk-cb-think-head--static:hover { color: var(--hsk-chat-muted, #6b7280); }
 .hsk-cb-think-spin { animation: hsk-think-spin 3s linear infinite; }
 @keyframes hsk-think-spin { to { transform: rotate(360deg); } }
 
@@ -1510,12 +2399,13 @@ button, [role="button"] {
 .hsk-cb-think-chevron--open { transform: rotate(90deg); }
 .hsk-cb-think-body {
   margin-top: 6px;
-  padding: 8px 10px;
+  padding: 8px 12px;
   border-left: 2px solid var(--hsk-chat-border, rgba(128,128,128,.25));
-  color: var(--hsk-chat-muted, #666);
+  color: var(--hsk-chat-muted, #4b5563);
   white-space: pre-wrap;
-  line-height: 1.45;
-  font-style: italic;
+  line-height: 1.5;
+  font-family: var(--hsk-font, var(--hsk-default-font));
+  font-size: 14px;
 }
 
 .hsk-cb-stopped {
@@ -1573,7 +2463,7 @@ button, [role="button"] {
   .hsk-cb-chip:hover { background: rgba(255,106,51,.06); }
   .hsk-cb-msg-group { border-bottom-color: rgba(255,255,255,.05); }
   .hsk-cb-user-bubble { color: #fff; }
-  .hsk-cb-ai-icon { background: rgba(255,106,51,.12); border-color: rgba(255,106,51,.25); }
+  .hsk-cb-ai-icon { background: transparent !important; border: none !important; }
   .hsk-cb-ai-text { color: #f0efed; }
   .hsk-cb-sources-next { border-color: rgba(255,255,255,.12); background: #0a0a0a; color: #f0efed; }
   .hsk-cb-src-imgwrap-empty { background: rgba(255,255,255,.06); color: #555; }
@@ -1581,7 +2471,7 @@ button, [role="button"] {
   .hsk-cb-selected-product { border-color: rgba(255,255,255,.08); background: rgba(255,255,255,.03); }
   .hsk-cb-selected-name { color: #f0efed; }
   .hsk-cb-dot { background: #555; }
-  .hsk-cb-input-box { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.07); }
+  .hsk-cb-input-box { background: rgba(255,255,255,.05); border: none !important; }
   .hsk-cb-textarea { color: #f0efed; }
   .hsk-cb-textarea::placeholder { color: #555; }
   .hsk-cb-send:disabled { background: #555; }
@@ -1594,10 +2484,19 @@ button, [role="button"] {
     --hsk-chat-text: #1f1f1f;
     --hsk-chat-muted: #5f6368;
     --hsk-chat-divide: #f1f3f4;
-    --hsk-chat-input-bg: #f1f3f4;
+    --hsk-chat-input-bg: #ffffff;
     --hsk-chat-source-bg: #f8f9fa;
     --hsk-fade-bg: #ffffff;
     background: var(--hsk-chat-bg, #ffffff) !important;
+  }
+  .hsk-cb-input-box {
+    background: #f1f3f4 !important;
+    border: none !important;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.04), 0 10px 25px -6px rgba(255, 106, 51, 0.08) !important;
+  }
+  .hsk-cb-input-box:focus-within {
+    background: #ffffff !important;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.07), 0 14px 35px -6px rgba(255, 106, 51, 0.14) !important;
   }
 }
 
@@ -1824,13 +2723,17 @@ button, [role="button"] {
 .hsk-sp-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 99998;
+  width: 100vw;
+  height: 100vh;
+  min-height: 100dvh;
+  z-index: 2147483647 !important;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
   animation: hsk-bd-in .2s ease-out both;
-  background: #ffffff !important;
+  background: var(--hsk-chat-bg, #ffffff) !important;
+  box-sizing: border-box;
 }
 
 @keyframes hsk-bd-in { from { opacity:0; } to { opacity:1; } }
@@ -2158,37 +3061,137 @@ button, [role="button"] {
 .hsk-sp-esc { font-size: 11px; color: var(--hsk-modal-muted, #5f6368); margin-left: auto; }
 
 @media (max-width: 768px) {
-  .hsk-sp-body {
-    flex-direction: column;
-    overflow: hidden;
+  .hsk-cb-overlay {
+    --hsk-font-size: var(--hsk-mobile-font-size, 13.5px) !important;
+    position: fixed !important;
+    top: var(--hsk-vvtop, 0px) !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: auto !important;
+    width: 100vw !important;
+    /* --hsk-vvh tracks the visual viewport, so the keyboard shrinks us. */
+    height: var(--hsk-vvh, 100dvh) !important;
+    min-height: 0 !important;
+    z-index: 2147483647 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    overscroll-behavior: contain !important;
+    background: var(--hsk-chat-bg, #0a0a0a) !important;
+    box-sizing: border-box !important;
   }
-  .hsk-sp-header {
-    padding: 14px 12px 10px;
+
+  .hsk-cb-panel {
+    position: relative !important;
+    height: 100% !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    border-radius: 0 !important;
+    background: var(--hsk-chat-bg, #0a0a0a) !important;
+    box-sizing: border-box !important;
   }
-  .hsk-sp-details-pane {
-    border-right: none;
-    border-bottom: 1px solid var(--hsk-modal-divide, #f1f3f4);
-    flex: 0 1 auto;
-    max-height: 35vh;
-    overflow-y: auto;
-    padding: 12px;
+
+  .hsk-cb-main {
+    flex: 1 1 auto !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    overflow: hidden !important;
+    background: var(--hsk-chat-bg, #0a0a0a) !important;
+    box-sizing: border-box !important;
   }
-  .hsk-sp-chat-pane {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    height: auto;
-  }
+
   .hsk-cb-msgs {
-    flex: 1;
-    overflow-y: auto;
-    padding: 8px 12px 0;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding: 12px 14px 0 !important;
   }
+
+  .hsk-cb-empty {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    justify-content: center !important;
+  }
+
   .hsk-cb-input-wrap {
-    padding: 8px 12px 12px;
-    flex-shrink: 0;
+    margin-top: auto !important;
+    flex-shrink: 0 !important;
+    padding: 8px 12px !important;
+    padding-bottom: max(12px, env(safe-area-inset-bottom)) !important;
+    background: var(--hsk-chat-bg, #0a0a0a) !important;
+    position: relative !important;
+    z-index: 10 !important;
   }
+
+  .hsk-cb-attach-btn,
+  .hsk-cb-mic-btn,
+  .hsk-cb-send,
+  .hsk-chat-send {
+    width: 32px !important;
+    height: 32px !important;
+    border-radius: 8px !important;
+  }
+
+  .hsk-cb-attach-btn svg,
+  .hsk-cb-mic-btn svg,
+  .hsk-cb-send svg,
+  .hsk-chat-send svg {
+    width: 15px !important;
+    height: 15px !important;
+  }
+
+  .hsk-sp-backdrop.hsk-sp-mobile-view {
+    position: fixed !important;
+    top: var(--hsk-vvtop, 0px) !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: auto !important;
+    width: 100vw !important;
+    height: var(--hsk-vvh, 100dvh) !important;
+    min-height: 0 !important;
+    z-index: 2147483647 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    overscroll-behavior: contain !important;
+    background: var(--hsk-chat-bg, #0a0a0a) !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .hsk-sp-card.hsk-sp-mobile-card {
+    position: relative !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    overflow: hidden !important;
+    border-radius: 0 !important;
+    background: var(--hsk-chat-bg, #0a0a0a) !important;
+    box-sizing: border-box !important;
+  }
+
+  .hsk-sp-body {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    background: var(--hsk-chat-bg, #0a0a0a) !important;
+  }
+
   .hsk-cb-input-box {
     padding: 10px 10px 10px 14px;
   }
@@ -2209,9 +3212,6 @@ button, [role="button"] {
     --hsk-modal-card-border: #202124;
     --hsk-modal-text: #e8eaed;
     --hsk-modal-muted: #888;
-    --hsk-modal-divide: #202124;
-    --hsk-modal-item-bg: #1a1a1b;
-    --hsk-modal-item-border: #202124;
     --hsk-action-sec-bg: #202124;
     --hsk-action-sec-bg-hover: #2d2f34;
   }
@@ -2228,148 +3228,215 @@ button, [role="button"] {
   }
 }
 
-/* ─── Markdown Rendering Styles ─── */
-.hsk-markdown-p {
-  margin: 0 0 8px 0;
+/* ─── Table Alignment, Sticky First Column & High Contrast ─── */
+.hsk-table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 14px 0;
+  width: 100%;
+  max-width: 100%;
+  border-radius: 8px;
+  padding: 0;
+  background: transparent;
 }
 
-.hsk-markdown-p:last-child {
+/* Host resets (Tailwind preflight and friends) strip list markers and paragraph
+   margins, which collapses an answer into one unbroken block. The widget has to
+   carry its own typography or it renders differently on every site. */
+.hsk-cb-ai-text .hsk-markdown-p {
+  margin: 0 0 10px;
+}
+.hsk-cb-ai-text .hsk-markdown-p:last-child {
   margin-bottom: 0;
 }
 
-.hsk-markdown-list {
-  margin: 4px 0 8px 0;
-  padding-left: 20px;
-  list-style-type: disc;
+.hsk-cb-ai-text .hsk-markdown-list {
+  margin: 0 0 10px;
+  padding-left: 1.2em;
+}
+.hsk-cb-ai-text .hsk-markdown-list:last-child {
+  margin-bottom: 0;
+}
+.hsk-cb-ai-text .hsk-markdown-ul { list-style: disc outside; }
+.hsk-cb-ai-text .hsk-markdown-ol { list-style: decimal outside; }
+
+.hsk-cb-ai-text .hsk-markdown-list li {
+  margin: 0 0 7px;
+  padding-left: 3px;
+  line-height: 1.5;
+}
+.hsk-cb-ai-text .hsk-markdown-list li:last-child {
+  margin-bottom: 0;
+}
+.hsk-cb-ai-text .hsk-markdown-list li::marker {
+  color: var(--hsk-primary, #ff6a33);
 }
 
-.hsk-markdown-list li {
-  margin-bottom: 4px;
+.hsk-cb-ai-text .hsk-markdown-h1,
+.hsk-cb-ai-text .hsk-markdown-h2,
+.hsk-cb-ai-text .hsk-markdown-h3 {
+  margin: 14px 0 7px;
+  font-weight: 650;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
 }
+.hsk-cb-ai-text .hsk-markdown-h1 { font-size: 1.09em; }
+.hsk-cb-ai-text .hsk-markdown-h2 { font-size: 1.03em; }
+.hsk-cb-ai-text .hsk-markdown-h3 { font-size: 1em; }
 
-.hsk-table-wrapper {
-  overflow-x: auto;
-  margin: 8px 0;
-  border-radius: var(--hsk-border-radius, 0px);
-  border: 1px solid var(--hsk-border, #f1f3f4);
-}
-
-@media (prefers-color-scheme: dark) {
-  .hsk-table-wrapper {
-    border-color: #202124;
-  }
+.hsk-cb-ai-text > :first-child {
+  margin-top: 0;
 }
 
 .hsk-markdown-table {
   width: 100%;
-  border-collapse: separate;
+  border-collapse: collapse;
   border-spacing: 0;
   text-align: left;
-  font-size: 13px;
-  border: 1px solid var(--hsk-border, rgba(0, 0, 0, 0.08));
-  border-radius: 8px;
-  overflow: hidden;
-  margin: 14px 0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
-}
-
-.hsk-markdown-table th,
-.hsk-markdown-table td {
-  white-space: normal;
-  word-break: break-word;
-  padding: 12px 16px;
-  vertical-align: top;
-  line-height: 1.5;
+  font-size: 13.5px;
+  background: transparent;
+  margin: 0;
+  border: none;
+  border-top: 1px solid rgba(0, 0, 0, 0.12);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+  box-shadow: none;
 }
 
 .hsk-markdown-table th {
-  background-color: rgba(0, 0, 0, 0.02);
-  font-weight: 600;
-  border-bottom: 2px solid var(--hsk-border, rgba(0, 0, 0, 0.08));
-  color: var(--hsk-text, #111827);
+  padding: 10px 12px;
+  vertical-align: middle;
+  line-height: 1.4;
+  font-weight: 700;
+  color: #111827 !important;
+  border-bottom: 2px solid rgba(0, 0, 0, 0.15);
+  background: transparent !important;
 }
 
 .hsk-markdown-table td {
-  border-bottom: 1px solid var(--hsk-border, rgba(0, 0, 0, 0.06));
-  color: var(--hsk-text-muted, #4b5563);
+  padding: 10px 12px;
+  vertical-align: middle;
+  line-height: 1.5;
+  white-space: normal;
+  word-break: normal;
+  color: #1f2937 !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  background: transparent !important;
 }
 
-.hsk-markdown-table tr:nth-child(even) td {
-  background-color: rgba(0, 0, 0, 0.008);
+.hsk-markdown-table td * {
+  color: #1f2937 !important;
 }
 
-.hsk-markdown-table tr:nth-child(even) td:first-child {
-  background-color: var(--hsk-bg, #ffffff);
+/* Sticky First Column (Feature Name Column) */
+.hsk-markdown-table th:first-child,
+.hsk-markdown-table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  background: var(--hsk-chat-bg, #ffffff) !important;
+  box-shadow: 2px 0 6px rgba(0, 0, 0, 0.05);
+  font-weight: 700 !important;
+  color: #111827 !important;
 }
 
 .hsk-markdown-table tr:last-child td {
   border-bottom: none;
 }
 
-/* Key column (first) stays fixed while the rest scroll horizontally on narrow viewports */
-.hsk-markdown-table th:first-child,
-.hsk-markdown-table td:first-child {
-  position: sticky;
-  left: 0;
-  z-index: 2;
-  background-color: var(--hsk-bg, #ffffff);
-  min-width: 120px;
-  max-width: 180px;
-  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.03);
+@media (prefers-color-scheme: dark) {
+  .hsk-markdown-table {
+    border-top-color: rgba(255, 255, 255, 0.15);
+    border-bottom-color: rgba(255, 255, 255, 0.15);
+  }
+  .hsk-markdown-table th {
+    color: #f9fafb !important;
+    border-bottom-color: rgba(255, 255, 255, 0.2) !important;
+  }
+  .hsk-markdown-table td,
+  .hsk-markdown-table td * {
+    color: #e5e7eb !important;
+    border-bottom-color: rgba(255, 255, 255, 0.1) !important;
+  }
+  .hsk-markdown-table th:first-child,
+  .hsk-markdown-table td:first-child {
+    background: var(--hsk-chat-bg, #0a0a0a) !important;
+    box-shadow: 2px 0 6px rgba(0, 0, 0, 0.3);
+    color: #ffffff !important;
+  }
 }
 
-.hsk-markdown-table .hsk-markdown-link {
-  display: inline-block;
-  padding: 3px 10px;
-  background: rgba(255, 106, 51, 0.06);
-  border: 1px solid rgba(255, 106, 51, 0.12);
-  color: var(--hsk-primary, #ff6a33);
-  text-decoration: none !important;
-  font-size: 11px;
-  font-weight: 500;
-  border-radius: 99px;
-  margin: 2px 0;
+@media (max-width: 640px) {
+  .hsk-table-wrapper {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+
+.hsk-markdown-table {
+  width: 100%;
+  min-width: 100%;
+  border-collapse: collapse;
+  border-spacing: 0;
+  text-align: left;
+  font-size: 13px;
+  background: transparent;
+  margin: 0;
+  border: none;
+  border-top: 1px solid var(--hsk-table-border, rgba(0, 0, 0, 0.08));
+  border-bottom: 1px solid var(--hsk-table-border, rgba(0, 0, 0, 0.08));
+  box-shadow: none;
+}
+
+.hsk-markdown-table th,
+.hsk-markdown-table td {
+  padding: 8px 12px;
+  vertical-align: top;
+  line-height: 1.5;
+  white-space: normal;
+  word-break: normal;
+  border: none;
+  border-bottom: 1px solid var(--hsk-table-border, #e5e7eb);
+  background: transparent !important;
+}
+
+.hsk-markdown-table th,
+.hsk-markdown-table th:first-child,
+.hsk-markdown-table td:first-child {
+  font-weight: 600;
+  color: var(--hsk-table-text-head, #111827);
   white-space: nowrap;
+}
+
+/* Claude's link badges inside markdown tables */
+.hsk-markdown-table .hsk-markdown-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background-color: var(--hsk-link-chip-bg, #f3f4f6);
+  border: 1px solid var(--hsk-link-chip-border, #e5e7eb);
+  color: var(--hsk-link-chip-text, #374151);
+  font-size: 11.5px;
+  font-weight: 500;
+  border-radius: 4px;
+  text-decoration: none !important;
+  margin: 2px 0;
   transition: all 0.15s ease;
 }
 
 .hsk-markdown-table .hsk-markdown-link:hover {
-  background: rgba(255, 106, 51, 0.12);
-  border-color: rgba(255, 106, 51, 0.25);
-  transform: translateY(-0.5px);
+  background-color: var(--hsk-link-chip-bg-hover, #e5e7eb);
+  color: var(--hsk-table-text-head, #111827);
 }
 
 @media (prefers-color-scheme: dark) {
   .hsk-markdown-table {
-    border-color: rgba(255, 255, 255, 0.08);
-  }
-  .hsk-markdown-table th {
-    background-color: rgba(255, 255, 255, 0.02);
-    border-bottom-color: rgba(255, 255, 255, 0.08);
-    color: #f3f3f2;
-  }
-  .hsk-markdown-table td {
-    border-bottom-color: rgba(255, 255, 255, 0.06);
-    color: #9ca3af;
-  }
-  .hsk-markdown-table tr:nth-child(even) td {
-    background-color: rgba(255, 255, 255, 0.008);
-  }
-  .hsk-markdown-table th:first-child,
-  .hsk-markdown-table td:first-child {
-    background-color: #0a0a0a;
-    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.25);
-  }
-  .hsk-markdown-table tr:nth-child(even) td:first-child {
-    background-color: #0a0a0a;
-  }
-  .hsk-markdown-table .hsk-markdown-link {
-    background: rgba(255, 106, 51, 0.08);
-    border-color: rgba(255, 106, 51, 0.18);
-  }
-  .hsk-markdown-table .hsk-markdown-link:hover {
-    background: rgba(255, 106, 51, 0.16);
-    border-color: rgba(255, 106, 51, 0.35);
+    --hsk-table-border: rgba(255, 255, 255, 0.1);
+    --hsk-table-text-head: #f3f3f2;
+    --hsk-table-text-body: #9ca3af;
+    --hsk-link-chip-bg: rgba(255, 255, 255, 0.05);
+    --hsk-link-chip-border: rgba(255, 255, 255, 0.1);
+    --hsk-link-chip-text: #9ca3af;
+    --hsk-link-chip-bg-hover: rgba(255, 255, 255, 0.1);
   }
 }
 
@@ -2521,15 +3588,15 @@ button, [role="button"] {
   }
 }
 
-/* ─── Webkit Custom Scrollbar Override (faint scrollbar) ─── */
+/* ─── Webkit Custom Scrollbar Override (iOS Ultra-Light Scrollbar) ─── */
 .hsk-chat-widget ::-webkit-scrollbar,
 .hsk-sp-card ::-webkit-scrollbar,
 .hsk-cb-msgs ::-webkit-scrollbar,
 .hsk-sp-details-pane ::-webkit-scrollbar,
 .hsk-sp-results ::-webkit-scrollbar,
 .hsk-chat-messages ::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 3px;
+  height: 3px;
 }
 
 .hsk-chat-widget ::-webkit-scrollbar-track,
@@ -2547,8 +3614,14 @@ button, [role="button"] {
 .hsk-sp-details-pane ::-webkit-scrollbar-thumb,
 .hsk-sp-results ::-webkit-scrollbar-thumb,
 .hsk-chat-messages ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.08);
-  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 99px;
+  transition: background 0.2s ease;
+}
+
+.hsk-chat-widget ::-webkit-scrollbar-thumb:hover,
+.hsk-cb-msgs ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.15);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -2560,12 +3633,16 @@ button, [role="button"] {
   .hsk-chat-messages ::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.08);
   }
+  .hsk-chat-widget ::-webkit-scrollbar-thumb:hover,
+  .hsk-cb-msgs ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
 }
 
 /* Firefox scrollbar compatibility */
 .hsk-cb-msgs, .hsk-sp-details-pane, .hsk-sp-results, .hsk-chat-messages {
   scrollbar-width: thin;
-  scrollbar-color: rgba(0, 0, 0, 0.08) transparent;
+  scrollbar-color: rgba(0, 0, 0, 0.06) transparent;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -3575,6 +4652,66 @@ button, [role="button"] {
   gap: 4px;
 }
 
+/* ─── Docked Mode Tag Bar (Antigravity / Cursor / Raycast Style) ────────────── */
+
+.hsk-cb-docked-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: color-mix(in srgb, var(--hsk-primary, #ff6a33) 14%, rgba(0,0,0,0.4));
+  border: 1px solid color-mix(in srgb, var(--hsk-primary, #ff6a33) 35%, transparent);
+  border-radius: 12px;
+  padding: 4px 10px 4px 8px;
+  margin-bottom: 8px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  animation: hsk-docked-in 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+  user-select: none;
+}
+
+@keyframes hsk-docked-in {
+  from { opacity: 0; transform: translateY(4px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.hsk-cb-docked-tag-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--hsk-primary, #ff6a33);
+}
+
+.hsk-cb-docked-tag-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--hsk-primary, #ff6a33);
+  letter-spacing: -0.01em;
+}
+
+.hsk-cb-docked-tag-desc {
+  font-size: 11px;
+  color: var(--hsk-chat-muted, rgba(255, 255, 255, 0.65));
+  font-weight: 400;
+}
+
+.hsk-cb-docked-tag-close {
+  background: none;
+  border: none;
+  color: var(--hsk-chat-muted, rgba(255, 255, 255, 0.6));
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0 0 4px;
+  margin-left: 2px;
+  display: flex;
+  align-items: center;
+  transition: color 0.12s;
+}
+
+.hsk-cb-docked-tag-close:hover {
+  color: var(--hsk-chat-text, #ffffff);
 }
 
 /* ─── @kiku Picker ───────────────────────────────────────────────────────────── */
@@ -3583,12 +4720,14 @@ button, [role="button"] {
   position: absolute;
   bottom: calc(100% + 8px);
   left: 0;
+  right: 0;
   min-width: 260px;
-  max-width: 340px;
-  background: var(--hsk-chat-bg, #ffffff);
-  border: 1px solid var(--hsk-chat-divide, rgba(0,0,0,0.08));
+  background: rgba(18, 18, 22, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 16px;
-  box-shadow: 0 8px 28px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.08);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
   overflow: hidden;
   padding: 6px;
   z-index: 120;
@@ -3671,18 +4810,20 @@ button, [role="button"] {
 .hsk-kiku-badge {
   display: inline-flex;
   align-items: center;
-  font-size: 10px;
+  gap: 3px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  color: #fff;
-  background: rgba(255,255,255,0.16);
-  border: 1px solid rgba(255,255,255,0.35);
-  padding: 1px 7px;
-  border-radius: 20px;
-  margin-right: 6px;
+  letter-spacing: -0.01em;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  padding: 2px 8px;
+  border-radius: 8px;
+  margin-right: 8px;
   vertical-align: middle;
   position: relative;
   top: -1px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
 /* ── Image lightbox ──────────────────────────────────────────────────────── */
@@ -3963,4 +5104,79 @@ button, [role="button"] {
   to { transform: rotate(360deg); }
 }
 
+}
 
+
+
+/* ─── Non-Latin scripts ─────────────────────────────────────────────────────
+   The brand display font is Latin-only. In Tamil, Arabic, Devanagari, CJK and
+   the rest, the browser falls back per glyph run — but U+0020 EXISTS in the
+   brand font, so the words come from the fallback while the spaces between
+   them keep the brand font's advance width. Mixing two sets of metrics in one
+   line is what shows up as uneven little gaps between words. Handing the whole
+   run to the system stack keeps one font for glyphs and spaces alike. */
+/* No per-script font names. `system-ui` plus the generic `sans-serif` keyword is
+   what triggers the platform's own script fallback, which already knows every
+   script the OS can render — naming families here would mean one entry per
+   script forever, and would still miss whatever the user has installed. */
+.hsk-cb-panel[data-script="nonlatin"] {
+  --hsk-font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
+}
+
+/* Tracking tuned for Latin distorts scripts that carry their own shaping
+   rules, and in Arabic it severs the cursive joins outright. */
+.hsk-cb-panel[data-script="nonlatin"],
+.hsk-cb-panel[data-script="nonlatin"] * {
+  letter-spacing: normal;
+  font-family: var(--hsk-font);
+}
+
+/* Mark-stacking scripts (Myanmar, Tibetan, Devanagari, Thai, Khmer, Lao …) put
+   glyph ink well above and below the em box, so Latin-tuned leading collides
+   line-to-line. 1.9 is measured against Myanmar, the tightest-stacking of them;
+   one bucket covers every such script, which is the point — matching on
+   language (:lang(my), :lang(bo), …) would mean a new rule per language
+   forever and would still miss any language the backend adds next. */
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-hello,
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-hello-lead,
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-hello-ask,
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-ai-text,
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-user-bubble,
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-hint,
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-chip,
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-topbar-btn,
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-textarea,
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-ai-text .hsk-markdown-list li,
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-ai-text .hsk-markdown-h1,
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-ai-text .hsk-markdown-h2,
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-ai-text .hsk-markdown-h3 {
+  line-height: 1.9;
+}
+
+/* Below ~15px the stacked marks stop resolving into distinct shapes at any
+   leading, so these scripts need a higher size floor than Latin does. */
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-hello-lead { font-size: 15px; }
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-hint { font-size: 12px; }
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-chip { font-size: 14px; }
+
+/* Boxes sized to a Latin line box give the ink no slack, and a textarea clips.
+   Fixed heights become minimums so a stacked mark can't be cut off. */
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-topbar-btn {
+  height: auto;
+  min-height: 34px;
+  padding: 5px 14px;
+}
+
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-textarea {
+  min-height: 34px;
+}
+
+/* `anywhere` permits a break between a base character and its combining marks.
+   Latin gets away with it because words are space-separated; scripts that write
+   without inter-word spaces lean on it constantly, and each bad break splits a
+   grapheme cluster mid-stack. */
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-user-bubble,
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-ai-text {
+  overflow-wrap: break-word;
+  word-break: normal;
+}

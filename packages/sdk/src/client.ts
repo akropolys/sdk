@@ -1,5 +1,5 @@
 import { AkropolysConfig, ContentIngestPayload, ChatAttachment, CaptureTarget } from './types';
-import { AkropolysAPI } from './api';
+import { AkropolysAPI, UIStrings } from './api';
 import { KikuStream } from './stream';
 import { initContentIndexer } from './content/contentIndexer';
 import { stableStringify } from './utils/stableStringify';
@@ -214,6 +214,8 @@ export class AkropolysClient {
     this.initDevice();
     this.initKikuKey();
     this.initShopperName();
+    this.initShopperLanguage();
+    this.initEntityLanguageMode();
     this.loadIngestedCache();
 
     this.api = new AkropolysAPI(
@@ -226,7 +228,9 @@ export class AkropolysClient {
       () => this.deviceId,
       () => this.kikuPub ?? undefined,
       () => this.shopperName ?? undefined,
-      () => { try { return this.getCart?.(); } catch { return undefined; } }
+      () => { try { return this.getCart?.(); } catch { return undefined; } },
+      () => this.shopperLanguage ?? undefined,
+      () => this.entityLanguageMode ?? undefined
     );
     setInstance(this);
 
@@ -314,7 +318,15 @@ export class AkropolysClient {
     const responsePromise = this.getCurrentContextAsync(abortController.signal).then(ctx =>
       this.api.chatStream(query, history, abortController.signal, ctx, attachments, forcedIntent, captureTargets)
     );
-    return new KikuStream(responsePromise, abortController);
+    const stream = new KikuStream(responsePromise, abortController);
+    // The server echoes a language switch it detected in this turn; persist it so
+    // every later turn is sent with the new preference.
+    stream.on('meta', (meta: any) => {
+      if (meta && typeof meta.language === 'string' && meta.language) {
+        this.setShopperLanguage(meta.language);
+      }
+    });
+    return stream;
   }
 
   reRegister() {
@@ -464,6 +476,141 @@ export class AkropolysClient {
     this.shopperName = null;
     if (typeof window === 'undefined') return;
     try { localStorage.removeItem('akropolys_shopper_name'); } catch { /* ignore */ }
+  }
+
+  private shopperLanguage: string | null = null;
+
+  private initShopperLanguage() {
+    if (typeof window === 'undefined') return;
+    try {
+      const l = localStorage.getItem('akropolys_shopper_language');
+      if (l) this.shopperLanguage = l;
+    } catch { /* ignore */ }
+  }
+
+  /** The shopper's preferred language, if set during onboarding. */
+  getShopperLanguage(): string | undefined {
+    return this.shopperLanguage ?? undefined;
+  }
+
+  /** Remember the shopper's preferred language. */
+  setShopperLanguage(lang: string): void {
+    const l = (lang || '').trim().slice(0, 40);
+    if (!l) return;
+    this.shopperLanguage = l;
+    if (typeof window === 'undefined') return;
+    try { localStorage.setItem('akropolys_shopper_language', l); } catch { /* ignore */ }
+  }
+
+  /** Forget the shopper's preferred language. */
+  clearShopperLanguage(): void {
+    this.shopperLanguage = null;
+    if (typeof window === 'undefined') return;
+    try { localStorage.removeItem('akropolys_shopper_language'); } catch { /* ignore */ }
+  }
+
+  private entityLanguageMode: string | null = null;
+
+  private initEntityLanguageMode() {
+    if (typeof window === 'undefined') return;
+    try {
+      const m = localStorage.getItem('akropolys_entity_language');
+      if (m === 'original' || m === 'translated') this.entityLanguageMode = m;
+    } catch { /* ignore */ }
+  }
+
+  /**
+   * Whether result cards are shown as the site wrote them ('original') or
+   * translated into the shopper's language ('translated').
+   */
+  getEntityLanguageMode(): string | undefined {
+    return this.entityLanguageMode ?? undefined;
+  }
+
+  setEntityLanguageMode(mode: 'original' | 'translated'): void {
+    if (mode !== 'original' && mode !== 'translated') return;
+    this.entityLanguageMode = mode;
+    if (typeof window === 'undefined') return;
+    try { localStorage.setItem('akropolys_entity_language', mode); } catch { /* ignore */ }
+  }
+
+  clearEntityLanguageMode(): void {
+    this.entityLanguageMode = null;
+    if (typeof window === 'undefined') return;
+    try { localStorage.removeItem('akropolys_entity_language'); } catch { /* ignore */ }
+  }
+
+  /**
+   * A real entity from this site, as written and translated, so onboarding can
+   * show the choice instead of describing it.
+   */
+  getEntityPreview(language: string) {
+    return this.api.entityPreview(language);
+  }
+
+  /**
+   * Translated widget chrome for the shopper's language, cached in
+   * localStorage so it's fetched once per language per browser rather than
+   * once per session. Bump CHROME_STRINGS_CACHE_VERSION if the defaults dict
+   * changes shape, so stale cached keys can't linger.
+   */
+  private static CHROME_STRINGS_CACHE_VERSION = 2;
+
+  async getUIStrings(language: string, defaults: Record<string, string>): Promise<UIStrings> {
+    // The server owns the canonical dictionary; `defaults` stays only as the
+    // caller's English fallback and as a cache-key fingerprint, so a widget
+    // release with new keys refreshes rather than pinning the old cached set.
+    const fingerprint = AkropolysClient.hashStrings(defaults);
+    const cacheKey = `akropolys_ui_strings_v${AkropolysClient.CHROME_STRINGS_CACHE_VERSION}_${language.toLowerCase().trim()}_${fingerprint}`;
+
+    const english: UIStrings = { strings: {}, complete: false, dir: 'ltr', bcp47: '' };
+
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(cacheKey);
+        if (raw) {
+          const cached = JSON.parse(raw);
+          if (cached?.strings && Object.keys(cached.strings).length > 0) {
+            return {
+              strings: cached.strings,
+              complete: true,
+              dir: cached.dir === 'rtl' ? 'rtl' : 'ltr',
+              bcp47: typeof cached.bcp47 === 'string' ? cached.bcp47 : '',
+            };
+          }
+          localStorage.removeItem(cacheKey);
+        }
+      } catch { /* ignore */ }
+    }
+
+    // One retry: the server returns nothing rather than a half-translated
+    // dictionary, and a single transient provider failure shouldn't sentence
+    // this shopper to English for the whole session.
+    let result = await this.api.uiStrings(language);
+    if (!result?.complete) result = await this.api.uiStrings(language);
+    if (!result?.complete || Object.keys(result.strings).length === 0) return english;
+    const translated = result.strings;
+
+    if (typeof window !== 'undefined') {
+      try {
+        // Drop superseded entries for this language so old dictionaries don't
+        // accumulate in localStorage across SDK releases.
+        const stale = `akropolys_ui_strings_v${AkropolysClient.CHROME_STRINGS_CACHE_VERSION}_${language.toLowerCase().trim()}_`;
+        for (let i = localStorage.length - 1; i >= 0; i--) {
+          const k = localStorage.key(i);
+          if (k && k.startsWith(stale) && k !== cacheKey) localStorage.removeItem(k);
+        }
+        localStorage.setItem(cacheKey, JSON.stringify({ strings: translated, dir: result.dir, bcp47: result.bcp47 }));
+      } catch { /* ignore */ }
+    }
+    return result;
+  }
+
+  private static hashStrings(obj: Record<string, string>): string {
+    const flat = Object.keys(obj).sort().map(k => `${k}${obj[k]}`).join('');
+    let h = 5381;
+    for (let i = 0; i < flat.length; i++) h = ((h * 33) ^ flat.charCodeAt(i)) >>> 0;
+    return h.toString(36);
   }
 
   /** Activate an existing public id on this device (returning shopper). */

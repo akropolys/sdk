@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearch, useKiku, useAkropolysContext } from '@akropolys/sdk';
 import { renderMarkdown } from '../utils/markdown';
@@ -139,9 +139,39 @@ function SparkleModal({
     return () => document.removeEventListener('keydown', h);
   }, [onClose]);
 
+  const overlayRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    const prevPosition = document.body.style.position;
+    const prevWidth = document.body.style.width;
+
+    document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.width = '100%';
+
+    const handleScrollLock = () => {
+      window.scrollTo(0, 0);
+      if (overlayRef.current) overlayRef.current.scrollTop = 0;
+    };
+
+    window.addEventListener('scroll', handleScrollLock, { passive: true });
+
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.body.style.position = prevPosition;
+      document.body.style.width = prevWidth;
+      window.removeEventListener('scroll', handleScrollLock);
+    };
+  }, []);
+
+  const chatBodyRef = useRef<HTMLDivElement>(null);
+
   /* Scroll chat to bottom */
   useEffect(() => {
-    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (chatBodyRef.current) {
+      chatBodyRef.current.scrollTop = chatBodyRef.current.scrollHeight;
+    }
   }, [messages, chatLoading]);
 
   const blurVal = typeof backdropBlur === 'number' ? `${backdropBlur}px` : (backdropBlur ?? '16px');
@@ -202,6 +232,7 @@ function SparkleModal({
   if (isMobile) {
     return (
       <div
+        ref={overlayRef}
         className={cn("hsk-sp-backdrop hsk-sp-mobile-view", classNames.backdrop)}
         onClick={onClose}
         style={{

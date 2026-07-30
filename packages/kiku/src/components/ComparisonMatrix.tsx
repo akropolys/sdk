@@ -302,6 +302,12 @@ export function ComparisonMatrix({ sources, defaultCurrency = 'KES', displayConf
             return (
               <div
                 key={i}
+                // Spec values are Latin/numeric inside an RTL panel, so the bidi
+                // algorithm reorders them against the base direction — "×5" came
+                // out with the sign on the wrong side. "auto" takes the direction
+                // from the value's own first strong character, which is right for
+                // a Latin spec, a bare number, and an all-Arabic value alike.
+                dir="auto"
                 style={{
                   ...cellBase,
                   fontWeight: isBest ? 700 : 400,

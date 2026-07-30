@@ -146,8 +146,10 @@ export function ChatWidget({
     }
   }, [messages]);
 
+  // Instant while a response streams — restarting a smooth scroll on every
+  // token makes the list crawl and never reach the bottom.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    bottomRef.current?.scrollIntoView({ behavior: loading ? 'auto' : 'smooth' });
   }, [chatHistory, loading]);
 
   const handleSend = async () => {
