@@ -9,6 +9,7 @@ import { AkropolysTheme, ChatAttachment, CaptureTarget } from '@akropolys/sdk';
 import { cn } from '../utils/cn';
 import { resolveTheme } from '../utils/theme';
 import { useHostFontFace } from '../utils/hostFont';
+import { useDragToDismiss } from '../utils/sheetGesture';
 import { ComparisonMatrix } from './ComparisonMatrix';
 import { MarkupEditor } from './MarkupEditor';
 import { ArrowUpIcon } from '../utils/icons';
@@ -1562,6 +1563,15 @@ function ChatModal({
   // to the bottom if the user is already pinned there — this lets them freely
   // scroll up to re-read earlier messages.
   const msgsContainerRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Drag the sheet down to dismiss, tracking the finger and carrying release
+  // velocity into the spring. Touch only — a mouse has no equivalent gesture.
+  useDragToDismiss({
+    panel: useCallback(() => panelRef.current, []),
+    scroller: useCallback(() => msgsContainerRef.current, []),
+    onDismiss: onClose,
+  });
   const messageRefs = useRef<(HTMLDivElement | null)[]>([]);
   // Lets a programmatic scroll re-seed the wheel interpolator below, so the
   // next wheel tick doesn't yank the list back to a stale target.
@@ -1941,6 +1951,7 @@ function ChatModal({
       }}
     >
       <div
+        ref={panelRef}
         className={cn("hsk-cb-panel", classNames.panel)}
         dir={isRTL ? 'rtl' : 'ltr'}
         data-script={isNonLatin ? 'nonlatin' : 'latin'}
