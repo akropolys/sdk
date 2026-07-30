@@ -14,10 +14,15 @@ function formatFor(url: string): string {
 
 // A url() value is injected into a stylesheet, so a stray quote or paren would
 // let a malicious theme close the declaration and append rules of its own.
+// Everything else is allowed: absolute, protocol-relative, document-relative and
+// data: URIs are all legitimate ways to point at a font, and an allow-list of
+// schemes only ends up rejecting valid ones.
 function safeUrl(url: string): string | null {
-  if (/["'()\\\s]/.test(url)) return null;
-  if (!/^(https?:\/\/|\/)/i.test(url)) return null;
-  return url;
+  const u = url.trim();
+  if (!u) return null;
+  if (/["'()\\\s]/.test(u)) return null;
+  if (/^(javascript|vbscript):/i.test(u)) return null;
+  return u;
 }
 
 /**
@@ -31,12 +36,19 @@ export function useHostFontFace(theme: 'light' | 'dark' | AkropolysTheme | undef
   const urls = typeof t?.fontUrl === 'string' ? { normal: t.fontUrl } : (t?.fontUrl ?? {});
   const normal = urls.normal ?? '';
   const bold = urls.bold ?? '';
+  const variable = urls.variable ?? '';
 
   useEffect(() => {
-    if (!family || (!normal && !bold)) return;
+    if (!family || (!normal && !bold && !variable)) return;
+
+    // A variable font declares the whole axis, so the browser instances the real
+    // weight instead of synthesising bold off a single static cut.
+    const weights: ReadonlyArray<readonly [string, string]> = variable
+      ? [['100 900', variable]]
+      : [['400', normal], ['700', bold]];
 
     const faces: string[] = [];
-    for (const [weight, raw] of [['400', normal], ['700', bold]] as const) {
+    for (const [weight, raw] of weights) {
       if (!raw) continue;
       const url = safeUrl(raw);
       if (!url) continue;
@@ -49,8 +61,12 @@ export function useHostFontFace(theme: 'light' | 'dark' | AkropolysTheme | undef
     if (faces.length === 0) return;
 
     const css = faces.join('');
-    const key = `${family}|${normal}|${bold}`;
-    const id = `hsk-host-font-${btoa(key).replace(/[^a-zA-Z0-9]/g, '')}`;
+    const key = `${family}|${normal}|${bold}|${variable}`;
+    // Not btoa: it throws on anything outside Latin-1, and a non-ASCII family
+    // name is exactly the case this feature exists to serve.
+    let h = 5381;
+    for (let i = 0; i < key.length; i++) h = ((h << 5) + h + key.charCodeAt(i)) >>> 0;
+    const id = `hsk-host-font-${h.toString(36)}`;
 
     MOUNTED.set(key, (MOUNTED.get(key) ?? 0) + 1);
     if (!document.getElementById(id)) {
@@ -66,5 +82,5 @@ export function useHostFontFace(theme: 'light' | 'dark' | AkropolysTheme | undef
       MOUNTED.delete(key);
       document.getElementById(id)?.remove();
     };
-  }, [family, normal, bold]);
+  }, [family, normal, bold, variable]);
 }

@@ -131,8 +131,14 @@ export interface AkropolysTheme {
    * that font — which is the common reason a non-Latin font silently does not
    * apply. Pass both weights where you have them: a single file leaves bold
    * text to be synthesised, which looks smeared in scripts that stack marks.
+   * `variable` takes a variable font and declares the whole 100–900 axis, so
+   * the browser instances real weights instead of faking them.
+   *
+   * The file must be served with CORS headers allowing your origin — cross-origin
+   * font fetches are CORS-checked, and without them the browser refuses the font
+   * and falls back silently.
    */
-  fontUrl?: string | { normal?: string; bold?: string };
+  fontUrl?: string | { normal?: string; bold?: string; variable?: string };
   /** Base font size for chat message text on desktop, e.g. "15px" or "1rem". */
   fontSize?: string;
   /** Base font size for chat message text on mobile screens, e.g. "13.5px" or "0.9rem". */
