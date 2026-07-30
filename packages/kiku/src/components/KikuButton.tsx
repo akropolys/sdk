@@ -1245,8 +1245,20 @@ function ChatModal({
       const cx = document.createElement('canvas').getContext('2d');
       if (!cx) return false;
       const absent = '"__hsk_no_such_family__"';
-      const width = (ff: string) => { cx.font = `32px ${ff}`; return cx.measureText(sample).width; };
-      return Math.abs(width(`${family}, ${absent}`) - width(absent)) > 0.5;
+      // Assigning an unparseable value to cx.font is a silent no-op that leaves
+      // the previous font in place, which would compare two different fonts and
+      // wrongly report coverage. cx.font echoes back what was *asked for*, so
+      // confirm the family survived the round trip before trusting a width.
+      const width = (ff: string): number | null => {
+        cx.font = `32px ${ff}`;
+        const asked = ff.split(',')[0].trim().replace(/["']/g, '').toLowerCase();
+        if (!cx.font.replace(/["']/g, '').toLowerCase().includes(asked)) return null;
+        return cx.measureText(sample).width;
+      };
+      const a = width(`${family}, ${absent}`);
+      const b = width(absent);
+      if (a === null || b === null) return false;
+      return Math.abs(a - b) > 0.5;
     } catch { return false; }
   }, [isNonLatin, theme, chromeStrings, fontEpoch]);
 
