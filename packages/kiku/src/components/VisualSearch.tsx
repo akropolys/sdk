@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import { downscaleImage } from '../utils/downscaleImage';
 import { useAkropolysContext } from '@akropolys/sdk';
 import type { VisualSearchResponse } from '@akropolys/sdk';
 
@@ -28,13 +29,10 @@ const SpinnerIcon = () => (
   </svg>
 );
 
+// Shrinks first: visual search only needs enough pixels for style extraction,
+// and a raw phone photo is several MB before base64 adds a third on top.
 function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+  return downscaleImage(file);
 }
 
 /**

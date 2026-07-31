@@ -10,6 +10,7 @@ import { cn } from '../utils/cn';
 import { resolveTheme } from '../utils/theme';
 import { useHostFontFace } from '../utils/hostFont';
 import { useDragToDismiss } from '../utils/sheetGesture';
+import { downscaleImage } from '../utils/downscaleImage';
 import { ComparisonMatrix } from './ComparisonMatrix';
 import { MarkupEditor } from './MarkupEditor';
 import { ArrowUpIcon } from '../utils/icons';
@@ -435,45 +436,20 @@ function extractName(raw: string): string | null {
 }
 
 // ─── @kiku Mention System ─────────────────────────────────────────────────────
-
-/**
- * Parses the user's input for an @kiku mention prefix.
- * Returns the resolved intent + a cleaned query (product name only, no @kiku prefix)
- * that gets sent as the actual search text. Returns null if not an @kiku command.
- */
-function parseAtKiku(raw: string): { intent: string; cleanQuery: string } | null {
-  const trimmed = raw.trim();
-  if (!/^@kiku\b/i.test(trimmed)) return null;
-
-  const rest = trimmed.slice(5).trim(); // everything after "@kiku"
-
-  if (rest === '' || /^(capture|save)\b/i.test(rest)) {
-    return {
-      intent: 'capture',
-      cleanQuery: rest.replace(/^(capture|save)\s*/i, '').trim() || trimmed,
-    };
-  }
-  if (/^(history|what have you|show my|my items|what did you|saved|captures|recall)\b/i.test(rest)) {
-    return { intent: 'view_history', cleanQuery: 'show my saved items' };
-  }
-  if (/^(delete|forget|remove|unsave)\b/i.test(rest)) {
-    return {
-      intent: 'delete',
-      cleanQuery: rest.replace(/^(delete|forget|remove|unsave)\s*/i, '').trim() || trimmed,
-    };
-  }
-  // A language change is an instruction to the assistant, not a capture —
-  // forcing it to capture sent it down the kiku-history path, which rejects
-  // on sites without capture enabled before the server ever saw the request.
-  // Passing null sends it as a plain query (with the @kiku prefix intact),
-  // where the backend detects the switch in any phrasing or language.
-  if (/\b(language|lang)\b/i.test(rest) || /^(change|switch|set|update)\b/i.test(rest)) {
-    return null;
-  }
-
-  // Bare "@kiku <text>" defaults to capture
-  return { intent: 'capture', cleanQuery: rest || trimmed };
-}
+//
+// There is deliberately no client-side intent parsing here. It used to match the
+// text after "@kiku" against English keywords (capture|save, history, delete,
+// language) and default anything unmatched to capture. That gave English typists
+// deterministic routing and everyone else a different code path — and it broke
+// outright in other languages: "@kiku Сменить язык на английский" matched no
+// pattern, defaulted to capture, demanded a kiku key, and answered a language
+// request with a key-minting prompt.
+//
+// Deliberate actions do not need parsing: the picker calls send() with an
+// explicit intent, which is a button press and therefore language-independent.
+// Typed text goes to the server with the @kiku prefix intact, where the model
+// classifies it in any language and the allow-list degrades anything this
+// site/plan disallows to a plain search.
 
 // ─── @kiku Picker Menu ────────────────────────────────────────────────────────
 
@@ -1329,16 +1305,13 @@ function ChatModal({
 
   const handleImageFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    Array.from(files).forEach(file => {
+    Array.from(files).forEach(async file => {
       if (!file.type.startsWith('image/')) return;
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const dataUrl = e.target?.result as string;
-        if (dataUrl) {
-          setAttachments(prev => [...prev, { type: 'image', data: dataUrl }]);
-        }
-      };
-      reader.readAsDataURL(file);
+      // Shrink before upload. A phone photo is several MB and base64 adds a
+      // third on top; that went to the backend and straight on to the image
+      // model inline, where it blew the request timeout.
+      const dataUrl = await downscaleImage(file);
+      if (dataUrl) setAttachments(prev => [...prev, { type: 'image', data: dataUrl }]);
     });
   };
 
@@ -1854,9 +1827,9 @@ function ChatModal({
       return;
     }
 
-    const kiku = parseAtKiku(raw);
-    const q = kiku ? kiku.cleanQuery : raw;
-    const resolvedForcedIntent = forcedIntent ?? kiku?.intent;
+    // Typed @kiku text is classified server-side; only the picker forces an intent.
+    const q = raw;
+    const resolvedForcedIntent = forcedIntent;
 
     setSelectedProduct(null);
     setShowKikuPicker(false);
