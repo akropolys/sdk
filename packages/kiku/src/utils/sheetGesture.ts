@@ -72,6 +72,8 @@ type Opts = {
   panel: () => HTMLElement | null;
   scroller: () => HTMLElement | null;
   onDismiss: () => void;
+  /** False while the list is still moving under its own momentum. */
+  quiescent?: () => boolean;
   enabled?: boolean;
 };
 
@@ -82,7 +84,7 @@ type Opts = {
  * that stalls snaps back — which is where velocity actually matters, since the
  * spring itself absorbs it almost entirely.
  */
-export function useDragToDismiss({ panel, scroller, onDismiss, enabled = true }: Opts): void {
+export function useDragToDismiss({ panel, scroller, onDismiss, quiescent, enabled = true }: Opts): void {
   const dismissRef = useRef(onDismiss);
   dismissRef.current = onDismiss;
 
@@ -93,7 +95,7 @@ export function useDragToDismiss({ panel, scroller, onDismiss, enabled = true }:
     if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
     let dragging = false, startY = 0, startX = 0, offset = 0, pointerId = -1;
-    let lastY = 0, lastT = 0, velocity = 0, decided = false;
+    let lastY = 0, lastT = 0, velocity = 0, decided = false, exiting = false;
 
     const apply = (v: number) => {
       el.style.transform = v === 0 ? '' : `translate3d(0, ${v}px, 0)`;
@@ -102,12 +104,19 @@ export function useDragToDismiss({ panel, scroller, onDismiss, enabled = true }:
     };
     const spring = createSpring({
       onFrame: apply,
-      onRest: () => { el.style.willChange = ''; },
+      onRest: () => {
+        el.style.willChange = '';
+        // Dismiss AFTER the sheet has flown out. Calling it on release unmounts
+        // the panel immediately, which tears down this effect and cancels the
+        // very animation that was meant to play — the sheet just vanished.
+        if (exiting) { exiting = false; dismissRef.current(); }
+      },
     });
 
     const atTop = () => {
       const s = scroller();
-      return !s || s.scrollTop <= 0;
+      if (s && s.scrollTop > 0) return false;
+      return quiescent ? quiescent() : true;
     };
 
     const onDown = (e: PointerEvent) => {
@@ -131,6 +140,10 @@ export function useDragToDismiss({ panel, scroller, onDismiss, enabled = true }:
         decided = true;
         dragging = dy > 0 && Math.abs(dy) > Math.abs(dx) && atTop();
         if (dragging) {
+          // Capture only once committed. Capturing on pointerdown would claim
+          // every touch on the panel — including ones meant to scroll the list —
+          // and a captured pointer can stop the native scroll from happening.
+          try { el.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
           spring.stop();
           // A running CSS animation outranks inline styles for the same
           // property, so the entrance keyframes would swallow our transform.
@@ -152,14 +165,16 @@ export function useDragToDismiss({ panel, scroller, onDismiss, enabled = true }:
 
     const onUp = (e: PointerEvent) => {
       if (e.pointerId !== pointerId) return;
+      try { if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
       pointerId = -1;
       if (!dragging) return;
       dragging = false;
       const h = el.offsetHeight || 1;
       const projected = spring.value + velocity * 0.12;
       if (projected > h * 0.3 || velocity > 900) {
+        exiting = true;
+        el.style.pointerEvents = 'none';
         spring.to(h, velocity);
-        dismissRef.current();
       } else {
         spring.to(0, velocity);
       }
@@ -175,9 +190,9 @@ export function useDragToDismiss({ panel, scroller, onDismiss, enabled = true }:
       el.removeEventListener('pointermove', onMove);
       el.removeEventListener('pointerup', onUp);
       el.removeEventListener('pointercancel', onUp);
-      el.style.transform = ''; el.style.willChange = ''; el.style.animation = '';
+      el.style.transform = ''; el.style.willChange = ''; el.style.animation = ''; el.style.pointerEvents = '';
       const host = el.parentElement;
       if (host) host.style.opacity = '';
     };
-  }, [enabled, panel, scroller]);
+  }, [enabled, panel, scroller, quiescent]);
 }

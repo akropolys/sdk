@@ -768,7 +768,15 @@
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
-  overscroll-behavior-y: contain;
+  /* `none`, not `contain`: contain stops scroll chaining to the host page but
+     leaves this element's own elastic bounce, which then stacks with the sheet
+     drag's rubber-band — two elastic effects on one gesture. */
+  overscroll-behavior-y: none;
+  /* Scroll anchoring rewrites scrollTop behind our back whenever content above
+     the viewport resizes (a bubble growing, an image loading). With a custom
+     scroller also writing scrollTop each frame, the two take turns correcting
+     each other and the tail of every scroll shimmers. */
+  overflow-anchor: none;
   padding: 8px 28px 0;
   display: flex;
   flex-direction: column;

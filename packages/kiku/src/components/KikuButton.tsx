@@ -1226,10 +1226,14 @@ function ChatModal({
     return () => fonts.removeEventListener?.('loadingdone', bump);
   }, []);
 
+  // The string, not the theme object: hosts pass an inline object literal, whose
+  // identity changes every render and would re-run the canvas probe each time.
+  const declaredFontFamily = typeof theme === 'object' && theme ? theme.fontFamily : undefined;
+
   const hostFontCovers = React.useMemo(() => {
     void fontEpoch;
     if (!isNonLatin) return true;
-    const declared = typeof theme === 'object' && theme ? theme.fontFamily : undefined;
+    const declared = declaredFontFamily;
     if (!declared || typeof document === 'undefined') return false;
     const family = declared.split(',')[0].trim();
     if (!family) return false;
@@ -1261,7 +1265,7 @@ function ChatModal({
       if (a === null || b === null) return false;
       return Math.abs(a - b) > 0.5;
     } catch { return false; }
-  }, [isNonLatin, theme, chromeStrings, fontEpoch]);
+  }, [isNonLatin, declaredFontFamily, chromeStrings, fontEpoch]);
 
   const t = useCallback((key: keyof typeof DEFAULT_UI_STRINGS, vars?: Record<string, string>) => {
     let s = chromeStrings[key] || DEFAULT_UI_STRINGS[key];
@@ -1564,6 +1568,7 @@ function ChatModal({
   // scroll up to re-read earlier messages.
   const msgsContainerRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const lastExternalScrollRef = useRef(0);
 
   // Drag the sheet down to dismiss, tracking the finger and carrying release
   // velocity into the spring. Touch only — a mouse has no equivalent gesture.
@@ -1571,6 +1576,10 @@ function ChatModal({
     panel: useCallback(() => panelRef.current, []),
     scroller: useCallback(() => msgsContainerRef.current, []),
     onDismiss: onClose,
+    // Momentum keeps firing scroll events after the finger lifts. Starting a
+    // sheet drag then means the native fling and the gesture both own the
+    // frame, so wait for the list to actually be still.
+    quiescent: useCallback(() => performance.now() - lastExternalScrollRef.current > 90, []),
   });
   const messageRefs = useRef<(HTMLDivElement | null)[]>([]);
   // Lets a programmatic scroll re-seed the wheel interpolator below, so the
@@ -1723,8 +1732,28 @@ function ChatModal({
       }
     };
 
+    // Any scroll we did not write is the user (touch momentum, scrollbar, keys)
+    // or the browser. Previously the loop re-seeded from it and kept easing to
+    // its old target, so the two fought all the way down — visible as a jitter
+    // as the scroll settled. Yielding outright is always the right call: the
+    // user's input outranks an animation we started.
+    const handleScroll = () => {
+      // Only scrolls we did NOT write count as "the list is moving on its own".
+      // Counting ours meant streaming autoscroll kept the list permanently
+      // non-quiescent, and the sheet could never be dragged during a reply.
+      if (Math.abs(el.scrollTop - written) > 1) lastExternalScrollRef.current = performance.now();
+      if (rafId !== null && Math.abs(el.scrollTop - written) > 1) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+        el.classList.remove('hsk-scrolling');
+        target = current = written = el.scrollTop;
+      }
+    };
+
     el.addEventListener('wheel', handleWheel, { passive: false });
+    el.addEventListener('scroll', handleScroll, { passive: true });
     return () => {
+      el.removeEventListener('scroll', handleScroll);
       el.removeEventListener('wheel', handleWheel);
       if (rafId !== null) cancelAnimationFrame(rafId);
       el.classList.remove('hsk-scrolling');
