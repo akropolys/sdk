@@ -298,6 +298,24 @@ const DEFAULT_UI_STRINGS = {
   nameStepLead: 'I can search, visualize, or capture anything for you — on this site or any other.',
   nameStepAsk: 'What should I call you?',
   namePlaceholder: 'Type your name…',
+  vizUnavailable: 'The preview could not be loaded.',
+  // The kiku-key flow. These were hardcoded English literals in the JSX, so a
+  // shopper being asked to mint a portable identity read the whole exchange in
+  // a language they may not have.
+  keyPastePrompt: 'Paste your public id — or create one',
+  keyPastePlaceholder: 'your public id…',
+  keyUseMine: 'Use my id',
+  keyCreating: 'Creating…',
+  keyCreateNew: "I'm new — create one",
+  keySecretTitle: 'Your secret — shown only once',
+  keyDismiss: 'Dismiss',
+  keyCopySecret: 'Copy secret',
+  keyCopied: 'Copied',
+  keySecretHint: 'Keep it private — use it to unlock your memory.',
+  keyPublicTitle: 'Your public id',
+  keyCopyId: 'Copy id',
+  keyPublicHint: 'Paste this on any site to save to the same memory.',
+  keyAutoHide: 'Hides automatically in {seconds}s.',
 
   // The returning-shopper greeting, shown on every later visit before the first
   // question of the session.
@@ -1301,6 +1319,11 @@ function ChatModal({
 
   // ── Image attachments ────────────────────────────────────────────────────────
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
+  // Load state per visualization URL. The mark button is absolutely positioned
+  // against the image wrapper, so while the image has no size "right: 10px"
+  // measures from a zero-width box and lands the button beside the bubble. It
+  // also distinguishes "still loading" from "will never load".
+  const [vizState, setVizState] = useState<Record<string, 'ok' | 'err'>>({});
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageFiles = (files: FileList | null) => {
@@ -2263,10 +2286,15 @@ function ChatModal({
                                     src={msg.visualization}
                                     alt="Product visualized in your photo"
                                     className="hsk-markdown-img"
-                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                    style={vizState[msg.visualization] === 'err' ? { display: 'none' } : undefined}
+                                    onLoad={() => setVizState(p => ({ ...p, [msg.visualization!]: 'ok' }))}
+                                    onError={() => setVizState(p => ({ ...p, [msg.visualization!]: 'err' }))}
                                   />
                                 )}
-                                {isLast && !streaming && (msg.visualizationType !== 'video' && !msg.visualization.includes('/videos/')) && (
+                                {vizState[msg.visualization] === 'err' && (
+                                  <div className="hsk-cb-viz-broken">{t('vizUnavailable')}</div>
+                                )}
+                                {isLast && !streaming && vizState[msg.visualization] === 'ok' && (msg.visualizationType !== 'video' && !msg.visualization.includes('/videos/')) && (
                                   <button className="hsk-cb-viz-mark" onClick={() => setMarkupSrc(msg.visualization!)}>
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                                       <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
@@ -2427,11 +2455,11 @@ function ChatModal({
                 <div className="hsk-cb-ai-body">
                   <div className="hsk-cb-ai-text">
                     <div className="hsk-cb-phone-form">
-                      <label className="hsk-cb-phone-label">Paste your public id — or create one</label>
+                      <label className="hsk-cb-phone-label">{t('keyPastePrompt')}</label>
                       <input
                         type="text"
                         className="hsk-cb-phone-input"
-                        placeholder="your public id…"
+                        placeholder={t('keyPastePlaceholder')}
                         value={keyInput}
                         onChange={e => setKeyInput(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && handleUseExistingKey()}
@@ -2439,10 +2467,10 @@ function ChatModal({
                       />
                       <div style={{ display: 'flex', gap: 8 }}>
                         <button className="hsk-cb-phone-submit" onClick={handleUseExistingKey} disabled={!keyInput.trim()}>
-                          Use my id
+                          {t('keyUseMine')}
                         </button>
                         <button className="hsk-cb-phone-submit" onClick={handleCreateKey} disabled={minting}>
-                          {minting ? 'Creating…' : "I'm new — create one"}
+                          {minting ? t('keyCreating') : t('keyCreateNew')}
                         </button>
                       </div>
                     </div>
@@ -2461,40 +2489,40 @@ function ChatModal({
                     <div style={{ padding: '12px 14px', border: '1px solid var(--hsk-border, rgba(255,255,255,0.1))', borderRadius: 'var(--hsk-border-radius, 12px)', display: 'flex', flexDirection: 'column', gap: 12 }}>
                       <div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                          <span style={{ fontSize: 12, fontWeight: 600 }}>Your secret — shown only once</span>
+                          <span style={{ fontSize: 12, fontWeight: 600 }}>{t('keySecretTitle')}</span>
                           <button
                             className="hsk-cb-phone-submit"
                             style={{ padding: '2px 8px', fontSize: 11, background: 'transparent', border: '1px solid var(--hsk-chat-divide, rgba(255,255,255,0.15))' }}
                             onClick={() => { setMintedKey(null); setMintedPub(null); }}
                           >
-                            Dismiss ✕
+                            {t('keyDismiss')} ✕
                           </button>
                         </div>
                         <code style={{ display: 'block', fontSize: 13, fontWeight: 700, marginBottom: 8, wordBreak: 'break-all' }}>{mintedKey}</code>
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                           <button className="hsk-cb-phone-submit" style={{ padding: '4px 10px' }} onClick={() => copyValue(mintedKey, 'secret')}>
-                            {copied === 'secret' ? 'Copied' : 'Copy secret'}
+                            {copied === 'secret' ? t('keyCopied') : t('keyCopySecret')}
                           </button>
                           <span style={{ fontSize: 11, opacity: 0.7, flex: '1 1 180px' }}>
-                            Keep it private — use it to unlock your memory.
+                            {t('keySecretHint')}
                           </span>
                         </div>
                       </div>
                       {mintedPub && (
                         <div>
-                          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Your public id</div>
+                          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>{t('keyPublicTitle')}</div>
                           <code style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6, wordBreak: 'break-all', opacity: 0.85 }}>{mintedPub}</code>
                           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                             <button className="hsk-cb-phone-submit" style={{ padding: '4px 10px' }} onClick={() => copyValue(mintedPub, 'pub')}>
-                              {copied === 'pub' ? 'Copied' : 'Copy id'}
+                              {copied === 'pub' ? t('keyCopied') : t('keyCopyId')}
                             </button>
                             <span style={{ fontSize: 11, opacity: 0.7, flex: '1 1 180px' }}>
-                              Paste this on any site to save to the same memory.
+                              {t('keyPublicHint')}
                             </span>
                           </div>
                         </div>
                       )}
-                      <div style={{ fontSize: 11, opacity: 0.6 }}>Hides automatically in {keyCountdown}s.</div>
+                      <div style={{ fontSize: 11, opacity: 0.6 }}>{t('keyAutoHide', { seconds: String(keyCountdown) })}</div>
                     </div>
                   </div>
                 </div>
