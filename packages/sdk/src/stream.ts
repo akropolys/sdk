@@ -58,6 +58,10 @@ export interface ChatMetadata {
 export type VizEvent =
   | { status: 'generating' }
   | { status: 'generating_video' }
+  // Video outlives the chat stream: generation runs for minutes, the turn ends
+  // in seconds. The server hands back the job id so the client can follow it
+  // after the stream closes — without this the finished video has no way back.
+  | { status: 'pending'; jobId: string }
   | { status: 'done'; url: string; id: string; mediaType?: 'image' | 'video' }
   | { status: 'failed'; reason?: string };
 

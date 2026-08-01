@@ -158,6 +158,69 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     rafRef.current = requestAnimationFrame(tick);
   }, []);
 
+  // Video jobs the client is still following, so a re-render or a second video
+  // in the same conversation can't start duplicate pollers for one job.
+  const videoPollsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const polls = videoPollsRef.current;
+    return () => polls.clear();
+  }, []);
+
+  /**
+   * Follows a video job after the chat stream has closed.
+   *
+   * Generation takes minutes; the turn ends in seconds. The server therefore
+   * closes the stream with a `pending` event carrying the job id, and nothing
+   * was listening for it — so every finished video was stored and billed while
+   * the shopper watched a spinner that never resolved.
+   *
+   * Backs off as it goes: quick at first for a fast render, then sparse, giving
+   * up after ~10 minutes rather than polling a dead job forever.
+   */
+  const followVideoJob = useCallback((jobId: string) => {
+    if (!jobId || videoPollsRef.current.has(jobId)) return;
+    videoPollsRef.current.add(jobId);
+
+    const deadline = Date.now() + 10 * 60 * 1000;
+    let delay = 4000;
+
+    const settle = (patch: Partial<ChatMessage>) => {
+      videoPollsRef.current.delete(jobId);
+      setMessages(prev => {
+        const next = [...prev];
+        for (let i = next.length - 1; i >= 0; i--) {
+          if (next[i].role === 'assistant') {
+            next[i] = { ...next[i], visualizing: false, ...patch };
+            break;
+          }
+        }
+        return next;
+      });
+    };
+
+    const tick = async () => {
+      if (!videoPollsRef.current.has(jobId)) return;
+      if (Date.now() > deadline) {
+        settle({});
+        return;
+      }
+      const res = await client.api?.getVideoStatus?.(jobId);
+      if (res?.status === 'SUCCESS' && res.videoUrl) {
+        settle({ visualization: res.videoUrl, visualizationType: 'video' });
+        return;
+      }
+      if (res?.status === 'FAILED') {
+        settle({});
+        return;
+      }
+      delay = Math.min(delay * 1.4, 20000);
+      setTimeout(tick, delay);
+    };
+
+    setTimeout(tick, delay);
+  }, [client]);
+
   // Wires a chat stream to state. `continuing` resumes into the assistant bubble
   // already on screen (after a manual stop) instead of opening a new one.
   const consumeStream = useCallback((stream: any, continuing: boolean, baseText: string) => {
@@ -278,6 +341,13 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
           }
           return next;
         });
+        return;
+      }
+      if (viz.status === 'pending') {
+        // The stream is about to close with the video still rendering. Keep the
+        // placeholder up and follow the job over HTTP instead — otherwise the
+        // finished video is stored, billed, and never shown to anyone.
+        followVideoJob(viz.jobId);
         return;
       }
       setMessages(prev => {

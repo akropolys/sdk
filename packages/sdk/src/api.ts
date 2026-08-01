@@ -113,6 +113,24 @@ export class AkropolysAPI {
     }
   }
 
+  /**
+   * Polls a video makeover job. Generation runs for minutes while the chat
+   * stream ends in seconds, so a finished video can only reach the shopper if
+   * someone asks for it after the fact.
+   */
+  async getVideoStatus(jobId: string): Promise<
+    { status: 'PENDING' | 'SUCCESS' | 'FAILED'; videoUrl?: string; error?: string } | null
+  > {
+    try {
+      const url = `${this.apiUrl}/visualize/video/${encodeURIComponent(jobId)}?siteId=${encodeURIComponent(this.siteId)}`;
+      const res = await fetch(url, { method: 'GET', headers: this.buildHeaders() });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  }
+
   // Common request headers: auth + the shopper/session/device identity trio.
   // includeKikuPub adds the cross-site memory id, which only chat needs.
   private buildHeaders(includeKikuPub = false): Record<string, string> {
