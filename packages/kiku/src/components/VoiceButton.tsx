@@ -1,4 +1,5 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
+import { useVoiceSession } from '../utils/voiceSession';
 
 export interface VoiceButtonProps {
   onTranscript: (text: string) => void;
@@ -21,8 +22,8 @@ const MicIcon = ({ active }: { active: boolean }) => (
 );
 
 /**
- * VoiceButton — converts speech to text using the browser's free Web Speech API.
- * No API key, no backend call, no cost.
+ * VoiceButton — speech to text, ended by an actual pause in speech rather than
+ * by the browser's own guess at where a sentence stops.
  *
  * @example
  * <VoiceButton onTranscript={(text) => setQuery(text)} />
@@ -35,76 +36,36 @@ export function VoiceButton({
   disabled = false,
   onError,
 }: VoiceButtonProps) {
-  const [listening, setListening] = useState(false);
-  const recognitionRef = useRef<any>(null);
+  const onTranscriptRef = useRef(onTranscript);
+  useEffect(() => { onTranscriptRef.current = onTranscript; }, [onTranscript]);
 
-  // Resolved after mount, never during render: the server has no window, so
-  // deciding at render time makes SSR and hydration disagree about the button.
-  const [isSupported, setIsSupported] = useState(false);
+  // One utterance per press: this is a search field, not a conversation.
+  const stopRef = useRef<() => void>(() => {});
+  const handleUtterance = useCallback((text: string) => {
+    stopRef.current();
+    onTranscriptRef.current(text);
+  }, []);
+
+  const voice = useVoiceSession({ lang, onUtterance: handleUtterance, onError });
+  useEffect(() => { stopRef.current = voice.stop; }, [voice.stop]);
+
   useEffect(() => {
-    setIsSupported('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
-  }, []);
+    if (voice.interim) onInterim?.(voice.interim);
+  }, [voice.interim, onInterim]);
 
-  const start = useCallback(() => {
-    if (!isSupported || listening) return;
-
-    const SR: any =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    const recognition = new SR();
-    // Never hardcode English: the page declares its language, the browser knows
-    // the user's. A fixed 'en-US' transcribed every other language as gibberish.
-    recognition.lang =
-      lang || document.documentElement.lang || navigator.language || 'en-US';
-    recognition.interimResults = true;
-    recognition.maxAlternatives = 1;
-    recognitionRef.current = recognition;
-
-    recognition.onstart = () => setListening(true);
-    recognition.onend = () => setListening(false);
-    recognition.onerror = (e: any) => {
-      setListening(false);
-      if (e?.error && e.error !== 'aborted') onError?.(e.error);
-    };
-
-    recognition.onresult = (e: any) => {
-      const results = Array.from(e.results as any[]);
-      const transcript = results.map((r: any) => r[0].transcript).join('');
-      const isFinal = (e.results[e.results.length - 1] as any).isFinal;
-      if (isFinal) {
-        onTranscript(transcript);
-        setListening(false);
-      } else {
-        onInterim?.(transcript);
-      }
-    };
-
-    try {
-      recognition.start();
-    } catch {
-      setListening(false);
-      onError?.('failed-to-start');
-    }
-  }, [isSupported, listening, lang, onTranscript, onInterim, onError]);
-
-  const stop = useCallback(() => {
-    recognitionRef.current?.stop();
-    setListening(false);
-  }, []);
-
-  // Silently render nothing if the browser doesn't support Web Speech API
-  if (!isSupported) return null;
+  if (!voice.supported) return null;
 
   return (
     <button
       type="button"
-      className={`kiku-voice-btn${listening ? ' kiku-voice-btn--active' : ''} ${className}`}
-      onClick={listening ? stop : start}
+      className={`kiku-voice-btn${voice.active ? ' kiku-voice-btn--active' : ''} ${className}`}
+      onClick={() => (voice.active ? voice.stop() : void voice.start())}
       disabled={disabled}
-      title={listening ? 'Stop listening' : 'Speak your search'}
-      aria-label={listening ? 'Stop voice input' : 'Start voice input'}
+      title={voice.active ? 'Stop listening' : 'Speak your search'}
+      aria-label={voice.active ? 'Stop voice input' : 'Start voice input'}
     >
-      <MicIcon active={listening} />
-      {listening && <span className="kiku-voice-ripple" aria-hidden="true" />}
+      <MicIcon active={voice.active} />
+      {voice.active && <span className="kiku-voice-ripple" aria-hidden="true" />}
     </button>
   );
 }

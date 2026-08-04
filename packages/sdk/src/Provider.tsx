@@ -5,7 +5,7 @@ import { AkropolysConfig } from './types';
 export const AkropolysContext = createContext<AkropolysClient | null>(null);
 
 export interface AkropolysProviderProps extends AkropolysConfig {
-  children: React.ReactNode;
+  children?: any;
 }
 
 /**

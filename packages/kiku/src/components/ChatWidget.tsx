@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useKiku, ChatMessage, ChatSource } from '@akropolys/sdk';
+import { useKiku, useAkropolysContext, ChatMessage, ChatSource } from '@akropolys/sdk';
 import { renderMarkdown } from '../utils/markdown';
 import { AkropolysTheme } from '@akropolys/sdk';
 import { cn } from '../utils/cn';
@@ -7,6 +7,7 @@ import { ArrowUpIcon } from '../utils/icons';
 import { resolveTheme } from '../utils/theme';
 import { VoiceButton } from './VoiceButton';
 import { VisualSearch } from './VisualSearch';
+import { speak, stopSpeech } from '../utils/tts';
 
 
 export interface ChatWidgetProps {
@@ -30,18 +31,39 @@ export interface ChatWidgetProps {
   
   onSelectSource?: (source: ChatSource) => void;
 
-  /** Enable 🎙️ voice input via browser Web Speech API (free) */
+  /** Enable 🎙️ voice input via browser Web Speech API */
   enableVoice?: boolean;
-  /** Enable 📷 visual style-match search via Gemini (requires backend GEMINI_API_KEY) */
+  /** Enable 📷 visual style-match search */
   enableVision?: boolean;
   /** Optional category hint for visual search (e.g. 'dress', 'curtains') */
   visionCategoryHint?: string;
+
+  /** Enable 🔊 TTS voice audio responses from AI */
+  enableAudioResponse?: boolean;
+  /** Optional AI voice preset */
+  ttsVoice?: string;
+  /** Auto-speak assistant responses when user sends voice query */
+  autoSpeakResponses?: boolean;
 }
 
 
 const SparkleIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+  </svg>
+);
+
+const SpeakerIcon = ({ active }: { active: boolean }) => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill={active ? 'currentColor' : 'none'} />
+    {active ? (
+      <>
+        <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+        <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+      </>
+    ) : (
+      <line x1="23" y1="9" x2="17" y2="15" />
+    )}
   </svg>
 );
 
@@ -95,13 +117,22 @@ export function ChatWidget({
   onSelectSource,
   enableVoice = false,
   enableVision = false,
-  visionCategoryHint
+  visionCategoryHint,
+  enableAudioResponse = true,
+  ttsVoice,
+  autoSpeakResponses = true
 }: ChatWidgetProps) {
+  const client = useAkropolysContext();
   const { messages, sources, referencedIds, loading: chatLoading, streaming, error, send, reset } = useKiku();
   const [input, setInput] = useState('');
   const [visualLoading, setVisualLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const [audioEnabled, setAudioEnabled] = useState(enableAudioResponse);
+  const [speakingMsgIndex, setSpeakingMsgIndex] = useState<number | null>(null);
+  const prevStreamingRef = useRef(streaming);
+  const userInitiatedVoiceRef = useRef(false);
 
   const loading = chatLoading || visualLoading;
 
@@ -146,6 +177,30 @@ export function ChatWidget({
     }
   }, [messages]);
 
+  // Handle auto-TTS audio playback when assistant finishes streaming
+  useEffect(() => {
+    const wasStreaming = prevStreamingRef.current;
+    prevStreamingRef.current = streaming;
+
+    const spoken = userInitiatedVoiceRef.current;
+    userInitiatedVoiceRef.current = false;
+    if (wasStreaming && !streaming && spoken && audioEnabled && autoSpeakResponses) {
+      const lastMsgIndex = chatHistory.length - 1;
+      const lastMsg = chatHistory[lastMsgIndex];
+      if (lastMsg && lastMsg.role === 'assistant' && lastMsg.content) {
+        setSpeakingMsgIndex(lastMsgIndex);
+        void speak({
+          client: client as any,
+          text: lastMsg.content,
+          voice: ttsVoice,
+          language: client.getShopperLanguage?.(),
+          onEnd: () => setSpeakingMsgIndex(null),
+          onError: () => setSpeakingMsgIndex(null),
+        });
+      }
+    }
+  }, [streaming, audioEnabled, autoSpeakResponses, chatHistory, ttsVoice, client]);
+
   // Instant while a response streams — restarting a smooth scroll on every
   // token makes the list crawl and never reach the bottom.
   useEffect(() => {
@@ -155,6 +210,8 @@ export function ChatWidget({
   const handleSend = async () => {
     const q = input.trim();
     if (!q || loading) return;
+    stopSpeech();
+    setSpeakingMsgIndex(null);
     setInput('');
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
     await send(q);
@@ -172,6 +229,23 @@ export function ChatWidget({
     const t = e.target;
     t.style.height = 'auto';
     t.style.height = Math.min(t.scrollHeight, 120) + 'px';
+  };
+
+  const handleSpeakToggle = (idx: number, text: string) => {
+    if (speakingMsgIndex === idx) {
+      stopSpeech();
+      setSpeakingMsgIndex(null);
+    } else {
+      setSpeakingMsgIndex(idx);
+      void speak({
+        client: client as any,
+        text,
+        voice: ttsVoice,
+        language: client.getShopperLanguage?.(),
+        onEnd: () => setSpeakingMsgIndex(null),
+        onError: () => setSpeakingMsgIndex(null),
+      });
+    }
   };
 
   const handleVisualResults = (res: any, preview: string) => {
@@ -232,9 +306,29 @@ export function ChatWidget({
         <span className="hsk-chat-header-icon"><SparkleIcon /></span>
         <span className="hsk-chat-title">{title}</span>
         <span className="hsk-chat-badge">AI</span>
-        {chatHistory.length > 0 && (
-          <button className="hsk-chat-reset" onClick={reset} style={{ marginLeft: 'auto' }}>Clear</button>
-        )}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {enableAudioResponse && (
+            <button
+              type="button"
+              className={cn("hsk-audio-toggle-btn", audioEnabled && "hsk-audio-toggle-btn--active")}
+              onClick={() => {
+                const next = !audioEnabled;
+                setAudioEnabled(next);
+                if (!next) {
+                  stopSpeech();
+                  setSpeakingMsgIndex(null);
+                }
+              }}
+              title={audioEnabled ? "Mute AI audio response" : "Enable AI audio response"}
+              aria-label={audioEnabled ? "Mute voice" : "Enable voice"}
+            >
+              <SpeakerIcon active={audioEnabled} />
+            </button>
+          )}
+          {chatHistory.length > 0 && (
+            <button className="hsk-chat-reset" onClick={() => { stopSpeech(); reset(); }}>Clear</button>
+          )}
+        </div>
       </div>
 
       <div className="hsk-chat-messages">
@@ -272,6 +366,17 @@ export function ChatWidget({
                     </div>
                   )}
                   {renderMarkdown(msg.content)}
+                  {msg.role === 'assistant' && msg.content && !streaming && (
+                    <button
+                      type="button"
+                      className={cn("hsk-msg-audio-btn", speakingMsgIndex === idx && "hsk-msg-audio-btn--active")}
+                      onClick={() => handleSpeakToggle(idx, msg.content)}
+                      title={speakingMsgIndex === idx ? "Stop speaking" : "Listen to response"}
+                      aria-label="Toggle speech"
+                    >
+                      <SpeakerIcon active={speakingMsgIndex === idx} />
+                    </button>
+                  )}
                   {streaming && idx === chatHistory.length - 1 && msg.role === 'assistant' && (
                     <span className="hsk-streaming-cursor" />
                   )}
@@ -327,14 +432,7 @@ export function ChatWidget({
                   );
                 }
 
-                // Streaming finished: show the products the answer actually
-                // references. Only fall back to the full candidate list when the
-                // answer referenced none — showing unrelated matches (a kids'
-                // sandal for a "heels to match my dress" query) reads as a bug.
                 const featured = sources.filter(src => src.id && referencedIds.includes(src.id));
-                // Only fall back to the candidate list when the answer referenced
-                // nothing at all. If it referenced specific items, show just those —
-                // never dump unrelated matches (e.g. phones for a sofa question).
                 const general = referencedIds.length > 0
                   ? []
                   : sources.filter(src => !src.id || !referencedIds.includes(src.id));
@@ -435,6 +533,9 @@ export function ChatWidget({
         {enableVoice && (
           <VoiceButton
             onTranscript={(text) => {
+              userInitiatedVoiceRef.current = true;
+              stopSpeech();
+              setSpeakingMsgIndex(null);
               setInput(text);
               send(text);
               setInput('');
@@ -455,5 +556,6 @@ export function ChatWidget({
     </div>
   );
 }
+
 
 
