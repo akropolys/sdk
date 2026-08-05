@@ -19,6 +19,7 @@ interface UseKikuReturn {
   loading: boolean;
   streaming: boolean;
   error: string | null;
+  errorCode: string | null;
   lastAction: ChatAction | null;
   lastIntent: string | null;
   allowedActions: string[] | null;
@@ -68,6 +69,9 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
   const [stopped, setStopped] = useState(false);
   const [interrupted, setInterrupted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Kept beside the message, not folded into it: the message is the server's
+  // English, and this is the only thing that can look up the shopper's own.
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const [lastAction, setLastAction] = useState<ChatAction | null>(null);
   const [lastIntent, setLastIntent] = useState<string | null>(null);
   // Which action tags this site+plan actually permits, as resolved by the
@@ -425,6 +429,7 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
         setInterrupted(true);
       } else {
         setError(err.message);
+        setErrorCode((err as Error & { code?: string }).code ?? null);
         setMessages(prev => {
           let next = prev;
           if (next.length > 0 && next[next.length - 1].role === 'assistant') next = next.slice(0, -1);
@@ -459,6 +464,7 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     setStopped(false);
     setInterrupted(false);
     setError(null);
+    setErrorCode(null);
     setReferencedIds([]);
     setLastAction(null);
     setLastIntent(null);
@@ -493,6 +499,7 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     setInterrupted(false);
     setLoading(true);
     setError(null);
+    setErrorCode(null);
 
     try {
       if (last.role === 'assistant') {
@@ -526,6 +533,7 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     setStopped(false);
     setInterrupted(false);
     setError(null);
+    setErrorCode(null);
     setLoading(false);
     setLastAction(null);
     setLastIntent(null);
@@ -560,6 +568,6 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     [sources, client?.display]
   );
 
-  return { messages, sources: resolvedSources, referencedIds, loading, streaming, error, lastAction, lastIntent, allowedActions, send, stop, stopped, interrupted, continueGenerating, reset };
+  return { messages, sources: resolvedSources, referencedIds, loading, streaming, error, errorCode, lastAction, lastIntent, allowedActions, send, stop, stopped, interrupted, continueGenerating, reset };
 }
 

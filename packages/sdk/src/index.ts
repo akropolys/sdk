@@ -1,6 +1,7 @@
 export { initAkropolys, getAkropolysClient, AkropolysClient, resolveDisplayFields } from './client';
 export type { DisplayFields } from './client';
 export { AkropolysAPI } from './api';
+export type { UIStrings, ScriptFont, SpeechResult, VoiceRefusal } from './api';
 export { KikuStream } from './stream';
 export { AkropolysProvider, useAkropolysContext } from './Provider';
 export { useAkropolys } from './hooks/useAkropolys';

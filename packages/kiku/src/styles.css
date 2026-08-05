@@ -1,4 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+/* kiku has no brand font of its own — it inherits the host page's, and only
+   loads a webfont (via useScriptFontFace) when the shopper's chosen language
+   needs a script the host's font cannot draw. That font is self-hosted rather
+   than @import-ed from fonts.googleapis.com, which strict merchant CSPs block
+   outright and which hands every shopper's IP to Google from inside someone
+   else's page. */
 
 @layer components {
 /* ==========================================================================
@@ -8,7 +13,11 @@
 :root {
   --hsk-border-radius: 0px;
   --hsk-brand-green: #2D7A4B;
-  --hsk-default-font: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  /* No brand font: kiku inherits the host page's own font by default. Single-
+     level var() references below (font-family: var(--hsk-font)) fall through
+     to the inherited value when --hsk-font is unset, per spec — verified live
+     in Chrome before relying on it. theme.fontFamily / --chat-font-family
+     remain the explicit opt-in for a font that differs from the page's. */
   --hsk-default-font-size: 16px;
 }
 
@@ -32,18 +41,28 @@
   -webkit-tap-highlight-color: transparent;
   /* Set once at the root so every descendant inherits the integrator's font;
      rules that only set font-size used to fall through to the host page's. */
-  font-family: var(--hsk-font, var(--hsk-default-font));
+  font-family: var(--hsk-font);
 }
 
-/* Scoped to kiku's own trees. Unscoped, this restyled every button and input
-   on the host page — the integrator's own controls changed font. */
-.hsk-cb-overlay :is(button, [role="button"], input, textarea, select),
-.hsk-chat :is(button, [role="button"], input, textarea, select),
+.hsk-cb-overlay button,
+.hsk-cb-overlay [role="button"],
+.hsk-cb-overlay input,
+.hsk-cb-overlay textarea,
+.hsk-cb-overlay select,
+.hsk-chat button,
+.hsk-chat [role="button"],
+.hsk-chat input,
+.hsk-chat textarea,
+.hsk-chat select,
 .hsk-cb-btn,
-.hsk-search :is(button, [role="button"], input, textarea, select) {
+.hsk-search button,
+.hsk-search [role="button"],
+.hsk-search input,
+.hsk-search textarea,
+.hsk-search select {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
-  font-family: var(--hsk-font, var(--hsk-default-font));
+  font-family: var(--hsk-font);
 }
 
 /* ─── ChatWidget ─── */
@@ -51,7 +70,7 @@
   --hsk-bg: var(--chat-bg-color, #ffffff);
   --hsk-text: var(--chat-text-color, #1f1f1f);
   --hsk-primary: var(--chat-primary-color, #ff6a33);
-  --hsk-font: var(--chat-font-family, var(--hsk-default-font));
+  --hsk-font: var(--chat-font-family);
   --hsk-font-size: var(--chat-font-size, 16px);
 
   display: flex;
@@ -1069,29 +1088,160 @@
   margin: 6px 0 2px;
 }
 
+/* A language with no shipped locale file goes through live translation, which
+   can run 15–40s (uiStringsDeadline scales with dictionary size and retries).
+   A skeleton that only breathes reads identical at 2s and at 25s, and a wait
+   that long with no visible progress starts to look hung. The moving
+   highlight is the actual fix — sweeping motion reads as "still working" in a
+   way a synchronized opacity pulse does not — kept wordless because any text
+   here would have to be in English, the exact thing this flow exists to avoid. */
 .hsk-cb-chrome-loading-bar {
+  position: relative;
   height: 13px;
   border-radius: 7px;
   background: var(--hsk-chat-source-bg, rgba(0, 0, 0, 0.06));
-  animation: hsk-chrome-pulse 1.3s ease-in-out infinite;
+  overflow: hidden;
 }
+
+.hsk-cb-chrome-loading-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--hsk-chat-text, #1f1f1f) 10%, transparent),
+    transparent
+  );
+  animation: hsk-chrome-shimmer 1.6s ease-in-out infinite;
+}
+
+/* Staggered so the sweep visibly travels bar to bar rather than all three
+   flashing in lockstep, which reads as a single blinking block instead of
+   one continuous motion. */
+.hsk-cb-chrome-loading-bar:nth-child(2)::after { animation-delay: 0.15s; }
+.hsk-cb-chrome-loading-bar:nth-child(3)::after { animation-delay: 0.3s; }
 
 .hsk-cb-chrome-loading-bar:first-child { height: 22px; width: 62%; }
 .hsk-cb-chrome-loading-bar:last-child { width: 74%; }
 
-@keyframes hsk-chrome-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.45; }
+@keyframes hsk-chrome-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hsk-cb-chrome-loading-bar { animation: none; }
+  .hsk-cb-chrome-loading-bar::after { animation: none; }
+}
+
+/* Recedes while the step it belongs to is still being fetched, so the composer
+   reads as not-yet-ready rather than as ready-and-ignoring-you. Every control
+   inside is separately disabled; this is only the visible half of that. */
+.hsk-cb-input-box--waiting {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* The advancing half of the wait. The skeleton says "something goes here";
+   this says "and it is on its way", which is the part a 30s translation
+   actually needs. */
+.hsk-cb-chrome-progress {
+  margin-top: 8px;
+  height: 2px;
+  width: 100%;
+  border-radius: 2px;
+  background: var(--hsk-chat-source-bg, rgba(0, 0, 0, 0.06));
+  overflow: hidden;
+}
+
+.hsk-cb-chrome-progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--hsk-primary, #007aff);
+  transition: width 0.24s linear;
+}
+
+.hsk-cb-chrome-progress-label {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+  letter-spacing: 0.01em;
+  color: var(--hsk-chat-muted, #888);
+  font-family: var(--hsk-font);
 }
 
 .hsk-cb-lang-chip:hover {
   background: var(--hsk-primary, #007aff);
   color: #ffffff;
   border-color: var(--hsk-primary, #007aff);
+}
+
+/* Step 3's two answer options. There was a richer card design in this file
+   already (.hsk-cb-entlang-card, with an image/title/price preview) built
+   against entityPreview() — but nothing calls entityPreview() and no JSX
+   renders those classes; the step actually markup is this simpler radio pair,
+   which had no styling of its own at all and rendered as two lines of
+   unstyled, overlapping text. text-align: start rather than left, so this
+   flips correctly under the RTL panels these steps are just as likely to be
+   answering in. */
+.hsk-cb-entlang-opts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 420px;
+}
+
+.hsk-cb-entlang-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  text-align: start;
+  background: var(--hsk-chat-source-bg, rgba(0, 0, 0, 0.03));
+  border: 1px solid var(--hsk-chat-border, rgba(0, 0, 0, 0.08));
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.hsk-cb-entlang-opt:hover {
+  border-color: var(--hsk-primary, #ff6a33);
+  background: color-mix(in srgb, var(--hsk-primary, #ff6a33) 6%, transparent);
+}
+
+.hsk-cb-entlang-radio {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  border: 1.5px solid var(--hsk-chat-border, rgba(0, 0, 0, 0.25));
+  border-radius: 50%;
+  transition: border-color 0.15s ease;
+}
+
+.hsk-cb-entlang-opt:hover .hsk-cb-entlang-radio {
+  border-color: var(--hsk-primary, #ff6a33);
+}
+
+.hsk-cb-entlang-opt-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hsk-cb-entlang-opt-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--hsk-chat-text, #1f1f1f);
+}
+
+.hsk-cb-entlang-opt-note {
+  font-size: 11.5px;
+  color: var(--hsk-chat-muted, #71717a);
+  line-height: 1.4;
 }
 
 /* Splendorous self-reveal: each line rises, sharpens from a soft blur, and
@@ -1195,40 +1345,34 @@
 }
 
 .hsk-cb-user-bubble {
-  background: linear-gradient(135deg, #007aff 0%, #0056b3 100%);
+  background: var(--hsk-user-bubble-bg, #007aff);
   color: #ffffff;
   padding: 10px 18px;
   border-radius: 20px;
   position: relative;
   font-size: var(--hsk-font-size, 15.5px);
-  font-family: var(--hsk-font, var(--hsk-default-font));
+  font-family: var(--hsk-font);
   line-height: 1.45;
   max-width: 100%;
   font-weight: 500;
   word-break: break-word;
   overflow-wrap: anywhere;
-  box-shadow: 0 4px 16px -3px rgba(0, 122, 255, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  box-shadow: 0 4px 16px -3px rgba(0, 122, 255, 0.38);
   letter-spacing: -0.01em;
 }
 
-/* Tail drawn as one masked shape in the bubble's own colour. The earlier version
-   carved a square using a second shape painted in the panel background, so every
-   theme had to re-state that colour and any mismatch showed as a pale blob. This
-   needs only the bubble colour. The mask is short (starts ~78% down the bubble,
-   not from the top) and hugs the bubble's own bottom-right corner rather than
-   spanning it, which is what keeps it looking fused instead of clipped on. The
-   outer sweep lands ON the baseline at a steep angle instead of tapering past
-   it — a taper leaves sub-pixel mass that antialiases into a stray whisker
-   poking out past the corner, which is what read as a nub. */
+/* Authentic iMessage speech bubble tail (Right / Sent).
+   Geometry: 20×20px box, right: -7px. At bubble exit (x=13), top is y=5.5, bottom is y=18 (12.5px thick base).
+   Outer curve sweeps smoothly out to tip (20,20). Inner curve scoops gracefully back to (0,14). */
 .hsk-cb-user-bubble::after {
   content: '';
   position: absolute;
-  z-index: -1;
-  bottom: 0;
-  right: -4px;
-  width: 10px;
-  height: 15px;
-  background: var(--hsk-user-bubble-tail, #0056b3);
+  z-index: 1;
+  bottom: 0px;
+  right: -7px;
+  width: 20px;
+  height: 20px;
+  background: var(--hsk-user-bubble-bg, #007aff);
   -webkit-mask-image: var(--hsk-tail-mask);
   mask-image: var(--hsk-tail-mask);
   -webkit-mask-size: 100% 100%;
@@ -1238,35 +1382,17 @@
 }
 
 .hsk-cb-user-bubble {
-  --hsk-tail-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 15' preserveAspectRatio='none'%3E%3Cpath d='M0,0 L5.4,0 C5.4,7 6.2,11 7.8,13.2 C8.3,13.9 8.7,14.4 8.9,15 L0,15 Z' fill='%23000'/%3E%3C/svg%3E");
-  border-bottom-right-radius: 6px;
-}
-
-.hsk-cb-panel[dir="rtl"] .hsk-cb-user-bubble {
-  border-bottom-right-radius: 20px;
-  border-bottom-left-radius: 6px;
+  --hsk-tail-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M0,0 C8,0 15,4 20,20 C16,19 11,17 0,14 Z' fill='%23000'/%3E%3C/svg%3E");
 }
 
 .hsk-cb-panel[dir="rtl"] .hsk-cb-user-bubble::after {
   right: auto;
-  left: -4px;
+  left: -7px;
   transform: scaleX(-1);
-}
-
-/* Middle bubbles in a consecutive run: same tightened corner as the tailed
-   bubble, but no tail drawn — this is what actually reads as "grouped" rather
-   than the tail itself. */
-.hsk-cb-user-bubble--grouped {
-  border-bottom-right-radius: 6px;
 }
 
 .hsk-cb-user-bubble--grouped::after {
   content: none;
-}
-
-.hsk-cb-panel[dir="rtl"] .hsk-cb-user-bubble--grouped {
-  border-bottom-right-radius: 20px;
-  border-bottom-left-radius: 6px;
 }
 
 
@@ -1308,7 +1434,7 @@
 
 .hsk-cb-ai-text {
   font-size: var(--hsk-font-size, 15.5px);
-  font-family: var(--hsk-font, var(--hsk-default-font));
+  font-family: var(--hsk-font);
   line-height: 1.55;
   color: var(--hsk-chat-text, #111827);
   background: var(--hsk-chat-ai-bg, #f3f4f6);
@@ -1326,19 +1452,15 @@
   margin-top: 4px;
 }
 
-/* Assistant tail — same masked shape as the shopper's bubble, mirrored onto the
-   left corner and filled in the assistant background colour. Selector is
-   ":no following text bubble" rather than :last-of-type, which is type-based:
-   markdown emits image and table blocks as sibling divs, so a reply ending in a
-   product image left the text bubble not-last-of-type and tail-less. */
+/* Assistant tail — authentic iMessage shape (Left / Received), mirrored. */
 .hsk-cb-ai-text:not(:has(~ .hsk-cb-ai-text))::after {
   content: '';
   position: absolute;
-  z-index: -1;
-  bottom: 0;
-  left: -4px;
-  width: 10px;
-  height: 15px;
+  z-index: 1;
+  bottom: 0px;
+  left: -7px;
+  width: 20px;
+  height: 20px;
   background: var(--hsk-chat-ai-bg, #f3f4f6);
   -webkit-mask-image: var(--hsk-tail-mask);
   mask-image: var(--hsk-tail-mask);
@@ -1350,19 +1472,13 @@
 }
 
 .hsk-cb-ai-text:not(:has(~ .hsk-cb-ai-text)) {
-  --hsk-tail-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 15' preserveAspectRatio='none'%3E%3Cpath d='M0,0 L5.4,0 C5.4,7 6.2,11 7.8,13.2 C8.3,13.9 8.7,14.4 8.9,15 L0,15 Z' fill='%23000'/%3E%3C/svg%3E");
-  border-bottom-left-radius: 6px;
+  --hsk-tail-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M0,0 C8,0 15,4 20,20 C16,19 11,17 0,14 Z' fill='%23000'/%3E%3C/svg%3E");
 }
 
 .hsk-cb-panel[dir="rtl"] .hsk-cb-ai-text:not(:has(~ .hsk-cb-ai-text))::after {
   left: auto;
-  right: -4px;
+  right: -7px;
   transform: none;
-}
-
-.hsk-cb-panel[dir="rtl"] .hsk-cb-ai-text:not(:has(~ .hsk-cb-ai-text)) {
-  border-bottom-left-radius: 20px;
-  border-bottom-right-radius: 6px;
 }
 
 
@@ -1990,7 +2106,7 @@
   outline: none;
   resize: none;
   font-size: 16px;
-  font-family: var(--hsk-font, var(--hsk-default-font));
+  font-family: var(--hsk-font);
   color: var(--hsk-chat-text, #111);
   min-height: 28px;
   max-height: 140px;
@@ -2018,7 +2134,7 @@
 
 .hsk-cb-textarea::placeholder {
   color: var(--hsk-chat-muted, #9ca3af);
-  font-family: var(--hsk-font, var(--hsk-default-font));
+  font-family: var(--hsk-font);
   font-size: 16px;
 }
 
@@ -2325,20 +2441,33 @@
 }
 
 
+/* Shrink-wraps its sentence instead of ruling a full-width band across the
+   panel — a one-line notice stretched edge to edge reads as a page-level
+   failure rather than as a note about the last turn. Still caps its width so
+   a long message wraps into a block rather than a single thin line. */
 .hsk-cb-error {
-  margin: 8px 0;
+  display: block;
+  width: fit-content;
+  max-width: min(560px, 100%);
+  /* Auto inline margins, not `start` — this is a notice about the turn as a
+     whole rather than a message from either side, so it sits on the panel's
+     axis instead of picking a side to hang off. */
+  margin: 10px auto 8px;
   padding: 10px 14px;
-  border-radius: var(--hsk-border-radius, 0px);
+  border-radius: 10px;
   background: rgba(239,68,68,.08);
   border: 1px solid rgba(239,68,68,.2);
   color: #ef4444;
   font-size: 13px;
+  line-height: 1.5;
+  font-family: var(--hsk-font);
+  text-align: center;
 }
 
 .hsk-kiku-badge {
   display: inline-block;
   font-size: var(--hsk-font-size, 16px);
-  font-family: var(--hsk-font, var(--hsk-default-font));
+  font-family: var(--hsk-font);
   font-weight: 600;
   background: rgba(255, 255, 255, 0.22);
   border: 1px solid rgba(255, 255, 255, 0.35);
@@ -2376,7 +2505,7 @@
 .hsk-cb-think {
   margin-bottom: 12px;
   font-size: 14px;
-  font-family: var(--hsk-font, var(--hsk-default-font));
+  font-family: var(--hsk-font);
 }
 .hsk-cb-think-head {
   display: inline-flex;
@@ -2386,7 +2515,7 @@
   padding: 0;
   border: none;
   background: none;
-  font-family: var(--hsk-font, var(--hsk-default-font));
+  font-family: var(--hsk-font);
   font-size: 14px;
   font-weight: 500;
   color: var(--hsk-chat-muted, #6b7280);
@@ -2412,41 +2541,78 @@
   color: var(--hsk-chat-muted, #4b5563);
   white-space: pre-wrap;
   line-height: 1.5;
-  font-family: var(--hsk-font, var(--hsk-default-font));
+  font-family: var(--hsk-font);
   font-size: 14px;
 }
 
+/* Sits directly under the halted reply, so it reads as a footnote to that
+   message rather than as a new block of chrome: the notice is quiet, and the
+   only emphasis is on the one control that resumes. Column, not row — a wrapped
+   flex row put the button on its own line at narrow widths anyway, but ragged. */
 .hsk-cb-stopped {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 8px 0;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: start;
+  gap: 8px;
+  margin: 10px 0 14px;
 }
+/* Nothing was generated, so there is no answer for this to hang off — it
+   centres and becomes the whole of what that turn produced. */
+.hsk-cb-stopped--empty {
+  align-items: center;
+  text-align: center;
+  margin: 22px auto 18px;
+}
+.hsk-cb-stopped--empty .hsk-cb-stopped-label { text-align: center; }
+
+/* Three settled dots: the shape a reply would have arrived in, at rest. */
+.hsk-cb-stopped-dots {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 2px;
+}
+.hsk-cb-stopped-dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--hsk-chat-muted, #888);
+  opacity: 0.4;
+}
+
 .hsk-cb-stopped-label {
   font-size: 12.5px;
+  line-height: 1.5;
   color: var(--hsk-chat-muted, #888);
+  font-family: var(--hsk-font);
+  text-align: start;
 }
 .hsk-cb-continue {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 12px;
+  gap: 7px;
+  padding: 7px 14px;
   font-size: 12.5px;
-  font-weight: 600;
+  font-weight: 500;
+  font-family: var(--hsk-font);
   color: var(--hsk-chat-text, #111);
-  background: transparent;
-  border: 1.5px solid var(--hsk-chat-divide, rgba(0,0,0,.14));
-  border-radius: var(--hsk-border-radius, 0px);
+  background: var(--hsk-chat-source-bg, rgba(0,0,0,.04));
+  border: 1px solid transparent;
+  border-radius: 999px;
   cursor: pointer;
   transition: border-color .15s, color .15s, background .15s;
 }
 .hsk-cb-continue:hover {
   border-color: var(--hsk-primary);
   color: var(--hsk-primary);
+  background: transparent;
 }
+/* The glyph points the way the reply will continue, which is the way the
+   script runs. */
+.hsk-cb-continue svg { flex: none; }
+[dir="rtl"] .hsk-cb-continue svg { transform: scaleX(-1); }
 @media (prefers-color-scheme: dark) {
-  .hsk-cb-continue { border-color: rgba(255,255,255,.14); color: #f0efed; }
+  .hsk-cb-continue { background: rgba(255,255,255,.06); color: #f0efed; }
+  .hsk-cb-continue:hover { background: transparent; }
 }
 
 @media (prefers-color-scheme: dark) {
@@ -5159,6 +5325,8 @@
 .hsk-cb-panel[data-script="nonlatin"] .hsk-cb-chip,
 .hsk-cb-panel[data-script="nonlatin"] .hsk-cb-topbar-btn,
 .hsk-cb-panel[data-script="nonlatin"] .hsk-cb-textarea,
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-entlang-opt-title,
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-entlang-opt-note,
 .hsk-cb-panel[data-script="nonlatin"] .hsk-cb-ai-text .hsk-markdown-list li,
 .hsk-cb-panel[data-script="nonlatin"] .hsk-cb-ai-text .hsk-markdown-h1,
 .hsk-cb-panel[data-script="nonlatin"] .hsk-cb-ai-text .hsk-markdown-h2,
@@ -5170,6 +5338,28 @@
    leading, so these scripts need a higher size floor than Latin does. */
 .hsk-cb-panel[data-script="nonlatin"] .hsk-cb-hello-lead { font-size: 15px; }
 .hsk-cb-panel[data-script="nonlatin"] .hsk-cb-hint { font-size: 12px; }
+
+/* Nastaliq (Urdu) writes on a diagonal and its ascenders/descenders run much
+   deeper than the mark-stacking scripts the 1.9 rule above was tuned for —
+   at that leading, adjacent lines' strokes overlap. Same selector list, source
+   order after the general rule so it wins at equal specificity. */
+.hsk-cb-panel[data-nastaliq="true"] .hsk-cb-hello,
+.hsk-cb-panel[data-nastaliq="true"] .hsk-cb-hello-lead,
+.hsk-cb-panel[data-nastaliq="true"] .hsk-cb-hello-ask,
+.hsk-cb-panel[data-nastaliq="true"] .hsk-cb-ai-text,
+.hsk-cb-panel[data-nastaliq="true"] .hsk-cb-user-bubble,
+.hsk-cb-panel[data-nastaliq="true"] .hsk-cb-hint,
+.hsk-cb-panel[data-nastaliq="true"] .hsk-cb-chip,
+.hsk-cb-panel[data-nastaliq="true"] .hsk-cb-topbar-btn,
+.hsk-cb-panel[data-nastaliq="true"] .hsk-cb-textarea,
+.hsk-cb-panel[data-nastaliq="true"] .hsk-cb-entlang-opt-title,
+.hsk-cb-panel[data-nastaliq="true"] .hsk-cb-entlang-opt-note,
+.hsk-cb-panel[data-nastaliq="true"] .hsk-cb-ai-text .hsk-markdown-list li,
+.hsk-cb-panel[data-nastaliq="true"] .hsk-cb-ai-text .hsk-markdown-h1,
+.hsk-cb-panel[data-nastaliq="true"] .hsk-cb-ai-text .hsk-markdown-h2,
+.hsk-cb-panel[data-nastaliq="true"] .hsk-cb-ai-text .hsk-markdown-h3 {
+  line-height: 2.2;
+}
 .hsk-cb-panel[data-script="nonlatin"] .hsk-cb-chip { font-size: 14px; }
 
 /* Boxes sized to a Latin line box give the ink no slack, and a textarea clips.
@@ -5202,4 +5392,402 @@
   padding: 14px 16px;
   border: 1px dashed var(--hsk-chat-divide, rgba(0, 0, 0, 0.12));
   border-radius: 12px;
+}
+
+/* ─── Voice Controls & Overlay ─────────────────────────────────────────────── */
+
+.hsk-msg-audio-btn {
+  background: transparent;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.hsk-cb-voice-mode-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  color: var(--hsk-chat-muted, #71717a);
+  cursor: pointer;
+  transition: all .2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  font-family: inherit;
+}
+
+.hsk-cb-voice-mode-btn:hover:not(:disabled),
+.hsk-cb-mic-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--hsk-primary, #ff6a33) 25%, transparent);
+  color: var(--hsk-primary, #ff6a33);
+  background: color-mix(in srgb, var(--hsk-primary, #ff6a33) 8%, transparent);
+  transform: translateY(-1px);
+}
+
+.hsk-cb-voice-mode-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+.hsk-cb-voice-mode-btn--active,
+.hsk-cb-mic-btn--listening {
+  color: var(--hsk-primary, #ff6a33);
+  background: color-mix(in srgb, var(--hsk-primary, #ff6a33) 12%, transparent);
+}
+
+.hsk-cb-mic-btn--processing { color: var(--hsk-primary, #ff6a33); opacity: .7; }
+
+.hsk-voice-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  /* Elastic, not fixed. The stack is canvas + caption + product cards + mic,
+     and at 26px gaps on a laptop viewport that overflows as soon as the answer
+     references anything — with no scroll, the overflow simply got clipped and
+     everything read as fighting for room. */
+  gap: clamp(12px, 2.2vh, 26px);
+  padding: clamp(14px, 2.5vh, 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--hsk-chat-bg, #ffffff);
+  animation: hsk-voice-in .32s cubic-bezier(.2, .8, .2, 1);
+  will-change: opacity;
+  contain: paint;
+}
+
+.hsk-voice-overlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(42% 26% at 50% 40%,
+    color-mix(in srgb, var(--hsk-primary, #ff6a33) 8%, transparent) 0%,
+    transparent 68%);
+  pointer-events: none;
+}
+
+.hsk-voice-overlay > * { position: relative; }
+
+@keyframes hsk-voice-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Mirrors the exit button's placement on the opposite corner. Deliberately
+   quiet: a guest's remaining seconds are information, not a threat, until they
+   are nearly gone. */
+.hsk-voice-allowance {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  border: 1px solid color-mix(in srgb, var(--hsk-chat-text, #1f1f1f) 14%, transparent);
+  border-radius: 999px;
+  color: var(--hsk-chat-muted, #71717a);
+  transition: color .18s ease, border-color .18s ease;
+}
+
+.hsk-voice-allowance--low {
+  color: #dc2626;
+  border-color: color-mix(in srgb, #dc2626 40%, transparent);
+}
+
+.hsk-voice-exit {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--hsk-chat-text, #1f1f1f) 14%, transparent);
+  border-radius: 999px;
+  color: var(--hsk-chat-muted, #71717a);
+  cursor: pointer;
+  transition: color .18s ease, border-color .18s ease;
+}
+
+.hsk-voice-exit:hover {
+  color: var(--hsk-chat-text, #1f1f1f);
+  border-color: color-mix(in srgb, var(--hsk-chat-text, #1f1f1f) 32%, transparent);
+}
+
+/* The waveform is the most compressible thing on screen — it reads the same at
+   150px as at 260px — so it yields its height first and the cards keep theirs. */
+.hsk-voice-stage {
+  width: min(560px, 100%);
+  height: clamp(110px, 24vh, 240px);
+  flex: none;
+}
+
+.hsk-voice-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.hsk-voice-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.hsk-voice-control {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--hsk-chat-text, #1f1f1f) 16%, transparent);
+  border-radius: 999px;
+  color: var(--hsk-chat-text, #1f1f1f);
+  cursor: pointer;
+  transition: color .18s ease, border-color .18s ease, background .18s ease;
+}
+
+.hsk-voice-control:hover {
+  border-color: color-mix(in srgb, var(--hsk-chat-text, #1f1f1f) 34%, transparent);
+}
+
+.hsk-voice-control--muted {
+  color: var(--hsk-primary, #ff6a33);
+  border-color: color-mix(in srgb, var(--hsk-primary, #ff6a33) 45%, transparent);
+  background: color-mix(in srgb, var(--hsk-primary, #ff6a33) 10%, transparent);
+}
+
+.hsk-voice-caption {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: min(520px, 100%);
+  text-align: center;
+}
+
+.hsk-voice-phase {
+  font-family: var(--hsk-font);
+  font-size: .72rem;
+  font-weight: 600;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--hsk-chat-muted, #71717a);
+  transition: color .25s ease;
+}
+
+.hsk-voice-phase--listening,
+.hsk-voice-phase--speaking { color: var(--hsk-primary, #ff6a33); }
+
+.hsk-voice-phase--thinking {
+  animation: hsk-voice-breathe 1.6s ease-in-out infinite;
+}
+
+@keyframes hsk-voice-breathe {
+  0%, 100% { opacity: .45; }
+  50% { opacity: 1; }
+}
+
+.hsk-voice-heard {
+  min-height: 2.6em;
+  font-family: var(--hsk-font);
+  font-size: 1.05rem;
+  line-height: 1.5;
+  color: var(--hsk-chat-text, #1f1f1f);
+}
+
+.hsk-voice-items {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  justify-content: center;
+  gap: 10px;
+  width: min(620px, 100%);
+}
+
+.hsk-voice-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: clamp(108px, 30vw, 132px);
+  padding: 8px;
+  text-align: start;
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--hsk-chat-text, #1f1f1f) 10%, transparent);
+  border-radius: 12px;
+  cursor: pointer;
+  font-family: var(--hsk-font);
+  animation: hsk-voice-item-in .34s cubic-bezier(.2, .8, .2, 1) both;
+  transition: border-color .18s ease, transform .18s ease;
+}
+
+.hsk-voice-item:hover {
+  border-color: color-mix(in srgb, var(--hsk-primary, #ff6a33) 45%, transparent);
+  transform: translateY(-2px);
+}
+
+@keyframes hsk-voice-item-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+.hsk-voice-item-img {
+  width: 100%;
+  height: clamp(52px, 8.5vh, 78px);
+  object-fit: cover;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--hsk-chat-text, #1f1f1f) 5%, transparent);
+}
+
+.hsk-voice-item-img--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: color-mix(in srgb, var(--hsk-chat-text, #1f1f1f) 30%, transparent);
+}
+
+.hsk-voice-item-name {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: .78rem;
+  line-height: 1.35;
+  color: var(--hsk-chat-text, #1f1f1f);
+}
+
+.hsk-voice-item-price {
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--hsk-primary, #ff6a33);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-voice-item { animation: none; }
+}
+
+.hsk-voice-error {
+  font-family: var(--hsk-font);
+  font-size: .85rem;
+  color: #e5484d;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-voice-overlay,
+  .hsk-voice-phase--thinking { animation: none; }
+}
+
+.hsk-cb-listen {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  margin-top: 6px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  color: var(--hsk-chat-muted, #71717a);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .18s ease, color .18s ease;
+}
+
+.hsk-cb-msg-group:hover .hsk-cb-listen,
+.hsk-cb-listen:focus-visible,
+.hsk-cb-listen--active { opacity: 1; }
+
+.hsk-cb-listen:hover,
+.hsk-cb-listen--active { color: var(--hsk-primary, #ff6a33); }
+
+.hsk-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.hsk-voice-picker {
+  position: absolute;
+  top: clamp(14px, 3vh, 28px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 0 56px;
+  z-index: 2;
+}
+
+.hsk-voice-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.09);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(8px);
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0.01em;
+  color: #5b5b5b;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.hsk-voice-pill:hover { background: rgba(255, 255, 255, 0.95); transform: translateY(-1px); }
+
+.hsk-voice-pill--on {
+  background: #1a1a1a;
+  border-color: #1a1a1a;
+  color: #fff;
+}
+
+.hsk-voice-pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.hsk-voice-pill-dot--male { background: #6aa6ff; }
+.hsk-voice-pill-dot--female { background: #ff8ba7; }
+
+@media (prefers-color-scheme: dark) {
+  .hsk-voice-pill {
+    border-color: rgba(255, 255, 255, 0.14);
+    background: rgba(30, 30, 30, 0.7);
+    color: #cfcfcf;
+  }
+  .hsk-voice-pill:hover { background: rgba(45, 45, 45, 0.9); }
+  .hsk-voice-pill--on { background: #f2f2f2; border-color: #f2f2f2; color: #141414; }
 }

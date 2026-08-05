@@ -13,6 +13,30 @@ export interface UIStrings {
   dir: 'ltr' | 'rtl';
   /** BCP-47 tag for speech recognition, e.g. 'sw-KE'. Empty when unresolved. */
   bcp47: string;
+  /**
+   * Webfont for the script this language is written in, served from the API
+   * origin. Null when the host's own font or the operating system already
+   * draws it — Latin and CJK never carry one.
+   */
+  font: ScriptFont | null;
+}
+
+// Why the server declined to speak. 'guest' is the one a shopper can fix, by
+// creating an account.
+export type VoiceRefusal = 'guest' | 'shopper' | 'site' | 'credits' | 'unavailable';
+
+export type SpeechResult =
+  | { audio: ArrayBuffer; mime: string; secondsLeft?: number; refused?: undefined }
+  | { refused: VoiceRefusal };
+
+export interface ScriptFont {
+  family: string;
+  /**
+   * More than one whenever the foundry splits the family — Space Grotesk ships
+   * latin and latin-ext separately. The unicode-range is what lets the browser
+   * skip the file this shopper will never render a glyph from.
+   */
+  faces: { url: string; unicodeRange: string }[];
 }
 
 const MAX_RETRIES = 3;
@@ -92,6 +116,44 @@ export class AkropolysAPI {
    * client sends nothing but the language and merges the result over its own
    * built-in English defaults.
    */
+  /**
+   * The server sends a path, not a URL — it has no reliable view of its own
+   * public origin behind Cloud Run. Resolved here against apiUrl, and only if
+   * it still points at apiUrl afterwards: a response that could name any host
+   * would be a way to make every widget load a font from somewhere else.
+   */
+  private parseFont(raw: unknown): ScriptFont | null {
+    const f = raw as { family?: unknown; faces?: unknown } | null | undefined;
+    if (!f || typeof f.family !== 'string' || !f.family.trim()) return null;
+    if (!Array.isArray(f.faces)) return null;
+
+    let base: URL;
+    try {
+      base = new URL(this.apiUrl, typeof location !== 'undefined' ? location.href : undefined);
+    } catch {
+      return null;
+    }
+
+    const faces: ScriptFont['faces'] = [];
+    for (const raw of f.faces) {
+      const fc = raw as { url?: unknown; unicodeRange?: unknown };
+      if (typeof fc?.url !== 'string' || !fc.url.startsWith('/')) continue;
+      try {
+        // Concatenated, NOT resolved against the base. apiUrl carries a path
+        // segment (`/v1`), and resolving an absolute path against it replaces
+        // that segment instead of extending it — every font URL would 404
+        // while still passing the origin check below.
+        const url = new URL(this.apiUrl.replace(/\/+$/, '') + fc.url);
+        if (url.origin !== base.origin) continue;
+        faces.push({
+          url: url.href,
+          unicodeRange: typeof fc.unicodeRange === 'string' ? fc.unicodeRange : '',
+        });
+      } catch { /* skip */ }
+    }
+    return faces.length > 0 ? { family: f.family, faces } : null;
+  }
+
   async uiStrings(language: string): Promise<UIStrings | null> {
     try {
       const res = await fetch(`${this.apiUrl}/ui-strings`, {
@@ -107,6 +169,7 @@ export class AkropolysAPI {
         complete: data.complete !== false,
         dir: data.dir === 'rtl' ? 'rtl' : 'ltr',
         bcp47: typeof data.bcp47 === 'string' ? data.bcp47 : '',
+        font: this.parseFont(data.font),
       };
     } catch {
       return null;
@@ -356,6 +419,43 @@ export class AkropolysAPI {
   ): Promise<{ answer: string }> {
     log('info', 'analyzeImage query', query ?? '(describe)');
     return this.post('/chat/vision', { siteId: this.siteId, image, query });
+  }
+
+  /**
+   * Spoken audio for an assistant answer. Returns the raw bytes so the caller
+   * owns the blob URL's lifetime; null on any failure, which lets the widget
+   * fall back to the browser's own voice rather than going silent.
+   */
+  async synthesizeSpeech(
+    text: string,
+    voice?: string,
+    language?: string,
+    signal?: AbortSignal
+  ): Promise<SpeechResult | null> {
+    try {
+      const res = await fetch(`${this.apiUrl}/speech`, {
+        method: 'POST',
+        headers: this.buildHeaders(),
+        body: JSON.stringify({ siteId: this.siteId, text, voice, language }),
+        signal,
+      });
+      if (!res.ok) {
+        log('warn', `speech failed [${res.status}]`, await res.text().catch(() => ''));
+        // A refusal is not a failure. Returning null for both let the widget
+        // fall back to the browser's own voice, which kept the hands-free loop
+        // running for a shopper the server had just cut off.
+        const refused = res.headers.get('X-Akropolys-Voice-Refused');
+        return refused ? { refused: refused as VoiceRefusal } : null;
+      }
+      const left = res.headers.get('X-Akropolys-Voice-Seconds-Left');
+      return {
+        audio: await res.arrayBuffer(),
+        mime: res.headers.get('Content-Type') || 'audio/wav',
+        secondsLeft: left === null ? undefined : Number(left),
+      };
+    } catch {
+      return null;
+    }
   }
 
   // Composite a product into the shopper's own photo. Billed per generation.

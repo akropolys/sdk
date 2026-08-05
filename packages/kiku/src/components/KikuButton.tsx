@@ -5,15 +5,20 @@ import { createPortal } from 'react-dom';
 import { useKiku, ChatMessage, ChatSource } from '@akropolys/sdk';
 import { useAkropolysContext } from '@akropolys/sdk';
 import { renderMarkdown } from '../utils/markdown';
-import { AkropolysTheme, ChatAttachment, CaptureTarget } from '@akropolys/sdk';
+import { AkropolysTheme, ChatAttachment, CaptureTarget, ScriptFont } from '@akropolys/sdk';
 import { cn } from '../utils/cn';
 import { resolveTheme } from '../utils/theme';
-import { useHostFontFace } from '../utils/hostFont';
+import { useHostFontFace, useScriptFontFace, preloadScriptFont } from '../utils/hostFont';
 import { useDragToDismiss } from '../utils/sheetGesture';
 import { downscaleImage } from '../utils/downscaleImage';
 import { ComparisonMatrix } from './ComparisonMatrix';
 import { MarkupEditor } from './MarkupEditor';
 import { ArrowUpIcon } from '../utils/icons';
+import { speak, stopSpeech, speechLevel, speechSpectrum, spectrumBins, isSpeaking } from '../utils/tts';
+import { useVoiceSession, type VoicePhase } from '../utils/voiceSession';
+import { useLiveVoice } from '../utils/liveVoice';
+import { floorReducer, initialFloor, uiPhase, micPaused } from '../utils/voiceFloor';
+import { VoiceCanvas } from './VoiceCanvas';
 
 
 export interface KikuButtonProps {
@@ -43,6 +48,13 @@ export interface KikuButtonProps {
   enableVision?: boolean;
   /** Optional category hint for visual search (e.g. 'dress', 'curtains') */
   visionCategoryHint?: string;
+
+  /** Enable 🔊 TTS voice audio responses from AI */
+  enableAudioResponse?: boolean;
+  /** Optional platform voice name. Synthesis runs server-side — no key here. */
+  ttsVoice?: string;
+  /** Auto-speak assistant responses when user sends voice query */
+  autoSpeakResponses?: boolean;
 }
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -70,6 +82,20 @@ const SparkleIcon = KikuIcon;
 const StopIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
     <rect x="5" y="5" width="14" height="14" rx="2"/>
+  </svg>
+);
+
+const SpeakerIcon = ({ active }: { active?: boolean }) => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill={active ? 'currentColor' : 'none'} />
+    {active ? (
+      <>
+        <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+        <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+      </>
+    ) : (
+      <line x1="23" y1="9" x2="17" y2="15" />
+    )}
   </svg>
 );
 
@@ -170,6 +196,17 @@ const MicOffIcon = () => (
   </svg>
 );
 
+const WaveformIcon = ({ active }: { active?: boolean }) => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M2 12h2" />
+    <path d="M6 8v8" />
+    <path d="M10 4v16" />
+    <path d="M14 7v10" />
+    <path d="M18 9v6" />
+    <path d="M22 12h-2" />
+  </svg>
+);
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 // Blank canvas by default — the empty state is just the logo + a welcome line,
@@ -196,15 +233,50 @@ const LANGUAGE_CHOICES = [
   { value: 'Chinese', native: '中文', tag: 'zh', rtl: false },
 ];
 
+// The endonym for a language the shopper picked from the chips. Anything typed
+// in falls back to what they typed, which is already their own wording.
+function endonymFor(lang: string | null | undefined): string | undefined {
+  if (!lang) return undefined;
+  const typed = lang.trim();
+  if (!typed) return undefined;
+  const l = typed.toLowerCase();
+  const hit = LANGUAGE_CHOICES.find(
+    x => x.value.toLowerCase() === l || x.native.toLowerCase() === l || x.tag === l
+  );
+  return hit ? hit.native : typed;
+}
+
 // Shown while the chrome for a freshly chosen language is being fetched. It is
 // deliberately wordless — any text here would have to be English, which is the
 // exact thing this whole flow exists to avoid.
-function ChromeLoading() {
+//
+// `label` is the one exception: the language's own endonym, which is by
+// definition already in the language being fetched, so it names what the wait
+// is for without a word of English.
+function ChromeLoading({ label }: { label?: string }) {
+  // A shimmer alone reads identical at 2s and at 25s. A bar that advances is
+  // the part that says "still working" — it eases toward 92% over the ~30s a
+  // live translation takes and never reaches the end on its own, so arriving
+  // early looks fast and arriving late never looks stuck at 100%.
+  const [pct, setPct] = useState(4);
+  useEffect(() => {
+    const started = Date.now();
+    const id = setInterval(() => {
+      const t = (Date.now() - started) / 30000;
+      setPct(4 + 88 * (1 - Math.exp(-2.2 * t)));
+    }, 200);
+    return () => clearInterval(id);
+  }, []);
+
   return (
     <div className="hsk-cb-chrome-loading" aria-busy="true">
-      <span className="hsk-cb-chrome-loading-bar" />
-      <span className="hsk-cb-chrome-loading-bar" />
-      <span className="hsk-cb-chrome-loading-bar" />
+      <div className="hsk-cb-chrome-loading-bar" />
+      <div className="hsk-cb-chrome-loading-bar" />
+      <div className="hsk-cb-chrome-loading-bar" />
+      <div className="hsk-cb-chrome-progress">
+        <div className="hsk-cb-chrome-progress-fill" style={{ width: `${pct}%` }} />
+      </div>
+      {label && <span className="hsk-cb-chrome-progress-label">{label}</span>}
     </div>
   );
 }
@@ -224,64 +296,68 @@ const WAVE_BARS = 64;
  * Deliberately NOT a looping keyframe animation: a wave that dances while the
  * room is silent tells the shopper the mic is hearing them when it isn't. At
  * rest these are still dots; they only move when there is something to show.
+ *
+ * Reads the session's analyser rather than opening its own microphone. It used
+ * to call getUserMedia({ audio: true }) — a SECOND live stream, and one without
+ * echoCancellation, which on several platforms downgrades the processing on the
+ * capture stream that endpointing depends on. A meter must not be able to
+ * degrade the thing it is metering.
  */
-function ListeningWave() {
+// Gemini Live prebuilt voices. Named explicitly because the API takes an exact
+// name and silently substitutes its own choice for anything it doesn't
+// recognise — which is why passing a Cloud TTS voice here produced a different
+// voice on every connection.
+const LIVE_VOICES = [
+  { name: 'Puck', label: 'Puck', gender: 'male' },
+  { name: 'Charon', label: 'Charon', gender: 'male' },
+  { name: 'Kore', label: 'Kore', gender: 'female' },
+  { name: 'Aoede', label: 'Aoede', gender: 'female' },
+] as const;
+
+const VOICE_STORAGE_KEY = 'hsk-live-voice';
+
+function ListeningWave({ spectrumBins, micSpectrum }: {
+  spectrumBins: () => number;
+  micSpectrum: (out: Uint8Array) => boolean;
+}) {
   const rowRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let raf = 0;
-    let audioCtx: AudioContext | null = null;
-    let stream: MediaStream | null = null;
-    let cancelled = false;
     const level = new Array(WAVE_BARS).fill(0);
+    const mid = (WAVE_BARS - 1) / 2;
+    let spectrum = new Uint8Array(0);
 
-    (async () => {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        if (cancelled) return;
-        const AC = window.AudioContext || (window as any).webkitAudioContext;
-        audioCtx = new AC();
-        const analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 256;
-        analyser.smoothingTimeConstant = 0.72;
-        audioCtx.createMediaStreamSource(stream).connect(analyser);
-        const spectrum = new Uint8Array(analyser.frequencyBinCount);
-        const mid = (WAVE_BARS - 1) / 2;
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      // The bin count is only knowable once audio flows, and the session may
+      // reopen the mic underneath us, so it is re-checked rather than captured.
+      const bins = spectrumBins();
+      if (bins === 0) return;
+      if (spectrum.length !== bins) spectrum = new Uint8Array(bins);
+      if (!micSpectrum(spectrum)) return;
 
-        const tick = () => {
-          analyser.getByteFrequencyData(spectrum);
-          const row = rowRef.current;
-          if (row) {
-            for (let i = 0; i < WAVE_BARS; i++) {
-              // Mirror around the centre so the voice blooms outward instead of
-              // reading left-to-right like a progress bar.
-              const fromMid = Math.abs(i - mid) / mid;
-              // Speech energy lives low in the spectrum; the top bins are hiss.
-              const bin = Math.min(spectrum.length - 1, Math.round(fromMid * spectrum.length * 0.45));
-              const target = (spectrum[bin] / 255) * (1 - fromMid * 0.45);
-              level[i] += (target - level[i]) * 0.3;
-              const dot = row.children[i] as HTMLElement | undefined;
-              if (dot) {
-                dot.style.transform = `scaleY(${(1 + level[i] * 13).toFixed(3)})`;
-                dot.style.opacity = (0.3 + level[i] * 0.7).toFixed(3);
-              }
-            }
-          }
-          raf = requestAnimationFrame(tick);
-        };
-        tick();
-      } catch {
-        // No meter available — the dots simply rest. Recognition is unaffected.
+      const row = rowRef.current;
+      if (!row) return;
+      for (let i = 0; i < WAVE_BARS; i++) {
+        // Mirror around the centre so the voice blooms outward instead of
+        // reading left-to-right like a progress bar.
+        const fromMid = Math.abs(i - mid) / mid;
+        // Speech energy lives low in the spectrum; the top bins are hiss.
+        const bin = Math.min(spectrum.length - 1, Math.round(fromMid * spectrum.length * 0.45));
+        const target = (spectrum[bin] / 255) * (1 - fromMid * 0.45);
+        level[i] += (target - level[i]) * 0.3;
+        const dot = row.children[i] as HTMLElement | undefined;
+        if (dot) {
+          dot.style.transform = `scaleY(${(1 + level[i] * 13).toFixed(3)})`;
+          dot.style.opacity = (0.3 + level[i] * 0.7).toFixed(3);
+        }
       }
-    })();
-
-    return () => {
-      cancelled = true;
-      cancelAnimationFrame(raf);
-      stream?.getTracks().forEach(t => t.stop());
-      audioCtx?.close().catch(() => {});
     };
-  }, []);
+    tick();
+
+    return () => cancelAnimationFrame(raf);
+  }, [spectrumBins, micSpectrum]);
 
   return (
     <div className="hsk-cb-listening" ref={rowRef} aria-hidden="true">
@@ -299,6 +375,11 @@ const DEFAULT_UI_STRINGS = {
   nameStepAsk: 'What should I call you?',
   namePlaceholder: 'Type your name…',
   vizUnavailable: 'The preview could not be loaded.',
+  // Spelled out rather than "AI": the abbreviation reads like marketing, and
+  // this line exists to be believed. Also British spelling throughout — the two
+  // literals these replaced disagreed with each other.
+  vizDisclaimerImage: 'Generated using Artificial Intelligence — colours, size and placement may differ from the real product.',
+  vizDisclaimerVideo: 'Generated using Artificial Intelligence — colours, size and movement may differ from the real product.',
   // The kiku-key flow. These were hardcoded English literals in the JSX, so a
   // shopper being asked to mint a portable identity read the whole exchange in
   // a language they may not have.
@@ -323,10 +404,10 @@ const DEFAULT_UI_STRINGS = {
   greetReturningLead: 'What can I find for you today?',
 
   howShouldResultsLook: 'How should results look?',
-  entityLangIntro: 'I reply in {lang}. Result cards can stay exactly as this site wrote them, or be translated too.',
+  entityLangIntro: 'I reply in {lang}. Product names stay as this site lists them — the details can too, or be translated.',
   asWritten: 'As written',
   inLanguage: 'In {lang}',
-  namesAsWritten: 'Names and details exactly as the site lists them.',
+  namesAsWritten: 'Details exactly as the site lists them.',
   detailsTranslated: 'Details translated. Numbers and links stay exactly as listed.',
   entityLangPlaceholder: 'Pick one of the two cards above…',
   allSet: "You're all set, {name}.",
@@ -338,11 +419,21 @@ const DEFAULT_UI_STRINGS = {
   // Voice. Every one of these was previously a silent no-op.
   voiceListening: 'Listening… tap the mic to stop',
   voiceSending: 'Got it — sending…',
+  voiceModeStart: 'Hands-free conversation',
+  voiceModeExit: 'Leave hands-free',
+  voicePhaseListening: 'Listening',
+  voicePhaseThinking: 'Thinking',
+  voicePhaseSpeaking: 'Speaking',
+  voiceHint: "Just talk — I'll answer when you pause.",
+  voiceMuted: 'Muted',
+  voiceMutedHint: 'Tap the microphone to speak again.',
   micDenied: 'Microphone blocked. Allow mic access for this site, then try again.',
   micInsecure: 'Voice needs a secure (https) connection.',
   micMissing: 'No microphone found.',
   micLangUnsupported: 'This browser cannot transcribe that language yet. Type instead.',
-  micNetwork: 'Voice needs a connection right now. Check yours and try again.',
+  micNetwork: "Couldn't reach voice. Try again in a moment.",
+  voiceUnavailable: 'Voice is unavailable right now. Try again in a moment.',
+  voicePickerLabel: 'Choose a voice',
   micNoSpeech: "Didn't catch anything. Try again, a little closer to the mic.",
   micFailed: "Couldn't hear that. Try again.",
 
@@ -373,6 +464,11 @@ const DEFAULT_UI_STRINGS = {
 
   statusSent: 'Sent',
   statusStopped: 'Sent · reply stopped',
+
+  stoppedByYou: 'You stopped this response.',
+  stoppedInterrupted: 'This response was interrupted.',
+  continueGenerating: 'Continue generating',
+  generateResponse: 'Generate response',
 
   // Follow-up suggestion pills. Both halves are translated: the label is read,
   // and the query becomes the shopper's own next message — sending English on
@@ -893,6 +989,15 @@ const SERVER_ERROR_STRINGS: Record<string, UIStringKey> = {
   stream_interrupted: 'errStreamInterrupted',
 };
 
+// Refusals the shopper cannot talk their way out of. Retrying is not just
+// futile, it is the failure: the hands-free loop re-armed the mic after every
+// rejected turn, so an unsigned shopper could keep talking indefinitely to a
+// wall while text chat had already stopped after one.
+const TERMINAL_ERROR_CODES = new Set(['account_required', 'access_revoked', 'shopper_reply_limit']);
+
+const isTerminalError = (code: string | null | undefined): boolean =>
+  Boolean(code && TERMINAL_ERROR_CODES.has(code));
+
 const getFriendlyError = (err: any, tr: Translate) => {
   const code = err && typeof err === 'object' ? (err as { code?: string }).code : undefined;
   if (code && SERVER_ERROR_STRINGS[code]) return tr(SERVER_ERROR_STRINGS[code]);
@@ -938,7 +1043,7 @@ const KIKU_KEY_REVEAL_SECONDS = 15;
 
 // ─── ChatModal Props ───────────────────────────────────────────────────────────
 
-interface ChatModalProps extends Pick<KikuButtonProps, 'title' | 'placeholder' | 'backdropColor' | 'backdropBlur' | 'onSelectSource' | 'defaultCurrency' | 'chips' | 'theme' | 'classNames' | 'enableVoice' | 'voiceLang' | 'enableVision' | 'visionCategoryHint'> {
+interface ChatModalProps extends Pick<KikuButtonProps, 'title' | 'placeholder' | 'backdropColor' | 'backdropBlur' | 'onSelectSource' | 'defaultCurrency' | 'chips' | 'theme' | 'classNames' | 'enableVoice' | 'voiceLang' | 'enableVision' | 'visionCategoryHint' | 'enableAudioResponse' | 'ttsVoice' | 'autoSpeakResponses'> {
   theme?: 'light' | 'dark' | AkropolysTheme;
   classNames?: any;
   onClose: () => void;
@@ -1030,40 +1135,6 @@ function ThinkingBlock({ text, isComplete, seconds: fixedSeconds }: { text: stri
   );
 }
 
-export type EntitySample = {
-  title?: string;
-  detail?: string;
-  price?: string;
-  image?: string;
-};
-
-// A miniature of the real result card, used only in onboarding so the shopper
-// can see the difference rather than read about it.
-function EntityPreviewCard({ sample, loading }: { sample?: EntitySample; loading?: boolean }) {
-  return (
-    <span className="hsk-cb-entlang-preview">
-      <span className={cn('hsk-cb-entlang-imgwrap', loading && 'hsk-cb-entlang-skeleton')}>
-        {sample?.image ? (
-          <img src={sample.image} alt="" className="hsk-cb-entlang-img" />
-        ) : (
-          <span className="hsk-cb-entlang-img hsk-cb-entlang-img--empty" />
-        )}
-      </span>
-      {loading ? (
-        <>
-          <span className="hsk-cb-entlang-line hsk-cb-entlang-skeleton" />
-          <span className="hsk-cb-entlang-line hsk-cb-entlang-line--short hsk-cb-entlang-skeleton" />
-        </>
-      ) : (
-        <>
-          {sample?.title && <span className="hsk-cb-entlang-title">{sample.title}</span>}
-          {sample?.detail && <span className="hsk-cb-entlang-detail">{sample.detail}</span>}
-          {sample?.price && <span className="hsk-cb-entlang-price">{sample.price}</span>}
-        </>
-      )}
-    </span>
-  );
-}
 
 function ChatModal({
   title = 'kiku',
@@ -1080,9 +1151,12 @@ function ChatModal({
   voiceLang,
   enableVision = false,
   visionCategoryHint,
+  enableAudioResponse = true,
+  ttsVoice = 'Puck',
+  autoSpeakResponses = true,
 }: ChatModalProps) {
   const client = useAkropolysContext();
-  const { messages, sources, loading, streaming, error, lastAction, lastIntent, allowedActions, send, stop, stopped, interrupted, continueGenerating, reset, referencedIds } = useKiku();
+  const { messages, sources, loading, streaming, error, errorCode, lastAction, lastIntent, allowedActions, send, stop, stopped, interrupted, continueGenerating, reset, referencedIds } = useKiku();
 
   // What the @kiku picker offers to capture. Entity refs are model-emitted and
   // routinely cover only some of the products an answer names — a two-way
@@ -1114,6 +1188,8 @@ function ChatModal({
   // known, stop offering actions the server would only reject.
   const captureAllowed = allowedActions === null || allowedActions.includes('capture');
   const [input, setInput] = useState('');
+  const [speakingMsgIndex, setSpeakingMsgIndex] = useState<number | null>(null);
+  const prevStreamingRef = useRef(streaming);
   const [shopperName, setShopperNameState] = useState<string>(() => {
     try { return client.getShopperName?.() ?? ''; } catch { return ''; }
   });
@@ -1158,9 +1234,12 @@ function ChatModal({
   });
   // Resolved server-side from the chosen language; arrives with the dictionary.
   const [speechLang, setSpeechLang] = useState('');
+  // The webfont for this script, also resolved server-side and served from our
+  // own origin. Null for Latin and CJK, where nothing needs loading.
+  const [scriptFont, setScriptFont] = useState<ScriptFont | null>(null);
 
   useEffect(() => {
-    if (!shopperLanguage) { setSpeechLang(''); setChromeReady(true); return; }
+    if (!shopperLanguage) { setSpeechLang(''); setScriptFont(null); setChromeReady(true); return; }
     let cancelled = false;
     setChromeReady(false);
     (async () => {
@@ -1174,12 +1253,56 @@ function ChatModal({
           setIsRTL(res.dir === 'rtl');
           setSpeechLang(res.bcp47 || '');
           try { localStorage.setItem(dirKey, res.dir); } catch { /* ignore */ }
+          // Awaited (bounded) before the panel is allowed to paint: without
+          // this, chrome text appeared in the system font and visibly swapped
+          // to the real one a moment later. No-op for Latin, where res.font is
+          // null — nothing to wait for, so that path is exactly as fast as
+          // before. Set AFTER the wait so the panel never renders the old
+          // scriptFont's stack against the new dictionary's text.
+          if (res.font) await preloadScriptFont(res.font);
+          setScriptFont(res.font ?? null);
         }
       } catch { /* English defaults are fine */ }
       if (!cancelled) setChromeReady(true);
     })();
     return () => { cancelled = true; };
   }, [shopperLanguage, dirKey, client]);
+
+  useScriptFontFace(scriptFont);
+
+  // There is no widget brand font, so the language picker — painted before any
+  // language exists — simply inherits the host page's own font, same as a
+  // Latin conversation does once one is chosen. Nothing to fetch or preload
+  // for that surface: it is short, known chip labels, not a paragraph, and the
+  // system fallback already renders them (proven live: Segoe UI carries
+  // Arabic glyphs, just not the ones we'd have chosen).
+  //
+  // The host's font stays FIRST. CSS falls back per glyph, not per element, so
+  // a developer whose font already covers the script keeps it, and ours draws
+  // only the characters theirs actually lacks — which is the whole reason this
+  // is a stack and not a replacement.
+  const fontStack = React.useMemo(() => {
+    if (!scriptFont) return undefined;
+    // Only the developer's OWN font name, never their whole stack. theme.fontFamily
+    // is typically itself a fallback chain ("'General Sans', system-ui, sans-serif"),
+    // and pasting that whole string ahead of ours put system-ui — which resolves to
+    // Segoe UI on Windows, which DOES carry Arabic glyphs — before Noto Sans Arabic
+    // ever got a turn. Per-glyph fallback stops at the first font that has the
+    // glyph, so Noto was declared but unreachable: hostFontCovers below measures
+    // this same single name, and the stack must agree with what it measured or the
+    // two silently contradict each other.
+    const declared = typeof theme === 'object' && theme?.fontFamily ? theme.fontFamily : '';
+    const hostName = declared.split(',')[0].trim().replace(/^['"]|['"]$/g, '');
+    const host = hostName ? `"${hostName}", ` : '';
+    // Deliberately NOT var(--chat-font-family, var(--hsk-default-font)) here. Both
+    // resolve to Latin fallback chains ending in Segoe UI / Arial / sans-serif —
+    // our OWN default included — and per-glyph resolution stops at the first font
+    // that has the glyph. Segoe UI does carry Arabic glyphs on Windows, so it was
+    // winning ahead of Noto Sans Arabic even after the developer's stack was
+    // trimmed to one name; the widget's own default chain reintroduced the exact
+    // bug it was supposed to fix.
+    return `${host}"${scriptFont.family}", system-ui, sans-serif`;
+  }, [scriptFont, typeof theme === 'object' && theme ? theme.fontFamily : undefined]);
 
   // The brand display font covers Latin only, so in another script the glyphs
   // fall back to a system font while the SPACES still come from the brand font
@@ -1281,29 +1404,6 @@ function ChatModal({
     });
   }, [chromeStrings]);
 
-  // A real entity from this site, shown side by side as written and translated,
-  // so the choice is concrete rather than described. Null until it loads — the
-  // cards fall back to a neutral placeholder so the step never blocks.
-  const [entityPreview, setEntityPreview] = useState<{
-    original?: EntitySample;
-    translated?: EntitySample;
-  } | null>(null);
-
-  // Fires on language choice, not on reaching step 3 — the translation round
-  // trip is the slow part, so starting it only once the step renders guaranteed
-  // empty cards on arrival.
-  useEffect(() => {
-    if (!shopperLanguage || entityPreview) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const p = await client.getEntityPreview?.(shopperLanguage);
-        if (!cancelled && p) setEntityPreview(p);
-      } catch { /* placeholder cards are fine */ }
-    })();
-    return () => { cancelled = true; };
-  }, [shopperLanguage, entityPreview, client]);
-
   const chooseLanguage = (lang: string) => {
     const v = lang.trim();
     if (!v) return;
@@ -1342,12 +1442,30 @@ function ChatModal({
     setAttachments(prev => prev.filter((_, i) => i !== idx));
   };
 
-  // ── Voice mode (Web Speech API) ──────────────────────────────────────────────
-  const [voiceState, setVoiceState] = useState<'idle' | 'listening' | 'processing'>('idle');
+  // ── Voice ─────────────────────────────────────────────────────────────────
+  // 'dictate' fills the composer from speech. 'converse' is the hands-free
+  // loop: listen → send → read the answer back → listen again, with barge-in.
+  const [voiceMode, setVoiceMode] = useState<'off' | 'dictate' | 'converse'>('off');
+  // Single owner of the conversational floor. Nothing sets a phase directly:
+  // recognition, the watchdog, the chat stream, TTS and the error handler all
+  // dispatch, and the reducer decides. `voicePhase` is the projection the
+  // interface has always rendered — the extra internal states are a distinction
+  // the shopper has no way to perceive.
+  const [floor, dispatchFloor] = React.useReducer(floorReducer, initialFloor);
+  const dictatePhase: VoicePhase = uiPhase(floor.state);
+  // Async work captures this and drops its result if the floor moved on.
+  const floorTurnRef = useRef(floor.turn);
+  useEffect(() => { floorTurnRef.current = floor.turn; }, [floor.turn]);
   const [voiceError, setVoiceError] = useState<string>('');
-  const recognitionRef = useRef<any>(null);
-  const pendingVoiceRef = useRef<string | null>(null); // transcript queued for auto-send
-  const heardRef = useRef(false); // any audio recognised this session
+  const [voiceMuted, setVoiceMuted] = useState(false);
+  // A guest's remaining spoken seconds, reported by the server after each
+  // answer so the countdown tracks audio actually produced rather than wall
+  // time. null = no allowance applies (signed in, or the site sets no cap).
+  const [voiceSecondsLeft, setVoiceSecondsLeft] = useState<number | null>(null);
+  // Set once the allowance is spent: voice stays closed until they sign in.
+  const [voiceBlocked, setVoiceBlocked] = useState(false);
+  const voiceModeRef = useRef<'off' | 'dictate' | 'converse'>('off');
+  const handleSendRef = useRef<(text: string) => void>(() => {});
 
   // Advice, not state: it retires itself rather than sitting under the bar.
   useEffect(() => {
@@ -1355,95 +1473,320 @@ function ChatModal({
     const timer = setTimeout(() => setVoiceError(''), 5000);
     return () => clearTimeout(timer);
   }, [voiceError]);
-  // Resolved after mount, never during render: the server has no window, so
-  // deciding at render time makes SSR and hydration disagree about the button.
-  const [hasSpeechAPI, setHasSpeechAPI] = useState(false);
-  useEffect(() => {
-    setHasSpeechAPI('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
+
+  // Transcribe in the language being SPOKEN: developer override → the language
+  // chosen in onboarding → page <html lang> → browser language → English.
+  const speechBCP47 =
+    voiceLang || speechLang ||
+    (typeof document !== 'undefined' ? document.documentElement.lang : '') ||
+    (typeof navigator !== 'undefined' ? navigator.language : '') || 'en-US';
+
+  const handleVoiceError = useCallback((code: string) => {
+    // Every failure looked identical before this: the button blinked and
+    // nothing happened, with no way to tell a denied mic from a silent one.
+    setVoiceError(
+      code === 'not-allowed' || code === 'service-not-allowed'
+        ? (isSecureOrigin() ? 'micDenied' : 'micInsecure')
+        : code === 'audio-capture' ? 'micMissing'
+        : code === 'language-not-supported' ? 'micLangUnsupported'
+        // A dropped socket is not a deaf microphone. Reporting it as one sent
+        // the shopper to check a device that was working the whole time.
+        : code === 'network' || code === 'connection' ? 'micNetwork'
+        : code === 'unavailable' ? 'voiceUnavailable'
+        : 'micFailed'
+    );
   }, []);
 
-  const startVoice = useCallback(() => {
-    if (!hasSpeechAPI || voiceState !== 'idle') return;
+  const stopSessionRef = useRef<() => void>(() => {});
+  const handleUtterance = useCallback((text: string) => {
+    setInput('');
+    dispatchFloor({ type: 'UTTERANCE' });
+    // Dictation is one utterance, not a conversation: close the mic rather
+    // than leaving it open behind a sent message.
+    if (voiceModeRef.current === 'dictate') {
+      voiceModeRef.current = 'off';
+      setVoiceMode('off');
+      stopSessionRef.current();
+    }
+    handleSendRef.current(text);
+  }, []);
+
+  const handleBargeIn = useCallback(() => {
+    // No isSpeaking() guard: the reducer rejects a barge-in from any state that
+    // does not hold the floor, and it accepts one during `preparing`, where
+    // isSpeaking() is still false because the audio has not arrived yet — the
+    // exact window in which cutting in used to do nothing.
+    stopSpeech();
+    setSpeakingMsgIndex(null);
+    dispatchFloor({ type: 'BARGE_IN' });
+  }, []);
+
+  const voice = useVoiceSession({
+    lang: speechBCP47,
+    onUtterance: handleUtterance,
+    onError: handleVoiceError,
+    onBargeIn: handleBargeIn,
+    // The mic stays open through both, but recognition is torn down so the
+    // assistant's own answer is never transcribed back as a new question.
+    paused: voiceMuted || micPaused(floor.state),
+  });
+
+  useEffect(() => { stopSessionRef.current = voice.stop; }, [voice.stop]);
+
+  // Hands-free conversation is a live audio session with the model, not a
+  // transcribe → chat → synthesize relay. Turn-taking, barge-in and endpointing
+  // are decided where the audio already is, which is why none of the floor
+  // machinery below applies to it.
+  // Remembered across sessions: a shopper who picked a voice should not have to
+  // pick it again, and the default must be stable rather than whatever the
+  // model felt like.
+  const [liveVoiceName, setLiveVoiceName] = useState<string>(() => {
+    if (typeof localStorage === 'undefined') return LIVE_VOICES[0].name;
+    const saved = localStorage.getItem(VOICE_STORAGE_KEY);
+    return LIVE_VOICES.some(v => v.name === saved) ? saved! : LIVE_VOICES[0].name;
+  });
+
+  const live = useLiveVoice({
+    apiUrl: (client as any)?.api?.apiUrl ?? '',
+    siteId: (client as any)?.api?.siteId ?? '',
+    token: (client as any)?.api?.apiToken ?? '',
+    kikuId: (client as any)?.api?.getShopperId?.(),
+    language: shopperLanguage,
+    voice: liveVoiceName,
+    onError: handleVoiceError,
+    onRefused: (reason) => {
+      setVoiceSecondsLeft(0);
+      voiceModeRef.current = 'off';
+      setVoiceMode('off');
+      if (reason === 'guest') setVoiceBlocked(true);
+    },
+  });
+
+  const conversing = voiceMode === 'converse';
+
+  // The voice is fixed when the session opens, so changing it mid-conversation
+  // means reconnecting. Done in an effect rather than in the click handler so
+  // the restart reads the name React has actually committed.
+  const prevVoiceRef = useRef(liveVoiceName);
+  useEffect(() => {
+    if (prevVoiceRef.current === liveVoiceName) return;
+    prevVoiceRef.current = liveVoiceName;
+    if (!conversing) return;
+    live.stop();
+    const id = setTimeout(() => { void live.start(); }, 120);
+    return () => clearTimeout(id);
+  }, [liveVoiceName, conversing, live]);
+
+  // In conversation the server says what it retrieved, so there is nothing to
+  // guess: cards land with the sentence rather than after it. The keyword
+  // inference still serves text, where no such signal exists.
+  const shownSources = conversing && live.sources.length ? live.sources : discussedSources;
+
+  const chooseVoice = useCallback((name: string) => {
+    setLiveVoiceName(name);
+    try { localStorage.setItem(VOICE_STORAGE_KEY, name); } catch { /* private mode */ }
+  }, []);
+  // One name for what the interface renders, two machines behind it: the floor
+  // reducer still owns dictation, the live session owns conversation.
+  const voicePhase: VoicePhase = conversing
+    ? (live.state === 'speaking' ? 'speaking'
+      : live.state === 'connecting' ? 'thinking'
+      : live.state === 'listening' ? 'listening' : 'idle')
+    : dictatePhase;
+
+  useEffect(() => {
+    if (conversing) setVoiceSecondsLeft(live.secondsLeft);
+  }, [conversing, live.secondsLeft]);
+
+  // Both analysers are created lazily, so the bin count is only knowable once
+  // audio is flowing. The canvas reads it per frame — polling it into state
+  // re-rendered the entire modal twice a second for a value that never changes.
+  const voiceBins = useCallback(
+    () => (voicePhase === 'speaking' ? spectrumBins() : voice.spectrumBins()),
+    [voicePhase, voice]
+  );
+
+  // A send that never settles would otherwise leave the loop stuck in
+  // 'thinking' with the microphone shut. `loading` alone cannot be trusted to
+  // recover it: an aborted stream emits neither 'done' nor 'error', so the flag
+  // can stay true indefinitely. Hence the hard ceiling as well as the fast path.
+  // The 1200ms fast path this used to carry was the race itself: it handed the
+  // floor back on `!loading && !streaming`, which is true throughout the
+  // /speech round trip, so it reopened the microphone into audio that was
+  // about to play. The stream now reports completion explicitly through
+  // REPLY_DONE, leaving this as what its name always claimed — a last resort
+  // against a turn that never settles at all.
+  useEffect(() => {
+    if (!micPaused(floor.state)) return;
+    const id = setTimeout(() => dispatchFloor({ type: 'WATCHDOG' }), 30000);
+    return () => clearTimeout(id);
+  }, [floor.state, floor.turn]);
+
+  // `committing` waits on a stream that may never begin — a send can be refused
+  // or fail before emitting a single token, and REPLY_DONE only ever fires off
+  // the END of a stream that started. Without this the floor sat in committing
+  // with the microphone shut, which is heard as the assistant going deaf: the
+  // shopper talks, the words are recognised, and nothing is ever sent.
+  //
+  // This is deliberately scoped to `committing` alone. The old version ran in
+  // every waiting state, which is what let it fire during the /speech round
+  // trip and reopen the mic into audio about to play — the race the machine
+  // exists to remove. Recovering a turn that never started and stealing the
+  // floor from one already under way are not the same thing.
+  useEffect(() => {
+    if (floor.state !== 'committing') return;
+    const since = Date.now();
+    const id = setInterval(() => {
+      if (!loading && !streaming && Date.now() - since > 1800) {
+        dispatchFloor({ type: 'WATCHDOG' });
+      }
+    }, 400);
+    return () => clearInterval(id);
+  }, [floor.state, floor.turn, loading, streaming]);
+
+  // Live feedback: partial words appear in the composer as they are heard.
+  useEffect(() => {
+    if (voice.active && voice.interim) setInput(voice.interim);
+  }, [voice.interim, voice.active]);
+
+  const startVoice = useCallback((mode: 'dictate' | 'converse') => {
     setVoiceError('');
-    heardRef.current = false;
-    if (!isSecureOrigin()) {
-      setVoiceError('micInsecure');
+    // Otherwise the loop is one tap away from restarting: ending the session on
+    // a terminal refusal accomplishes nothing if the mic can be reopened into
+    // the same wall.
+    if (voiceBlocked || isTerminalError(errorCode)) return;
+    if (!isSecureOrigin()) { setVoiceError('micInsecure'); return; }
+    if (mode === 'dictate' && !voice.supported) { setVoiceError('micFailed'); return; }
+    stopSpeech();
+    setSpeakingMsgIndex(null);
+    voiceModeRef.current = mode;
+    setVoiceMode(mode);
+    setVoiceMuted(false);
+    if (mode === 'converse') {
+      // No SpeechRecognition dependency: the live session needs a microphone
+      // and a socket, which is why it works in browsers dictation never did.
+      setTimeout(() => { void live.start(); }, 220);
       return;
     }
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    const recognition = new SR();
-    // Transcribe in the language being SPOKEN: developer override → the language
-    // chosen in onboarding → page <html lang> → browser language → English.
-    recognition.lang = voiceLang || speechLang || document.documentElement.lang || navigator.language || 'en-US';
-    // Stream partial results so the user SEES words appear as they speak —
-    // without this there's no feedback that anything was captured until the end.
-    recognition.interimResults = true;
-    recognition.maxAlternatives = 1;
-    recognitionRef.current = recognition;
-
-    recognition.onstart = () => setVoiceState('listening');
-    recognition.onresult = (event: any) => {
-      let finalText = '';
-      let interimText = '';
-      for (let i = 0; i < event.results.length; i++) {
-        const seg = event.results[i][0].transcript;
-        if (event.results[i].isFinal) finalText += seg;
-        else interimText += seg;
-      }
-      // Live feedback: show the (final + in-progress) text in the input box.
-      const live = (finalText + ' ' + interimText).trim();
-      if (live) { heardRef.current = true; setInput(live); }
-      // Only auto-send once we have a finalized transcript.
-      if (finalText.trim()) {
-        pendingVoiceRef.current = finalText.trim();
-        setVoiceState('processing');
-      }
-    };
-    recognition.onerror = (event: any) => {
-      // Every failure looked identical before this: the button blinked and
-      // nothing happened, with no way to tell a denied mic from a silent one.
-      const code = event?.error || '';
-      if (code !== 'no-speech' && code !== 'aborted') {
-        setVoiceError(
-          code === 'not-allowed' || code === 'service-not-allowed'
-            ? (isSecureOrigin() ? 'micDenied' : 'micInsecure')
-            : code === 'audio-capture' ? 'micMissing'
-            : code === 'language-not-supported' ? 'micLangUnsupported'
-            : code === 'network' ? 'micNetwork'
-            : 'micFailed'
-        );
-      }
-      setVoiceState('idle');
-    };
-    recognition.onend = () => {
-      // A session that captured nothing used to end in silence — the mic just
-      // went dark, which reads as "voice is broken" rather than "say it again".
-      if (!heardRef.current && !pendingVoiceRef.current) {
-        setVoiceError(prev => prev || 'micNoSpeech');
-      }
-      // Only reset if we didn't already move to processing
-      setVoiceState(prev => prev === 'listening' ? 'idle' : prev);
-    };
-    // start() throws InvalidStateError if a previous run is still winding down.
-    try {
-      recognition.start();
-    } catch {
-      setVoiceError('micFailed');
-      setVoiceState('idle');
-    }
-  }, [hasSpeechAPI, voiceState, voiceLang, speechLang]);
+    dispatchFloor({ type: 'START', mode });
+    // Opening the microphone is a ~60ms blocking task. Running it in the same
+    // frame as the overlay's entrance made the animation visibly stutter, so
+    // the surface paints first and the device is acquired right after.
+    setTimeout(() => { void voice.start(); }, 220);
+  }, [voice, live, error, voiceBlocked]);
 
   const stopVoice = useCallback(() => {
-    recognitionRef.current?.stop();
-    // Tapping stop as the final result lands must not discard it: 'processing'
-    // is what drives the auto-send, and clobbering it drops the transcript.
-    setVoiceState(prev => (prev === 'processing' ? prev : 'idle'));
-  }, []);
+    voice.stop();
+    live.stop();
+    stopSpeech();
+    voiceModeRef.current = 'off';
+    setVoiceMode('off');
+    dispatchFloor({ type: 'STOP' });
+    setSpeakingMsgIndex(null);
+  }, [voice, live]);
 
-  // Clean up recognition on unmount
+  const speakMessage = useCallback((idx: number, text: string) => {
+    if (speakingMsgIndex === idx) {
+      stopSpeech();
+      setSpeakingMsgIndex(null);
+      return;
+    }
+    setSpeakingMsgIndex(idx);
+    void speak({
+      client: client as any,
+      text,
+      voice: ttsVoice,
+      language: shopperLanguage,
+      bcp47: speechLang,
+      onEnd: () => setSpeakingMsgIndex(null),
+      onError: () => setSpeakingMsgIndex(null),
+    });
+  }, [speakingMsgIndex, client, ttsVoice, shopperLanguage, speechLang]);
+
+  // Declared BEFORE the resume effect below so that when both fire in the same
+  // commit — the refusal sets `error` and drops `streaming` together — voice
+  // mode is already off by the time the loop decides whether to listen again.
   useEffect(() => {
-    return () => recognitionRef.current?.abort();
-  }, []);
+    if (!isTerminalError(errorCode)) return;
+    voiceModeRef.current = 'off';
+    setVoiceMode('off');
+    stopSessionRef.current();
+    stopSpeech();
+    setSpeakingMsgIndex(null);
+    dispatchFloor({ type: 'TERMINAL' });
+  }, [errorCode]);
+
+  // The answer is read back only in the hands-free loop — a typed question in a
+  // quiet room should not suddenly start talking.
+  useEffect(() => {
+    const wasStreaming = prevStreamingRef.current;
+    prevStreamingRef.current = streaming;
+    if (!wasStreaming || streaming) return;
+    if (voiceModeRef.current !== 'converse') {
+      dispatchFloor({ type: 'REPLY_DONE', willSpeak: false });
+      return;
+    }
+
+    const idx = messages.length - 1;
+    const last = messages[idx];
+    const wantsAudio = (enableAudioResponse ?? true) && (autoSpeakResponses ?? true);
+    if (!wantsAudio || !last || last.role !== 'assistant' || !last.content) {
+      dispatchFloor({ type: 'REPLY_DONE', willSpeak: false });
+      return;
+    }
+    // Enters `preparing`, not `speaking`: nothing is audible until /speech has
+    // answered and the buffer has decoded, and pretending otherwise is what
+    // left that whole window unowned.
+    dispatchFloor({ type: 'REPLY_DONE', willSpeak: true });
+    // The turn this playback belongs to. A barge-in or watchdog moves the floor
+    // on, and every callback below then drops its result rather than steering a
+    // turn that has already ended.
+    const turn = floorTurnRef.current;
+    const mine = () => floorTurnRef.current === turn;
+    const resume = () => {
+      if (!mine()) return;
+      setSpeakingMsgIndex(null);
+      dispatchFloor({ type: 'AUDIO_ENDED' });
+    };
+    setSpeakingMsgIndex(idx);
+    void speak({
+      onStart: () => { if (mine()) dispatchFloor({ type: 'AUDIO_PLAYING' }); },
+      client: client as any,
+      text: last.content,
+      voice: ttsVoice,
+      language: shopperLanguage,
+      bcp47: speechLang,
+      onEnd: resume,
+      onError: resume,
+      onSecondsLeft: setVoiceSecondsLeft,
+      // The loop ends here rather than listening again. Only a guest can act on
+      // it, so only a guest is asked to.
+      onRefused: (reason) => {
+        setVoiceSecondsLeft(0);
+        voiceModeRef.current = 'off';
+        setVoiceMode('off');
+        stopSessionRef.current();
+        setSpeakingMsgIndex(null);
+        dispatchFloor({ type: 'TERMINAL' });
+        if (reason === 'guest') setVoiceBlocked(true);
+      },
+    });
+  }, [streaming, messages, enableAudioResponse, autoSpeakResponses, client, ttsVoice, shopperLanguage, speechLang]);
+
+  useEffect(() => () => { stopSpeech(); }, []);
+
+  // The spoken answer, trimmed to its opening sentences. The full text belongs
+  // in the transcript behind the overlay, not stacked under a waveform.
+  const voiceSpokenAnswer = React.useMemo(() => {
+    // In conversation the answer never passes through the message list — the
+    // transcript arrives with the audio it belongs to.
+    if (conversing) return live.said.replace(/\s+/g, ' ').trim().slice(-180);
+    if (voicePhase === 'listening' && voice.interim) return '';
+    const last = [...messages].reverse().find(m => m.role === 'assistant');
+    const text = (last?.content ?? '').replace(/[*_`#>|]/g, '').replace(/\s+/g, ' ').trim();
+    if (!text) return '';
+    return text.length > 180 ? text.slice(0, 177).trimEnd() + '…' : text;
+  }, [messages, voicePhase, voice.interim, conversing, live.said]);
 
   // No vertical pre-determination: chips and placeholder are whatever the
   // integrator passed (blank by default). One widget can't guess what a given
@@ -1454,12 +1797,17 @@ function ChatModal({
   // substitute the translated default when the caller left `placeholder` at
   // its own default — an integrator's custom placeholder is their content,
   // left as-is rather than silently overridden.
+  // The onboarding steps past the language pick have nothing to accept until
+  // their own chrome exists: a name sent mid-fetch advanced to step 3, which
+  // then had to render its question in a language that had not arrived yet.
+  const chromeLoading = (awaitingName || awaitingEntityLang) && !chromeReady;
+
   const activePlaceholder = awaitingLang
     ? 'Type preferred language…'
     : awaitingName
-      ? t('namePlaceholder')
+      ? (chromeReady ? t('namePlaceholder') : '')
       : awaitingEntityLang
-        ? t('entityLangPlaceholder')
+        ? (chromeReady ? t('entityLangPlaceholder') : '')
         : shopperLanguage && placeholder === 'Ask me anything…'
           ? t('defaultPlaceholder')
           : placeholder;
@@ -1822,7 +2170,7 @@ function ChatModal({
 
   const handleSend = async (text?: string, extraAttachments?: ChatAttachment[], forcedIntent?: string, captureTargets?: CaptureTarget[]) => {
     const raw = (text ?? input).trim();
-    if (!raw || loading) return;
+    if (!raw || loading || chromeLoading) return;
 
     // Onboarding: the first thing typed is treated as the shopper's name when it
     // reads like one; we store it and greet them, with no backend call. If it
@@ -1942,24 +2290,27 @@ function ChatModal({
     t.style.height = `${Math.min(t.scrollHeight, 140)}px`;
   };
 
-  // Auto-send voice transcript once processing state is reached
+  // The voice session is declared above handleSend and must reach it without
+  // dragging the whole send pipeline into its dependencies.
   useEffect(() => {
-    if (voiceState !== 'processing') return;
-    const transcript = pendingVoiceRef.current;
-    if (!transcript) { setVoiceState('idle'); return; }
-    pendingVoiceRef.current = null;
-    // Brief delay so user sees the transcript fill in before it fires
-    const timer = setTimeout(() => {
-      setVoiceState('idle');
-      handleSend(transcript);
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [voiceState]);
+    handleSendRef.current = (text: string) => { void handleSend(text); };
+  });
 
 
   const blurVal = typeof backdropBlur === 'number' ? `${backdropBlur}px` : (backdropBlur ?? '20px');
 
-  const displayMessages = messages;
+  // A stop before the first token leaves an assistant turn with nothing in it.
+  // Rendering it anyway drew the brand mark over an empty column, which read as
+  // an answer that had failed to paint rather than as one that never started.
+  const halted = (stopped || interrupted) && !loading && !streaming;
+  const displayMessages = halted
+    ? messages.filter((m, i) => !(i === messages.length - 1 && m.role === 'assistant' && !m.content))
+    : messages;
+
+  // Nothing was generated at all, so the notice has no answer to sit beneath
+  // and is centred on its own instead of hanging off the leading edge.
+  const haltedEmpty =
+    halted && displayMessages[displayMessages.length - 1]?.role !== 'assistant';
 
   return (
     <UIStringsContext.Provider value={t}>
@@ -1981,6 +2332,8 @@ function ChatModal({
         dir={isRTL ? 'rtl' : 'ltr'}
         data-script={isNonLatin ? 'nonlatin' : 'latin'}
         data-host-font={hostFontCovers ? 'covers' : 'gap'}
+        data-nastaliq={scriptFont?.family === 'Noto Nastaliq Urdu' ? 'true' : undefined}
+        style={fontStack ? ({ '--hsk-font': fontStack } as React.CSSProperties) : undefined}
         onClick={e => {
           e.stopPropagation();
           const target = e.target as HTMLElement;
@@ -2077,7 +2430,7 @@ function ChatModal({
                         <p className="hsk-cb-hello-ask">{t('nameStepAsk')}</p>
                       </>
                     ) : (
-                      <ChromeLoading />
+                      <ChromeLoading label={endonymFor(shopperLanguage)} />
                     )}
                   </div>
                 ) : awaitingEntityLang ? (
@@ -2091,30 +2444,32 @@ function ChatModal({
                         </p>
                       </>
                     )}
-                    <div className="hsk-cb-entlang-cards">
-                      <button
-                        type="button"
-                        className="hsk-cb-entlang-card"
-                        onClick={() => chooseEntityLang('original')}
-                        disabled={!entityPreview}
-                      >
-                        {chromeReady && <span className="hsk-cb-entlang-tag">{t('asWritten')}</span>}
-                        <EntityPreviewCard sample={entityPreview?.original} loading={!entityPreview} />
-                        {chromeReady && <span className="hsk-cb-entlang-note">{t('namesAsWritten')}</span>}
-                      </button>
-                      <button
-                        type="button"
-                        className="hsk-cb-entlang-card"
-                        onClick={() => chooseEntityLang('translated')}
-                        disabled={!entityPreview}
-                      >
-                        {chromeReady && (
-                          <span className="hsk-cb-entlang-tag">{tNode('inLanguage', { lang: shopperLanguage })}</span>
-                        )}
-                        <EntityPreviewCard sample={entityPreview?.translated} loading={!entityPreview} />
-                        {chromeReady && <span className="hsk-cb-entlang-note">{t('detailsTranslated')}</span>}
-                      </button>
-                    </div>
+                    {chromeReady && (
+                      <div className="hsk-cb-entlang-opts" role="radiogroup" aria-label={t('howShouldResultsLook')}>
+                        {(['translated', 'original'] as const).map(mode => (
+                          <button
+                            key={mode}
+                            type="button"
+                            role="radio"
+                            aria-checked={false}
+                            className="hsk-cb-entlang-opt"
+                            onClick={() => chooseEntityLang(mode)}
+                          >
+                            <span className="hsk-cb-entlang-radio" aria-hidden="true" />
+                            <span className="hsk-cb-entlang-opt-text">
+                              <span className="hsk-cb-entlang-opt-title">
+                                {mode === 'translated'
+                                  ? tNode('inLanguage', { lang: shopperLanguage })
+                                  : t('asWritten')}
+                              </span>
+                              <span className="hsk-cb-entlang-opt-note">
+                                {mode === 'translated' ? t('detailsTranslated') : t('namesAsWritten')}
+                              </span>
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ) : justCompleted ? (
                   <div className="hsk-cb-hello-wrap">
@@ -2257,6 +2612,17 @@ function ChatModal({
                                     <MarkdownBlock content={content} streaming={isLast && streaming} />
                                   </div>
                                 )}
+                                {content && enableAudioResponse !== false && !(isLast && streaming) && (
+                                  <button
+                                    type="button"
+                                    className={cn('hsk-cb-listen', speakingMsgIndex === idx && 'hsk-cb-listen--active')}
+                                    onClick={() => speakMessage(idx, content)}
+                                    aria-label={speakingMsgIndex === idx ? t('voiceModeExit') : t('voicePhaseSpeaking')}
+                                    title={speakingMsgIndex === idx ? t('voiceModeExit') : t('voicePhaseSpeaking')}
+                                  >
+                                    <SpeakerIcon active={speakingMsgIndex === idx} />
+                                  </button>
+                                )}
                               </>
                             );
                           })()}
@@ -2304,10 +2670,9 @@ function ChatModal({
                                 )}
                               </div>
                               <div className="hsk-cb-viz-disclaimer">
-                                {msg.visualizationType === 'video' || msg.visualization.includes('/videos/') ?
-                                  "AI-generated video makeover — colors, size and movement may differ from the real product." :
-                                  "AI-generated preview — colours, size and placement may differ from the real product."
-                                }
+                                {msg.visualizationType === 'video' || msg.visualization.includes('/videos/')
+                                  ? t('vizDisclaimerVideo')
+                                  : t('vizDisclaimerImage')}
                               </div>
                             </div>
                           )}
@@ -2431,19 +2796,24 @@ function ChatModal({
             {/* Resume affordance after a manual stop or a mid-answer interruption.
                 A stop before the first token (last message still the user's) resends
                 the question; with a partial answer it resumes into the same bubble. */}
-            {(stopped || interrupted) && !loading && !streaming && messages.length > 0 && (
-              <div className="hsk-cb-stopped">
+            {halted && messages.length > 0 && (
+              <div className={cn("hsk-cb-stopped", haltedEmpty && "hsk-cb-stopped--empty")}>
+                {haltedEmpty && (
+                  <span className="hsk-cb-stopped-dots" aria-hidden="true">
+                    <i /><i /><i />
+                  </span>
+                )}
                 <span className="hsk-cb-stopped-label">
-                  {stopped ? 'You stopped this response.' : 'This response was interrupted.'}
+                  {stopped ? t('stoppedByYou') : t('stoppedInterrupted')}
                 </span>
                 <button className="hsk-cb-continue" onClick={continueGenerating}>
                   <ContinueIcon />
-                  {messages[messages.length - 1]?.role === 'assistant' ? 'Continue generating' : 'Generate response'}
+                  {t(messages[messages.length - 1]?.role === 'assistant' ? 'continueGenerating' : 'generateResponse')}
                 </button>
               </div>
             )}
 
-            {error && <div className="hsk-cb-error">{getFriendlyError(error, t)}</div>}
+            {error && <div className="hsk-cb-error">{getFriendlyError({ code: errorCode ?? undefined, message: error }, t)}</div>}
 
             {/* Carry-your-items prompt: paste an existing kiku key, or mint a
                 new one (shown exactly once). No phone, no account. */}
@@ -2646,7 +3016,7 @@ function ChatModal({
                     ))}
                   </div>
                 )}
-                <div className="hsk-cb-input-box">
+                <div className={cn("hsk-cb-input-box", chromeLoading && "hsk-cb-input-box--waiting")}>
                   {/* Hidden file input */}
                   <input
                     ref={imageInputRef}
@@ -2668,6 +3038,17 @@ function ChatModal({
                       <PaperclipIcon />
                     </button>
                   )}
+                  {enableVoice && voice.supported && (
+                    <button
+                      className={cn("hsk-cb-voice-mode-btn", voiceMode === 'converse' && "hsk-cb-voice-mode-btn--active")}
+                      onClick={() => voiceMode === 'converse' ? stopVoice() : startVoice('converse')}
+                      disabled={loading || chromeLoading || voiceBlocked}
+                      aria-label={voiceMode === 'converse' ? t('voiceModeExit') : t('voiceModeStart')}
+                      title={t('voiceModeStart')}
+                    >
+                      <WaveformIcon active={voiceMode === 'converse'} />
+                    </button>
+                  )}
                   <div className="hsk-cb-field">
                     <textarea
                       ref={textareaRef}
@@ -2676,30 +3057,29 @@ function ChatModal({
                       onChange={handleInput}
                       onKeyDown={handleKeyDown}
                       placeholder={
-                        voiceState === 'listening' ? ''
-                        : voiceState === 'processing' ? t('voiceSending')
+                        voice.active && voicePhase === 'listening' ? ''
+                        : voicePhase === 'thinking' ? t('voiceSending')
                         : activePlaceholder
                       }
                       rows={1}
-                      disabled={loading}
-                      aria-label={voiceState === 'listening' ? t('voiceListening') : undefined}
+                      disabled={loading || chromeLoading}
+                      aria-label={voice.active ? t('voiceListening') : undefined}
                     />
-                    {voiceState === 'listening' && !input && <ListeningWave />}
+                    {voice.active && voicePhase === 'listening' && !input && <ListeningWave spectrumBins={voice.spectrumBins} micSpectrum={voice.micSpectrum} />}
                   </div>
-                  {/* Voice button — only shown if SpeechRecognition is supported and enabled */}
-                  {hasSpeechAPI && enableVoice && (
+                  {enableVoice && voice.supported && (
                     <button
                       className={cn(
                         "hsk-cb-mic-btn",
-                        voiceState === 'listening' && "hsk-cb-mic-btn--listening",
-                        voiceState === 'processing' && "hsk-cb-mic-btn--processing"
+                        voiceMode === 'dictate' && voicePhase === 'listening' && "hsk-cb-mic-btn--listening",
+                        voicePhase === 'thinking' && "hsk-cb-mic-btn--processing"
                       )}
-                      onClick={voiceState === 'idle' ? startVoice : stopVoice}
-                      disabled={loading}
-                      aria-label={voiceState === 'idle' ? 'Start voice input' : 'Stop recording'}
-                      title={voiceState === 'idle' ? 'Voice input' : 'Stop'}
+                      onClick={() => voiceMode === 'off' ? startVoice('dictate') : stopVoice()}
+                      disabled={loading || chromeLoading}
+                      aria-label={voiceMode === 'off' ? 'Start voice input' : 'Stop recording'}
+                      title={voiceMode === 'off' ? 'Voice input' : 'Stop'}
                     >
-                      {voiceState === 'listening' ? <MicOffIcon /> : <MicIcon />}
+                      {voiceMode === 'off' ? <MicIcon /> : <MicOffIcon />}
                     </button>
                   )}
                   {(loading || streaming) ? (
@@ -2715,7 +3095,7 @@ function ChatModal({
                     <button
                       className={cn("hsk-cb-send", classNames.sendButton)}
                       onClick={() => handleSend()}
-                      disabled={!input.trim() && attachments.length === 0}
+                      disabled={chromeLoading || (!input.trim() && attachments.length === 0)}
                       aria-label="Send message"
                     >
                       <ArrowUpIcon />
@@ -2723,7 +3103,11 @@ function ChatModal({
                   )}
                 </div>
               </div>
-              {voiceError && (
+              {voiceBlocked ? (
+                <div className="hsk-cb-voice-error" role="status">
+                  {t('errAccountRequired')}
+                </div>
+              ) : voiceError && (
                 <div className="hsk-cb-voice-error" role="status">
                   {t(voiceError as keyof typeof DEFAULT_UI_STRINGS)}
                 </div>
@@ -2732,6 +3116,119 @@ function ChatModal({
             </div>
 
         </div>{/* end .hsk-cb-main */}
+
+        {/* Hands-free conversation. The transcript stays behind it, so the
+            overlay is a mode of the same chat rather than a separate screen. */}
+        {voiceMode === 'converse' && (
+          <div className="hsk-voice-overlay" role="dialog" aria-label={t('voiceModeStart')}>
+            <button
+              className="hsk-voice-exit"
+              onClick={stopVoice}
+              aria-label={t('voiceModeExit')}
+              title={t('voiceModeExit')}
+            >
+              <CloseIcon />
+            </button>
+
+            <div className="hsk-voice-picker" role="radiogroup" aria-label={t('voicePickerLabel')}>
+              {LIVE_VOICES.map(v => (
+                <button
+                  key={v.name}
+                  type="button"
+                  role="radio"
+                  aria-checked={liveVoiceName === v.name}
+                  className={cn('hsk-voice-pill', liveVoiceName === v.name && 'hsk-voice-pill--on')}
+                  onClick={() => chooseVoice(v.name)}
+                >
+                  <span className={cn('hsk-voice-pill-dot', `hsk-voice-pill-dot--${v.gender}`)} aria-hidden="true" />
+                  {v.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Only while an allowance is actually running. A shopper with no
+                cap never sees a clock counting their conversation down. */}
+            {voiceSecondsLeft !== null && (
+              <div
+                className={cn('hsk-voice-allowance', voiceSecondsLeft <= 5 && 'hsk-voice-allowance--low')}
+                role="timer"
+                aria-live="off"
+              >
+                {Math.max(0, Math.ceil(voiceSecondsLeft))}s
+              </div>
+            )}
+
+            <div className="hsk-voice-stage">
+              <VoiceCanvas
+                className="hsk-voice-canvas"
+                phase={voicePhase}
+                level={live.micLevel}
+                spectrum={live.micSpectrum}
+                bins={live.spectrumBins}
+              />
+            </div>
+
+            {/* No phase label. The waveform already says whether anyone is
+                talking, and naming the state was only ever narrating what the
+                shopper can see. Announced for screen readers, not drawn. */}
+            <div className="hsk-voice-caption" aria-live="polite">
+              <span className="hsk-sr-only">
+                {voiceMuted ? t('voiceMuted')
+                  : voicePhase === 'speaking' ? t('voicePhaseSpeaking')
+                  : voicePhase === 'thinking' ? t('voicePhaseThinking')
+                  : t('voicePhaseListening')}
+              </span>
+              <span className="hsk-voice-heard">
+                {voiceMuted ? t('voiceMutedHint')
+                  : voice.interim ? voice.interim
+                  : voiceSpokenAnswer ? voiceSpokenAnswer
+                  : ''}
+              </span>
+            </div>
+
+            {/* What is being talked about. Hearing "the black sneakers are
+                3,500" and having nothing to look at is the whole reason voice
+                alone feels thin — these are the same entities the answer
+                referenced, not a fresh search. */}
+            {shownSources.length > 0 && (
+              <div className="hsk-voice-items">
+                {shownSources.slice(0, 4).map((src, i) => (
+                  <button
+                    key={src.id ?? i}
+                    type="button"
+                    className="hsk-voice-item"
+                    style={{ animationDelay: `${i * 70}ms` }}
+                    onClick={() => onSelectSource?.(src)}
+                  >
+                    {src.image
+                      ? <img src={src.image} alt="" className="hsk-voice-item-img" loading="lazy" />
+                      : <span className="hsk-voice-item-img hsk-voice-item-img--empty"><SparkleIcon /></span>}
+                    <span className="hsk-voice-item-name">{src.name}</span>
+                    {src.price && (
+                      <span className="hsk-voice-item-price">
+                        {src.currency ?? defaultCurrency}{' '}
+                        {parseFloat(String(src.price).replace(/[^0-9.]/g, '') || '0').toLocaleString()}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {voiceError && <div className="hsk-voice-error">{t(voiceError as keyof typeof DEFAULT_UI_STRINGS)}</div>}
+
+            <div className="hsk-voice-controls">
+              <button
+                className={cn('hsk-voice-control', voiceMuted && 'hsk-voice-control--muted')}
+                onClick={() => setVoiceMuted(m => !m)}
+                aria-label={voiceMuted ? t('voicePhaseListening') : t('voiceModeExit')}
+                title={voiceMuted ? t('voicePhaseListening') : t('voiceModeExit')}
+              >
+                {voiceMuted ? <MicOffIcon /> : <MicIcon />}
+              </button>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>
@@ -2757,6 +3254,9 @@ export function KikuButton({
   voiceLang,
   enableVision = false,
   visionCategoryHint,
+  enableAudioResponse,
+  ttsVoice,
+  autoSpeakResponses,
 }: KikuButtonProps) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -2826,6 +3326,9 @@ export function KikuButton({
           voiceLang={voiceLang}
           enableVision={enableVision}
           visionCategoryHint={visionCategoryHint}
+          enableAudioResponse={enableAudioResponse}
+          ttsVoice={ttsVoice}
+          autoSpeakResponses={autoSpeakResponses}
         />,
         document.body
       )}

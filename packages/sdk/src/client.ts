@@ -1,5 +1,5 @@
 import { AkropolysConfig, ContentIngestPayload, ChatAttachment, CaptureTarget } from './types';
-import { AkropolysAPI, UIStrings } from './api';
+import { AkropolysAPI, UIStrings, ScriptFont } from './api';
 import { KikuStream } from './stream';
 import { initContentIndexer } from './content/contentIndexer';
 import { stableStringify } from './utils/stableStringify';
@@ -35,6 +35,15 @@ function getEnvVar(key: string): string | undefined {
     }
   }
   return undefined;
+}
+
+// Matches what fetch() and other abortable web APIs reject with, so callers can
+// use the standard `err.name === 'AbortError'` check.
+function abortError(): Error {
+  if (typeof DOMException !== 'undefined') return new DOMException('Aborted', 'AbortError');
+  const e = new Error('Aborted');
+  e.name = 'AbortError';
+  return e;
 }
 
 function generateUUID(): string {
@@ -116,22 +125,31 @@ export class AkropolysClient {
       params: { q: string },
       options?: { signal?: AbortSignal; onToken?: (token: string) => void }
     ): Promise<void> => {
+      const signal = options?.signal;
+      // An already-aborted signal must not open a stream at all.
+      if (signal?.aborted) throw abortError();
+
       const stream = this.chat(params.q);
-      if (options?.signal) {
-        options.signal.addEventListener('abort', () => {
-          stream.destroy();
-        });
-      }
       return new Promise<void>((resolve, reject) => {
+        // destroy() suppresses both 'done' and 'error' on purpose, so a
+        // superseded stream cannot clobber the state of the one replacing it.
+        // That left this promise with nothing to settle it: an aborted query
+        // hung forever, holding its closure. Abort has to settle it here.
+        const onAbort = () => {
+          stream.destroy();
+          settle(() => reject(abortError()));
+        };
+        const settle = (finish: () => void) => {
+          signal?.removeEventListener('abort', onAbort);
+          finish();
+        };
+        signal?.addEventListener('abort', onAbort, { once: true });
+
         stream.on('token', (token: string) => {
           options?.onToken?.(token);
         });
-        stream.on('error', (err: any) => {
-          reject(err);
-        });
-        stream.on('done', () => {
-          resolve();
-        });
+        stream.on('error', (err: any) => settle(() => reject(err)));
+        stream.on('done', () => settle(() => resolve()));
       });
     }
   };
@@ -549,12 +567,20 @@ export class AkropolysClient {
   }
 
   /**
+   * Spoken audio for an assistant answer, synthesized server-side so no speech
+   * key ever reaches the page. Defaults to the shopper's chosen language.
+   */
+  synthesizeSpeech(text: string, voice?: string, language?: string, signal?: AbortSignal) {
+    return this.api.synthesizeSpeech(text, voice, language ?? this.getShopperLanguage(), signal);
+  }
+
+  /**
    * Translated widget chrome for the shopper's language, cached in
    * localStorage so it's fetched once per language per browser rather than
    * once per session. Bump CHROME_STRINGS_CACHE_VERSION if the defaults dict
    * changes shape, so stale cached keys can't linger.
    */
-  private static CHROME_STRINGS_CACHE_VERSION = 2;
+  private static CHROME_STRINGS_CACHE_VERSION = 3;
 
   async getUIStrings(language: string, defaults: Record<string, string>): Promise<UIStrings> {
     // The server owns the canonical dictionary; `defaults` stays only as the
@@ -563,7 +589,7 @@ export class AkropolysClient {
     const fingerprint = AkropolysClient.hashStrings(defaults);
     const cacheKey = `akropolys_ui_strings_v${AkropolysClient.CHROME_STRINGS_CACHE_VERSION}_${language.toLowerCase().trim()}_${fingerprint}`;
 
-    const english: UIStrings = { strings: {}, complete: false, dir: 'ltr', bcp47: '' };
+    const english: UIStrings = { strings: {}, complete: false, dir: 'ltr', bcp47: '', font: null };
 
     if (typeof window !== 'undefined') {
       try {
@@ -576,6 +602,7 @@ export class AkropolysClient {
               complete: true,
               dir: cached.dir === 'rtl' ? 'rtl' : 'ltr',
               bcp47: typeof cached.bcp47 === 'string' ? cached.bcp47 : '',
+              font: cached.font?.family && cached.font?.faces?.length ? cached.font : null,
             };
           }
           localStorage.removeItem(cacheKey);
@@ -600,7 +627,7 @@ export class AkropolysClient {
           const k = localStorage.key(i);
           if (k && k.startsWith(stale) && k !== cacheKey) localStorage.removeItem(k);
         }
-        localStorage.setItem(cacheKey, JSON.stringify({ strings: translated, dir: result.dir, bcp47: result.bcp47 }));
+        localStorage.setItem(cacheKey, JSON.stringify({ strings: translated, dir: result.dir, bcp47: result.bcp47, font: result.font }));
       } catch { /* ignore */ }
     }
     return result;

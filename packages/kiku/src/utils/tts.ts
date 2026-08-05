@@ -20,6 +20,7 @@ export interface SpeakOptions {
 
 let ctx: AudioContext | null = null;
 let analyser: AnalyserNode | null = null;
+let duckGain: GainNode | null = null;
 let timeData: Uint8Array | null = null;
 let generation = 0;
 let speaking = false;
@@ -35,10 +36,37 @@ function audio(): { ctx: AudioContext; analyser: AnalyserNode } | null {
     analyser = ctx!.createAnalyser();
     analyser.fftSize = 1024;
     analyser.smoothingTimeConstant = 0.25;
-    analyser.connect(ctx!.destination);
+    // Gain sits AFTER the analyser, so speechLevel() keeps reporting the true
+    // output level while ducked. The echo gate subtracts what the speakers are
+    // actually emitting, and a ducked signal leaks proportionally less — if the
+    // analyser read post-gain the two would cancel and the gate would go blind
+    // at exactly the moment it is being asked to adjudicate an interruption.
+    duckGain = ctx!.createGain();
+    duckGain.gain.value = 1;
+    analyser.connect(duckGain);
+    duckGain.connect(ctx!.destination);
     timeData = new Uint8Array(analyser.fftSize);
   }
   return { ctx: ctx!, analyser: analyser! };
+}
+
+/**
+ * Rides the output gain to `level` over `fadeMs`.
+ *
+ * A step change in gain is audible as a click and reads as a fault; the ear is
+ * far more forgiving of a ramp. Ramping is also what makes a provisional duck
+ * affordable — restoring after a false alarm is a fade the shopper barely
+ * registers rather than a lurch that announces the mistake.
+ */
+export function duckSpeech(level: number, fadeMs = 130): void {
+  const g = duckGain;
+  if (!g || !ctx) return;
+  const now = ctx.currentTime;
+  // From the value it actually holds right now, not from whatever it was last
+  // told to reach — cancelling mid-ramp otherwise snaps to the old target.
+  g.gain.cancelScheduledValues(now);
+  g.gain.setValueAtTime(g.gain.value, now);
+  g.gain.linearRampToValueAtTime(Math.max(0, Math.min(1, level)), now + fadeMs / 1000);
 }
 
 /** Live output amplitude, 0..1 — drives the voice-mode visual. */
@@ -91,6 +119,12 @@ export function isSpeaking(): boolean {
 export function stopSpeech() {
   generation++;
   speaking = false;
+  // A duck left in place would silently mute the START of the next answer,
+  // which looks exactly like TTS having failed.
+  if (duckGain && ctx) {
+    duckGain.gain.cancelScheduledValues(ctx.currentTime);
+    duckGain.gain.value = 1;
+  }
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
     try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
   }
