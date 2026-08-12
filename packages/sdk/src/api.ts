@@ -36,7 +36,7 @@ export interface ScriptFont {
    * latin and latin-ext separately. The unicode-range is what lets the browser
    * skip the file this shopper will never render a glyph from.
    */
-  faces: { url: string; unicodeRange: string }[];
+  faces: { url: string; unicodeRange: string; weight: string }[];
 }
 
 const MAX_RETRIES = 3;
@@ -136,7 +136,7 @@ export class AkropolysAPI {
 
     const faces: ScriptFont['faces'] = [];
     for (const raw of f.faces) {
-      const fc = raw as { url?: unknown; unicodeRange?: unknown };
+      const fc = raw as { url?: unknown; unicodeRange?: unknown; weight?: unknown };
       if (typeof fc?.url !== 'string' || !fc.url.startsWith('/')) continue;
       try {
         // Concatenated, NOT resolved against the base. apiUrl carries a path
@@ -148,6 +148,8 @@ export class AkropolysAPI {
         faces.push({
           url: url.href,
           unicodeRange: typeof fc.unicodeRange === 'string' ? fc.unicodeRange : '',
+          // A server that predates per-face weights served one static cut.
+          weight: typeof fc.weight === 'string' && fc.weight ? fc.weight : '400',
         });
       } catch { /* skip */ }
     }
@@ -372,8 +374,12 @@ export class AkropolysAPI {
     const cart = this.getCart?.();
     if (Array.isArray(cart) && cart.length > 0) body.cart = cart.slice(0, 50);
     if (attachments && attachments.length > 0) {
-      body.attachments = attachments;
+      // preview is the shopper's own marked copy, for their bubble only — sending it would upload the scene twice.
+      body.attachments = attachments.map(({ preview, ...a }: any) => a);
       if (attachments.some((a: any) => a.annotated)) body.imageAnnotated = true;
+      if (attachments.some((a: any) => a.instructed)) body.imageInstructed = true;
+      const marks = attachments.flatMap((a: any) => (Array.isArray(a.marks) ? a.marks : []));
+      if (marks.length > 0) body.imageMarks = marks;
     }
     if (forcedIntent)                          body.forcedIntent = forcedIntent;
     if (captureTargets && captureTargets.length > 0) body.captureTargets = captureTargets;

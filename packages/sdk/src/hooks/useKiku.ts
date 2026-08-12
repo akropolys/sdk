@@ -24,12 +24,46 @@ interface UseKikuReturn {
   lastIntent: string | null;
   allowedActions: string[] | null;
   send: (query: string, displayQuery?: string, attachments?: ChatAttachment[], forcedIntent?: string, captureTargets?: CaptureTarget[]) => Promise<void>;
+  /** The message waiting for the current turn to finish, or null. Deliberately
+   *  kept out of `messages` until it is dispatched — every stream write targets
+   *  the last message and expects it to be the assistant's. */
+  queuedMessage: ChatMessage | null;
+  /** Interrupts the current turn and dispatches the queued message right away. */
+  sendQueuedNow: () => void;
+  /**
+   * Records a spoken exchange in the transcript. Voice runs its own session
+   * with its own context, so nothing said aloud reached the text history —
+   * a typed follow-up after a call could not resolve so much as a pronoun.
+   */
+  appendSpokenExchange: (heard: string, said: string) => void;
   stop: () => void;
   stopped: boolean;
   /** true when the stream died mid-answer (network, provider) — a partial answer is on screen and continueGenerating can resume it */
   interrupted: boolean;
   continueGenerating: () => void;
   reset: () => void;
+}
+
+// A send() that arrived while the previous turn was still in flight, held
+// until that turn settles.
+interface PendingSend {
+  query: string;
+  displayQuery?: string;
+  attachments?: ChatAttachment[];
+  forcedIntent?: string;
+  captureTargets?: CaptureTarget[];
+}
+
+interface SpokenExchange {
+  heard: string;
+  said: string;
+}
+
+function appendSpoken(prev: ChatMessage[], heard: string, said: string): ChatMessage[] {
+  const next = [...prev];
+  if (heard) next.push({ role: 'user', content: heard, spoken: true });
+  if (said) next.push({ role: 'assistant', content: said, spoken: true });
+  return next;
 }
 
 const CONTINUE_QUERY =
@@ -78,6 +112,23 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
   // server each turn. null = not yet known (before the first reply).
   const [allowedActions, setAllowedActions] = useState<string[] | null>(null);
   const activeStreamRef = useRef<any | null>(null);
+  // A second send() while a turn is in flight queues here instead of racing
+  // the stream that's already running — the two were sharing one `loading`
+  // flag that goes false on the first token, long before the turn is done.
+  const pendingRef = useRef<PendingSend | null>(null);
+  // Held beside the transcript, not inside it: consumeStream writes every
+  // token, thought and status into messages[length-1] on the assumption that
+  // it is the assistant's turn. A queued user bubble sitting there instead
+  // silently swallowed the entire answer.
+  const [queuedMessage, setQueuedMessage] = useState<ChatMessage | null>(null);
+  // Spoken turns that landed while a text turn was streaming, waiting for it to
+  // settle. The voice socket fires outside React's render, so the flags it
+  // checks have to be refs — a closure over `loading` would be a stale read.
+  const spokenQueueRef = useRef<SpokenExchange[]>([]);
+  const loadingRef = useRef(false);
+  const streamingRef = useRef(false);
+  loadingRef.current = loading;
+  streamingRef.current = streaming;
 
   // Streaming pace buffer — decouples on-screen typing speed from how fast (or
   // bursty) the network delivers tokens, so a fast backend still "types" smoothly.
@@ -300,6 +351,18 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
       });
     });
 
+    stream.on('stale_notice', (items: any[]) => {
+      ensureAssistantMessage();
+      setMessages(prev => {
+        const next = [...prev];
+        const last = next[next.length - 1];
+        if (last?.role === 'assistant') {
+          next[next.length - 1] = { ...last, staleNotices: items };
+        }
+        return next;
+      });
+    });
+
     stream.on('thinking', (text: string) => {
       ensureAssistantMessage();
       setMessages(prev => {
@@ -441,24 +504,17 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     });
   }, [client, startPacing, stopPacing]);
 
-  const send = useCallback(async (query: string, displayQuery?: string, attachments?: ChatAttachment[], forcedIntent?: string, captureTargets?: CaptureTarget[]) => {
-    if (!query.trim() || loading) return;
-
-    // Abort previous stream if any
-    activeStreamRef.current?.destroy();
-
-    // Optimistically add user message and assistant message container
-    const userMsg: ChatMessage = {
-      role: 'user',
-      content: displayQuery ?? query,
-      images: attachments?.filter(a => a.type === 'image').map(a => a.data),
-    };
-    const assistantMsg: ChatMessage = {
-      role: 'assistant',
-      content: '',
-      thinking: '',
-    };
-    setMessages(prev => [...prev, userMsg, assistantMsg]);
+  // Starts a turn against the given history and wires its stream. Shared by an
+  // immediate send and a queued message being drained once the turn ahead of
+  // it settles — both need the exact same state resets and stream wiring.
+  const beginTurn = useCallback((
+    history: { role: 'user' | 'assistant'; content: string }[],
+    query: string,
+    attachments?: ChatAttachment[],
+    forcedIntent?: string,
+    captureTargets?: CaptureTarget[],
+  ) => {
+    setMessages(prev => [...prev, { role: 'assistant', content: '', thinking: '' }]);
     setLoading(true);
     setStreaming(true);
     setStopped(false);
@@ -472,8 +528,6 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     displayedLenRef.current = 0;
 
     try {
-      // History excludes the user message and assistant placeholder we just added
-      const history = messages.map(m => ({ role: m.role, content: m.content }));
       const stream = client.chat(query, history, attachments, forcedIntent, captureTargets);
       activeStreamRef.current = stream;
       consumeStream(stream, false, '');
@@ -481,10 +535,72 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
       setLoading(false);
       setStreaming(false);
       setError(err?.message ?? 'Chat request failed');
-      setMessages(prev => prev.slice(0, -2));
+      setMessages(prev => prev.slice(0, -1)); // only the assistant placeholder is ours to remove here
       onErrorRef.current?.(err);
     }
-  }, [client, messages, loading, consumeStream]);
+  }, [client, consumeStream]);
+
+  const send = useCallback(async (query: string, displayQuery?: string, attachments?: ChatAttachment[], forcedIntent?: string, captureTargets?: CaptureTarget[]) => {
+    if (!query.trim()) return;
+
+    const userMsg: ChatMessage = {
+      role: 'user',
+      content: displayQuery ?? query,
+      images: attachments?.filter(a => a.type === 'image').map(a => a.preview || a.data),
+    };
+
+    // A turn is already running: queue behind it rather than racing it — a
+    // second send() used to arrive while `loading` had already gone false
+    // (it flips on the first token, well before the answer finishes) and
+    // `destroy()` the stream still typing out the first answer.
+    if (loading || streaming) {
+      if (pendingRef.current) return; // one queued message at a time
+      pendingRef.current = { query, displayQuery, attachments, forcedIntent, captureTargets };
+      setQueuedMessage({ ...userMsg, queued: true });
+      return;
+    }
+
+    setMessages(prev => [...prev, userMsg]);
+    const history = messages.map(m => ({ role: m.role, content: m.content }));
+    beginTurn(history, query, attachments, forcedIntent, captureTargets);
+  }, [messages, loading, streaming, beginTurn]);
+
+  // Drains the queued message the instant the turn ahead of it settles,
+  // whichever way it settles (finished, errored, or force-interrupted by
+  // sendQueuedNow below) — one path for all three instead of three copies.
+  useEffect(() => {
+    if (loading || streaming) return;
+
+    // Spoken turns first: they happened while the text turn was still running,
+    // so they belong ahead of the queued message both in the transcript and in
+    // the history that message is answered against.
+    let settled = messages;
+    if (spokenQueueRef.current.length > 0) {
+      const spoken = spokenQueueRef.current;
+      spokenQueueRef.current = [];
+      for (const ex of spoken) settled = appendSpoken(settled, ex.heard, ex.said);
+      setMessages(prev => {
+        let next = prev;
+        for (const ex of spoken) next = appendSpoken(next, ex.heard, ex.said);
+        return next;
+      });
+    }
+
+    if (!pendingRef.current) return;
+    const pending = pendingRef.current;
+    pendingRef.current = null;
+    setQueuedMessage(null);
+    // History is the transcript as it stands, before this message joins it —
+    // the same contract send() uses, so the queued turn sees the answer it
+    // was waiting for.
+    const history = settled.map(m => ({ role: m.role, content: m.content }));
+    setMessages(prev => [...prev, {
+      role: 'user',
+      content: pending.displayQuery ?? pending.query,
+      images: pending.attachments?.filter(a => a.type === 'image').map(a => a.preview || a.data),
+    }]);
+    beginTurn(history, pending.query, pending.attachments, pending.forcedIntent, pending.captureTargets);
+  }, [loading, streaming, messages, beginTurn]);
 
   // Resume a stopped/interrupted answer. With a partial answer on screen it
   // appends into the same assistant bubble; stopped before any answer arrived,
@@ -526,6 +642,9 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     streamDoneRef.current = true;
     targetTextRef.current = '';
     displayedLenRef.current = 0;
+    pendingRef.current = null;
+    spokenQueueRef.current = [];
+    setQueuedMessage(null);
     setMessages([]);
     setSources([]);
     setReferencedIds([]);
@@ -563,11 +682,35 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     setMessages(prev => prev.map(m => m.visualizing ? { ...m, visualizing: false } : m));
   }, [stopPacing]);
 
+  // Interrupts the running turn so the queued message goes out now instead of
+  // waiting for the answer ahead of it to finish typing. stop() flips loading
+  // and streaming false, which the drain effect above is watching for — this
+  // just triggers that same path early rather than duplicating it.
+  const sendQueuedNow = useCallback(() => {
+    if (!pendingRef.current) return;
+    stop();
+  }, [stop]);
+
+  // Held back while a text turn is streaming, for the same reason a second
+  // send() is: consumeStream writes every token into messages[length-1] on the
+  // assumption that it is the assistant's turn, and appending here mid-stream
+  // moves that slot — the rest of the typed answer lands in the spoken bubble.
+  const appendSpokenExchange = useCallback((heard: string, said: string) => {
+    const h = heard.trim();
+    const s = said.trim();
+    if (!h && !s) return;
+    if (loadingRef.current || streamingRef.current) {
+      spokenQueueRef.current.push({ heard: h, said: s });
+      return;
+    }
+    setMessages(prev => appendSpoken(prev, h, s));
+  }, []);
+
   const resolvedSources = useMemo(
     () => enrichSources(sources, client?.display),
     [sources, client?.display]
   );
 
-  return { messages, sources: resolvedSources, referencedIds, loading, streaming, error, errorCode, lastAction, lastIntent, allowedActions, send, stop, stopped, interrupted, continueGenerating, reset };
+  return { messages, sources: resolvedSources, referencedIds, loading, streaming, error, errorCode, lastAction, lastIntent, allowedActions, send, queuedMessage, sendQueuedNow, appendSpokenExchange, stop, stopped, interrupted, continueGenerating, reset };
 }
 

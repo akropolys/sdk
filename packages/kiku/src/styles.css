@@ -70,7 +70,7 @@
   --hsk-bg: var(--chat-bg-color, #ffffff);
   --hsk-text: var(--chat-text-color, #1f1f1f);
   --hsk-primary: var(--chat-primary-color, #ff6a33);
-  --hsk-font: var(--chat-font-family);
+  --hsk-font: var(--chat-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif);
   --hsk-font-size: var(--chat-font-size, 16px);
 
   display: flex;
@@ -78,6 +78,10 @@
   height: 100%;
   min-height: 320px;
   font-family: var(--hsk-font);
+  /* Host pages set these on body and the widget inherited them. */
+  letter-spacing: normal;
+  word-spacing: normal;
+  text-transform: none;
   background: var(--hsk-bg);
   border: 1px solid #f1f3f4;
   border-radius: var(--hsk-border-radius, 0px);
@@ -652,6 +656,20 @@
 
 .hsk-cb-overlay {
   --hsk-primary: var(--chat-primary-color, #ff6a33);
+  /* Only .hsk-chat-widget declared this, so inside the modal every
+     `font-family: var(--hsk-font)` was invalid at computed-value time and
+     quietly fell through to inheritance — meaning the panel rendered in
+     whatever face the merchant's page happened to use. A UI stack has to be
+     declared here too, or the widget has no typography of its own. */
+  --hsk-font: var(--chat-font-family, ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif);
+  /* Typography inherits, so the merchant's own tracking reshaped our text the
+     same way their font family did. Reset it here and let the widget's own
+     rules opt back in where they mean to. */
+  letter-spacing: normal;
+  word-spacing: normal;
+  font-kerning: normal;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   --hsk-font-size: var(--hsk-desktop-font-size, 15px);
   --hsk-mobile-font-size: 13.5px;
   position: fixed !important;
@@ -680,7 +698,10 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  max-width: 960px;
+  /* The widest bubble is 560px, so a 960px panel spent its extra 400px on
+     empty gutter — the conversation drifted to one edge of a mostly blank
+     column. Sized to the content it actually holds. */
+  max-width: 720px;
   width: 100%;
   margin: 0 auto;
   animation: hsk-panel-in .28s cubic-bezier(.34,1.2,.64,1) both;
@@ -717,14 +738,6 @@
   gap: 10px;
 }
 
-.hsk-cb-topbar-icon {
-  font-size: 22px;
-  color: var(--hsk-primary);
-  line-height: 1;
-  display: flex;
-  align-items: center;
-}
-
 .hsk-cb-topbar-title {
   font-size: 16px;
   font-weight: 500;
@@ -744,12 +757,15 @@
   gap: 8px;
 }
 
+/* Chrome controls keep their own radius: --hsk-border-radius tunes content
+   surfaces, and an integrator choosing square cards did not ask for the close
+   button to become a hard-edged box. */
 .hsk-cb-topbar-btn {
   height: 34px;
   padding: 0 14px;
-  border-radius: var(--hsk-border-radius, 0px);
-  border: 1px solid var(--hsk-chat-divide, rgba(0,0,0,.1));
-  background: none;
+  border-radius: var(--hsk-control-radius, 999px);
+  border: 1px solid transparent;
+  background: var(--hsk-chat-subtle, rgba(0,0,0,.045));
   color: var(--hsk-chat-muted, #5f6368);
   font-size: 12px;
   font-weight: 500;
@@ -759,15 +775,15 @@
 }
 
 .hsk-cb-topbar-btn:hover {
-  border-color: var(--hsk-primary);
+  background: color-mix(in srgb, var(--hsk-primary) 12%, transparent);
   color: var(--hsk-primary);
 }
 
 .hsk-cb-close {
   width: 34px; height: 34px;
-  border-radius: var(--hsk-border-radius, 0px);
-  border: 1px solid var(--hsk-chat-divide, rgba(0,0,0,.1));
-  background: none;
+  border-radius: var(--hsk-control-radius, 999px);
+  border: 1px solid transparent;
+  background: var(--hsk-chat-subtle, rgba(0,0,0,.045));
   color: var(--hsk-chat-muted, #5f6368);
   cursor: pointer;
   font-size: 20px;
@@ -778,7 +794,10 @@
   line-height: 1;
 }
 
-.hsk-cb-close:hover { border-color: var(--hsk-primary); color: var(--hsk-primary); }
+.hsk-cb-close:hover {
+  background: color-mix(in srgb, var(--hsk-primary) 12%, transparent);
+  color: var(--hsk-primary);
+}
 
 .hsk-cb-msgs {
   flex: 1 1 auto;
@@ -800,8 +819,12 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  scrollbar-width: thin;
-  scrollbar-color: var(--hsk-chat-divide, rgba(0,0,0,.1)) transparent;
+  /* A visible track reserves its own width on Windows/Chrome, so the instant
+     a conversation grows tall enough to scroll, every bubble shifts a few
+     pixels left. Hidden outright; .hsk-cb-jump-bottom is the replacement
+     affordance for "there's more below" instead of a track thumb. */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 /* While the list is in motion, cards sliding under a stationary cursor would
@@ -1040,17 +1063,32 @@
   margin-right: auto;
 }
 
-.hsk-cb-panel[dir="rtl"] .hsk-cb-user-bubble {
-  border-radius: 20px 20px 20px 4px;
-}
-
-.hsk-cb-panel[dir="rtl"] .hsk-cb-ai-text {
-  border-radius: 20px 20px 4px 20px;
-}
+/* No RTL radius override. These used to square the corner the old notch-style
+   tail attached to; against the cutout tail that 4px corner pulls the bubble's
+   edge inward far enough for the cutout to swallow the tail's crescent whole,
+   so RTL rendered a plain rounded rectangle with no tail at all. The corners
+   are symmetric now and the ::before/::after mirroring below does the work. */
 
 .hsk-cb-panel[dir="rtl"] .hsk-cb-user-imgs {
   margin-left: 0;
   margin-right: auto;
+}
+
+/* `overflow-wrap: anywhere` breaks at any glyph, which in Arabic script lands
+   inside a connected cluster and severs the ligature — the same failure the SSE
+   token space caused. Break only when a word genuinely cannot fit, and drop the
+   negative tracking, which crowds joined forms. */
+.hsk-cb-panel[dir="rtl"] .hsk-cb-user-bubble,
+.hsk-cb-panel[dir="rtl"] .hsk-cb-ai-text {
+  word-break: normal;
+  overflow-wrap: break-word;
+  letter-spacing: normal;
+}
+
+/* 1.15 clipped Persian ascenders and below-dots; the nonlatin rule skips this one. */
+.hsk-cb-panel[dir="rtl"] .hsk-cb-hello {
+  line-height: 1.6;
+  letter-spacing: normal;
 }
 
 /* Tooltips and the @kiku picker anchor off the left edge in LTR. */
@@ -1301,6 +1339,36 @@
   animation: hsk-msg-in .22s ease-out both;
 }
 
+/* Spoken, not typed — transcription can be wrong, and the shopper should know
+   which words are theirs verbatim and which were merely heard.
+   Taken out of flow and hung outside the leading edge: inline it pushed the
+   line box taller and every spoken bubble grew. Leading edge, so it never
+   collides with the tail on the trailing one, and it mirrors in RTL. */
+.hsk-cb-spoken-mark {
+  position: absolute;
+  top: 50%;
+  margin-top: -5px;
+  inset-inline-start: -17px;
+  opacity: .4;
+  pointer-events: none;
+}
+
+/* Consecutive bubbles from the same sender are one utterance broken in two,
+   not two turns: iMessage sets them a couple of pixels apart. The default
+   16px group padding either side plus the 20px bubble margin put 52px
+   between them, which reads as an answer that never arrived. */
+.hsk-cb-msg-group--run-mid {
+  padding-bottom: 0;
+}
+
+.hsk-cb-msg-group--run-mid .hsk-cb-user-msg {
+  margin-bottom: 0;
+}
+
+.hsk-cb-msg-group--run-cont {
+  padding-top: 2px;
+}
+
 .hsk-cb-msg-group:last-child { border-bottom: none; }
 
 @keyframes hsk-msg-in {
@@ -1357,42 +1425,47 @@
   font-weight: 500;
   word-break: break-word;
   overflow-wrap: anywhere;
-  box-shadow: 0 4px 16px -3px rgba(0, 122, 255, 0.38);
   letter-spacing: -0.01em;
 }
 
-/* Authentic iMessage speech bubble tail (Right / Sent).
-   Geometry: 20×20px box, right: -7px. At bubble exit (x=13), top is y=5.5, bottom is y=18 (12.5px thick base).
-   Outer curve sweeps smoothly out to tip (20,20). Inner curve scoops gracefully back to (0,14). */
-.hsk-cb-user-bubble::after {
+/* iMessage's own construction, not a drawn spike: the tail is two
+   pseudo-elements — a coloured curl (::before) and a same-size-as-panel
+   cutout (::after) layered on top of it — rather than one traced shape.
+   That is why the corner reads as continuous instead of welded-on. */
+.hsk-cb-user-bubble--tail::before,
+.hsk-cb-user-bubble--tail::after {
   content: '';
   position: absolute;
-  z-index: 1;
-  bottom: 0px;
+  bottom: 0;
+  height: 25px;
+}
+
+.hsk-cb-user-bubble--tail::before {
   right: -7px;
   width: 20px;
-  height: 20px;
   background: var(--hsk-user-bubble-bg, #007aff);
-  -webkit-mask-image: var(--hsk-tail-mask);
-  mask-image: var(--hsk-tail-mask);
-  -webkit-mask-size: 100% 100%;
-  mask-size: 100% 100%;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
+  border-bottom-left-radius: 16px 14px;
 }
 
-.hsk-cb-user-bubble {
-  --hsk-tail-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M0,0 C8,0 15,4 20,20 C16,19 11,17 0,14 Z' fill='%23000'/%3E%3C/svg%3E");
+.hsk-cb-user-bubble--tail::after {
+  right: -26px;
+  width: 26px;
+  background: var(--hsk-chat-bg, #ffffff);
+  border-bottom-left-radius: 10px;
 }
 
-.hsk-cb-panel[dir="rtl"] .hsk-cb-user-bubble::after {
+.hsk-cb-panel[dir="rtl"] .hsk-cb-user-bubble--tail::before {
   right: auto;
   left: -7px;
-  transform: scaleX(-1);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 16px 14px;
 }
 
-.hsk-cb-user-bubble--grouped::after {
-  content: none;
+.hsk-cb-panel[dir="rtl"] .hsk-cb-user-bubble--tail::after {
+  right: auto;
+  left: -26px;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 10px;
 }
 
 
@@ -1416,10 +1489,20 @@
   margin-top: -2px;
 }
 
-.hsk-cb-ai-icon .hsk-cb-thinking-icon,
-.hsk-cb-ai-icon svg {
+/* The rocket sizes itself from its `size` prop — the canvas backing store has
+   to match, so it is excluded from this blanket override. */
+.hsk-cb-ai-icon > svg {
   width: 30px !important;
   height: 30px !important;
+}
+
+/* The settled mark matches the rocket's box exactly. Without this it inherits
+   the 30px clamp above and the glyph drops from ~31px to ~23px the moment the
+   answer finishes, which reads as the icon shrinking. Higher specificity than
+   the rule above, so it wins despite both being !important. */
+.hsk-cb-ai-icon > .hsk-cb-ai-mark {
+  width: 40px !important;
+  height: 40px !important;
 }
 
 .hsk-cb-ai-body { flex: 1; min-width: 0; }
@@ -1437,8 +1520,7 @@
   font-family: var(--hsk-font);
   line-height: 1.55;
   color: var(--hsk-chat-text, #111827);
-  background: var(--hsk-chat-ai-bg, #f3f4f6);
-  border: 1px solid var(--hsk-chat-ai-border, rgba(0, 0, 0, 0.05));
+  background: var(--hsk-chat-ai-bg, #eeeef0);
   padding: 14px 18px;
   border-radius: 20px;
   position: relative;
@@ -1446,39 +1528,50 @@
   /* Assistant prose gets more room than the shopper's short asks, but still a
      readable column (~65ch at this size), not the whole panel. */
   max-width: min(88%, 560px);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
   word-break: break-word;
   overflow-wrap: anywhere;
   margin-top: 4px;
 }
 
-/* Assistant tail — authentic iMessage shape (Left / Received), mirrored. */
+/* The same construction as the shopper's bubble, mirrored: a coloured curl
+   plus a panel-coloured cutout. It was still using the traced-spike mask the
+   sent side has since dropped, which is why the two tails did not match.
+   No border and no shadow here either — a border cannot follow a cutout tail,
+   and an iMessage received bubble carries neither. */
+.hsk-cb-ai-text:not(:has(~ .hsk-cb-ai-text))::before,
 .hsk-cb-ai-text:not(:has(~ .hsk-cb-ai-text))::after {
   content: '';
   position: absolute;
-  z-index: 1;
-  bottom: 0px;
-  left: -7px;
-  width: 20px;
-  height: 20px;
-  background: var(--hsk-chat-ai-bg, #f3f4f6);
-  -webkit-mask-image: var(--hsk-tail-mask);
-  mask-image: var(--hsk-tail-mask);
-  -webkit-mask-size: 100% 100%;
-  mask-size: 100% 100%;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  transform: scaleX(-1);
+  bottom: 0;
+  height: 25px;
 }
 
-.hsk-cb-ai-text:not(:has(~ .hsk-cb-ai-text)) {
-  --hsk-tail-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M0,0 C8,0 15,4 20,20 C16,19 11,17 0,14 Z' fill='%23000'/%3E%3C/svg%3E");
+.hsk-cb-ai-text:not(:has(~ .hsk-cb-ai-text))::before {
+  left: -7px;
+  width: 20px;
+  background: var(--hsk-chat-ai-bg, #eeeef0);
+  border-bottom-right-radius: 16px 14px;
+}
+
+.hsk-cb-ai-text:not(:has(~ .hsk-cb-ai-text))::after {
+  left: -26px;
+  width: 26px;
+  background: var(--hsk-chat-bg, #ffffff);
+  border-bottom-right-radius: 10px;
+}
+
+.hsk-cb-panel[dir="rtl"] .hsk-cb-ai-text:not(:has(~ .hsk-cb-ai-text))::before {
+  left: auto;
+  right: -7px;
+  border-bottom-right-radius: 0;
+  border-bottom-left-radius: 16px 14px;
 }
 
 .hsk-cb-panel[dir="rtl"] .hsk-cb-ai-text:not(:has(~ .hsk-cb-ai-text))::after {
   left: auto;
-  right: -7px;
-  transform: none;
+  right: -26px;
+  border-bottom-right-radius: 0;
+  border-bottom-left-radius: 10px;
 }
 
 
@@ -1496,15 +1589,386 @@
   to { opacity: 1; }
 }
 
+/* Waiting behind the turn ahead of it — not sent yet, so it reads as held
+   back rather than delivered. transform/opacity only, no layout properties:
+   the same rule the send-in and voice-canvas animations already follow. */
+.hsk-cb-user-bubble--queued {
+  opacity: .55;
+}
+
+.hsk-cb-queued-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  line-height: 1;
+  color: var(--hsk-chat-muted, #8a8f98);
+  padding: 4px 0 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--hsk-font);
+  animation: hsk-sent-in 0.2s ease-out both;
+}
+
+.hsk-cb-queued-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: currentColor;
+  animation: hsk-queued-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes hsk-queued-pulse {
+  0%, 100% { opacity: .35; transform: scale(0.85); }
+  50%      { opacity: 1;   transform: scale(1); }
+}
+
+.hsk-cb-queued-now {
+  color: var(--hsk-primary, #ff6a33);
+  font-weight: 600;
+  transition: opacity .15s ease;
+}
+
+.hsk-cb-queued-status:hover .hsk-cb-queued-now {
+  opacity: .7;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-cb-queued-dot { animation: none; opacity: .8; }
+}
+
+/* A sticky child of the scroller itself, not an absolutely-positioned
+   overlay: it rides the bottom edge of whatever's currently visible without
+   needing to know the composer's height. Zero-height wrapper so it never
+   adds its own scroll distance. */
+/* Anchored to the composer's own top edge, not floating above the thread.
+   The wrap spans exactly the card's width (same inset as the card gets from
+   the shared padding), so a child positioned by inset-inline-start travels
+   across the whole seam rather than jumping between two fixed spots. */
+.hsk-cb-jump-wrap {
+  position: absolute;
+  top: var(--hsk-composer-pad-top, 16px);
+  inset-inline: var(--hsk-composer-pad-x, 28px);
+  height: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* Vertical band the whole group travels within. Sized generously above and
+   below the seam so the blur has room to work without clipping. */
+.hsk-cb-jump-goo {
+  position: absolute;
+  inset-inline: 0;
+  top: -22px;
+  height: 44px;
+  pointer-events: none;
+}
+
+/* Opaque, and matched to the card's *rendered* colour rather than its declared
+   one: the goo filter's contrast ramp assumes opaque input, so feeding it the
+   real card fill (~5% white in dark mode) collapsed to fully transparent and
+   the bump vanished. These are that translucent card composited over the panel
+   behind it, precomputed. */
+.hsk-cb-jump-goo { --hsk-goo-fill: #ffffff; }
+@media (prefers-color-scheme: dark) {
+  .hsk-cb-jump-goo { --hsk-goo-fill: #1a1a1c; }
+}
+[data-hsk-theme="light"] .hsk-cb-jump-goo { --hsk-goo-fill: #ffffff; }
+[data-hsk-theme="dark"] .hsk-cb-jump-goo { --hsk-goo-fill: #1a1a1c; }
+
+/* Full card width so the bump melts into the whole top edge, but only deep
+   enough to cover the card's first few pixels — at 22px it painted over the
+   send button sitting in that band. */
+.hsk-cb-jump-seam {
+  position: absolute;
+  inset-inline: 0;
+  top: 22px;
+  height: 11px;
+  border-radius: 20px 20px 0 0;
+  background: var(--hsk-goo-fill);
+  transition: background .3s ease;
+}
+
+.hsk-cb-jump-bump {
+  position: absolute;
+  top: 5px;
+  /* Docked at the inline-START, opposite the send button. Docking at the
+     inline-end put it directly above send in both directions — that corner is
+     already the busiest part of the composer. */
+  inset-inline-start: 8px;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: var(--hsk-goo-fill);
+  transition: inset-inline-start .6s cubic-bezier(.34,1.1,.64,1), background .3s ease;
+  /* A dead-still bump reads as pasted on rather than grown from the same
+     surface. Slow enough that it never competes with the ghost's own float. */
+  animation: hsk-jump-idle 4.6s ease-in-out infinite;
+  transform-origin: 50% 100%;
+}
+
+.hsk-cb-jump-bump--alert {
+  inset-inline-start: calc(50% - 17px);
+  background: var(--hsk-primary, #ff6a33);
+  animation: hsk-jump-travel .6s linear both;
+}
+
+@keyframes hsk-jump-idle {
+  0%, 100% { transform: scaleY(1); }
+  50%      { transform: scaleY(1.045); }
+}
+
+/* The interactive, crisp layer: exactly the bump's geometry, but unfiltered —
+   this is what actually holds the ghost glyph, so the icon never blurs with
+   the shape fusion happening underneath it. */
+.hsk-cb-jump-bottom {
+  pointer-events: auto;
+  position: absolute;
+  top: -17px;
+  /* Tracks the fused bump exactly, so the glyph never drifts off the shape. */
+  inset-inline-start: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: none;
+  background: transparent;
+  color: var(--hsk-chat-muted, #9aa0a6);
+  cursor: pointer;
+  transition: inset-inline-start .6s cubic-bezier(.34,1.1,.64,1), color .3s ease;
+}
+
+.hsk-cb-jump-bottom--alert {
+  inset-inline-start: calc(50% - 17px);
+  color: #fff;
+  --hsk-ghost-eye: var(--hsk-primary, #ff6a33);
+  animation: hsk-jump-travel .6s linear both;
+}
+
+/* Stretched along the direction of travel, squashed on arrival. */
+/* Squash and stretch proper: every pair multiplies to 1 so the ghost keeps its
+   volume, the stretch lands on the travel curve's peak velocity rather than at
+   an arbitrary percentage, and the move is bracketed by anticipation before it
+   leaves and follow-through after it arrives. */
+@keyframes hsk-jump-travel {
+  0%   { transform: scale(1, 1); }
+  10%  { transform: scale(.88, 1.136); }
+  30%  { transform: scale(1.28, .781); }
+  50%  { transform: scale(1.18, .847); }
+  68%  { transform: scale(.84, 1.19); }
+  84%  { transform: scale(1.06, .943); }
+  100% { transform: scale(1, 1); }
+}
+
+/* The ghost drifts rather than the button bobbing — the button is a fixed
+   dock, the thing inside it is what should feel weightless. */
+.hsk-cb-jump-arrow {
+  display: flex;
+  animation: hsk-ghost-float 3.4s ease-in-out infinite;
+}
+.hsk-cb-jump-bottom svg { width: 19px; height: 19px; display: block; }
+
+@keyframes hsk-ghost-float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  30%      { transform: translateY(-1.6px) rotate(-3deg); }
+  70%      { transform: translateY(1.4px) rotate(3deg); }
+}
+
+/* Body takes the button's colour; the eyes are punched back out to whatever
+   sits behind, so one glyph works in both the resting and the alert state. */
+.hsk-ghost-body { fill: currentColor; }
+.hsk-ghost-eyes { fill: var(--hsk-ghost-eye, var(--hsk-chat-bg, #fff)); }
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-cb-jump-arrow,
+  .hsk-cb-jump-bottom--alert { animation: none; }
+}
+
+
+/* ─── Conversation timeline ───────────────────────────────────────────────
+   Questions as dots down the gutter. Content-agnostic on purpose: it reads
+   the conversation, never the catalogue, so it means the same thing on a
+   shop, a property site or a knowledge base. Removed below the breakpoint,
+   where the jump-to-bottom pill covers navigation on its own. */
+.hsk-cb-timeline {
+  display: none;
+}
+
+/* Needs 720px of column plus a gutter wide enough to hold the timeline
+   without crowding it: (1180 - 720) / 2 = 230px each side. */
+@media (min-width: 1180px) {
+  .hsk-cb-timeline {
+    display: block;
+    /* Out of flow, in the gutter. As a flex sibling it stole width from the
+       conversation and pushed it off centre — the column has to stay dead
+       centre in the viewport, with this hanging beside it. Logical inset so
+       RTL puts it on the other side without a second rule. */
+    position: absolute;
+    inset-inline-end: calc(100% + 20px);
+    top: 50%;
+    transform: translateY(-50%);
+    width: 180px;
+    max-height: 60%;
+    overflow: hidden;
+    /* Feathered top and bottom: entries do not stop, they dissolve. */
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 14%, #000 86%, transparent);
+    mask-image: linear-gradient(to bottom, transparent, #000 14%, #000 86%, transparent);
+  }
+
+  .hsk-cb-timeline-track {
+    animation: hsk-tl-in .32s cubic-bezier(.22,1,.36,1) both;
+  }
+}
+
+@keyframes hsk-tl-in {
+  from { opacity: 0; transform: translateX(-10px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* The spine, and the travelled portion of it drawn over the top. scaleY is
+   compositor-only, so the fill follows the scroll without touching layout. */
+/* One number owns the spine's x-position; the dots derive from it, so they
+   cannot drift apart. Kept clear of the left edge because the active dot
+   grows and this container clips. */
+.hsk-cb-timeline-track {
+  --hsk-tl-x: 9px;
+  position: relative;
+  padding-left: 26px;
+}
+
+.hsk-cb-timeline-track::before,
+.hsk-cb-timeline-track::after {
+  content: '';
+  position: absolute;
+  left: calc(var(--hsk-tl-x) - 1px);
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 2px;
+}
+
+.hsk-cb-timeline-track::before {
+  background: var(--hsk-chat-divide, rgba(0,0,0,.09));
+}
+
+.hsk-cb-timeline-track::after {
+  background: var(--hsk-primary, #ff6a33);
+  opacity: .5;
+  transform-origin: top;
+  transform: scaleY(var(--hsk-tl-progress, 0));
+  transition: transform .18s linear;
+}
+
+/* --hsk-tl-d is how many entries away from what the transcript is showing.
+   The item itself never transforms: the dot is its child, and scaling from
+   the left edge walked the dots off the spine, which is what read as sloppy.
+   Only the label moves. */
+.hsk-cb-tl-item {
+  --hsk-tl-d: 0;
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 7px 6px 7px 0;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--hsk-font);
+}
+
+/* Derived from the spine's own x, so the two can never fall out of step.
+   The item is padded 26px, hence the offset back to --hsk-tl-x. */
+.hsk-cb-tl-dot {
+  position: absolute;
+  left: calc(var(--hsk-tl-x, 9px) - 26px - 3.5px);
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin-top: -3.5px;
+  border-radius: 999px;
+  background: var(--hsk-chat-divide, rgba(0,0,0,.18));
+  opacity: max(.25, calc(1 - var(--hsk-tl-d) * .22));
+  transition: transform .28s cubic-bezier(.34,1.4,.64,1),
+              opacity .46s cubic-bezier(.22,1,.36,1),
+              background .2s ease;
+}
+
+/* Small, muted, and only as loud as it needs to be to be read. The further
+   an entry is from what you are reading, the further right it slides and the
+   fainter it gets — so the column's edge curves toward the focus instead of
+   ruling a hard vertical line. transform and opacity only. */
+.hsk-cb-tl-label {
+  display: block;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--hsk-chat-muted, #8a8f98);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transform: translateX(calc(var(--hsk-tl-d) * 7px));
+  /* The far entries were fading almost to nothing, which lost the sense of
+     how much conversation sits either side. Held above a readable floor. */
+  opacity: max(.32, calc(.9 - var(--hsk-tl-d) * .15));
+  /* Long and soft, so a new question settles into place rather than snapping. */
+  transition: transform .46s cubic-bezier(.22,1,.36,1),
+              opacity .46s cubic-bezier(.22,1,.36,1),
+              color .2s ease;
+}
+
+.hsk-cb-tl-item:hover .hsk-cb-tl-label {
+  opacity: 1;
+  transform: translateX(calc(var(--hsk-tl-d) * 7px - 2px));
+}
+
+.hsk-cb-tl-item:hover .hsk-cb-tl-dot { transform: scale(1.25); }
+
+/* The lit dot is a single element that slides between markers, so moving from
+   one question to the next is a travel rather than a cut. Its Y is written by
+   the component from the anchored item's own offset; the easing is here. */
+.hsk-cb-tl-cursor {
+  position: absolute;
+  left: calc(var(--hsk-tl-x, 9px) - 4.5px);
+  top: 0;
+  width: 9px;
+  height: 9px;
+  margin-top: -4.5px;
+  border-radius: 999px;
+  background: var(--hsk-primary, #ff6a33);
+  transform: translateY(0);
+  transition: transform .44s cubic-bezier(.22,1,.36,1);
+  will-change: transform;
+  pointer-events: none;
+}
+
+/* The marker under the travelling dot stays a plain marker — lighting it too
+   would put two highlights on the spine at once. */
+.hsk-cb-tl-item--on .hsk-cb-tl-dot {
+  opacity: .35;
+}
+
+.hsk-cb-tl-item--on .hsk-cb-tl-label {
+  color: var(--hsk-chat-text, #1f1f1f);
+  opacity: 1;
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-cb-timeline-track { animation: none; }
+  .hsk-cb-timeline-track::after,
+  .hsk-cb-tl-label,
+  .hsk-cb-tl-cursor,
+  .hsk-cb-tl-dot { transition: none; }
+}
+
 @media (prefers-color-scheme: dark) {
   /* Set the TOKEN, not the property: bubble and tail both read
      --hsk-chat-ai-bg, so a theme can never leave them mismatched. */
   .hsk-cb-ai-text {
-    --hsk-chat-ai-bg: #1c1c1e;
+    --hsk-chat-ai-bg: #26262a;
     background: var(--hsk-chat-ai-bg);
-    border-color: rgba(255, 255, 255, 0.08);
     color: #f9fafb;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
   }
 }
 
@@ -1526,22 +1990,49 @@
 
 .hsk-cb-sources::-webkit-scrollbar { display: none; }
 
-.hsk-cb-sources-fade-left {
+/* Narrower and eased rather than linear. A 48px linear ramp reads as a grey
+   band laid over the rail — most of a linear gradient's travel happens in the
+   middle, so the edge stays near-opaque far longer than it looks like it
+   should. Stopping the solid end early and letting it tail off gives the same
+   "there is more" cue without an obvious panel. */
+.hsk-cb-sources-fade-left,
+.hsk-cb-sources-fade-right {
   position: absolute;
-  left: 0; top: 0; bottom: 4px;
-  width: 48px;
+  top: 0; bottom: 4px;
+  width: 30px;
   pointer-events: none;
-  background: linear-gradient(to right, var(--hsk-fade-bg, var(--hsk-chat-bg, #0e0e0f)), transparent);
   z-index: 2;
 }
 
+.hsk-cb-sources-fade-left {
+  inset-inline-start: 0;
+  background: linear-gradient(to right,
+    var(--hsk-fade-bg, var(--hsk-chat-bg, #0e0e0f)) 0%,
+    color-mix(in srgb, var(--hsk-fade-bg, var(--hsk-chat-bg, #0e0e0f)) 55%, transparent) 45%,
+    transparent 100%);
+}
+
 .hsk-cb-sources-fade-right {
-  position: absolute;
-  right: 0; top: 0; bottom: 4px;
-  width: 48px;
-  pointer-events: none;
-  background: linear-gradient(to left, var(--hsk-fade-bg, var(--hsk-chat-bg, #0e0e0f)), transparent);
-  z-index: 2;
+  inset-inline-end: 0;
+  background: linear-gradient(to left,
+    var(--hsk-fade-bg, var(--hsk-chat-bg, #0e0e0f)) 0%,
+    color-mix(in srgb, var(--hsk-fade-bg, var(--hsk-chat-bg, #0e0e0f)) 55%, transparent) 45%,
+    transparent 100%);
+}
+
+/* The fades are painted in physical directions, so in RTL the one that sits at
+   the inline-start has to ramp the other way. */
+[dir="rtl"] .hsk-cb-sources-fade-left {
+  background: linear-gradient(to left,
+    var(--hsk-fade-bg, var(--hsk-chat-bg, #0e0e0f)) 0%,
+    color-mix(in srgb, var(--hsk-fade-bg, var(--hsk-chat-bg, #0e0e0f)) 55%, transparent) 45%,
+    transparent 100%);
+}
+[dir="rtl"] .hsk-cb-sources-fade-right {
+  background: linear-gradient(to right,
+    var(--hsk-fade-bg, var(--hsk-chat-bg, #0e0e0f)) 0%,
+    color-mix(in srgb, var(--hsk-fade-bg, var(--hsk-chat-bg, #0e0e0f)) 55%, transparent) 45%,
+    transparent 100%);
 }
 
 .hsk-cb-sources-next,
@@ -1573,8 +2064,11 @@
   box-shadow: 0 6px 18px rgba(255, 106, 51, 0.35);
 }
 
-.hsk-cb-sources-next { right: 2px; }
-.hsk-cb-sources-prev { left: 2px; }
+.hsk-cb-sources-next { inset-inline-end: 2px; }
+.hsk-cb-sources-prev { inset-inline-start: 2px; }
+/* The chevrons are drawn pointing left/right, so mirror them with the layout. */
+[dir="rtl"] .hsk-cb-sources-next svg,
+[dir="rtl"] .hsk-cb-sources-prev svg { transform: scaleX(-1); }
 
 .hsk-cb-carousel-dots {
   display: flex;
@@ -1678,39 +2172,6 @@
   margin-top: 3px;
 }
 
-.hsk-cb-selected-product {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  margin-top: 16px;
-  padding: 14px;
-  border: 1px solid var(--hsk-chat-divide, rgba(0,0,0,.08));
-  border-left: 3px solid var(--hsk-primary);
-  background: var(--hsk-chat-source-bg, rgba(0,0,0,.03));
-  cursor: pointer;
-  transition: border-color .15s;
-  animation: hsk-msg-in .2s ease-out both;
-}
-
-.hsk-cb-selected-product:hover { border-left-color: rgba(255,106,51,.6); }
-
-.hsk-cb-selected-img {
-  width: 64px; height: 64px;
-  object-fit: cover;
-  flex-shrink: 0;
-}
-
-.hsk-cb-selected-info { flex: 1; min-width: 0; }
-
-.hsk-cb-selected-name {
-  font-size: 13px; font-weight: 700;
-  color: var(--hsk-chat-text, #111);
-  margin-bottom: 3px;
-}
-
-.hsk-cb-selected-price {
-  font-size: 13px; color: var(--hsk-primary); font-weight: 700;
-}
 
 .hsk-cb-typing-row {
   display: flex;
@@ -1725,165 +2186,103 @@
    The door-handle dot spins out into a trailing comet of balls, holds as a
    ring, collapses back, and the real handle pops into place. ── */
 
-.hsk-cb-thinking-icon {
+/* ─── kiku rocket (thinking indicator) ────────────────────────────────────
+   The brand mark under thrust while an answer is worked out, touching down
+   as it starts to arrive. Motion is transform/translate/scale only; the
+   exhaust is a canvas the component drives. */
+.hsk-rocket {
   position: relative;
-  width: 40px;
-  height: 40px;
+  display: inline-block;
   color: var(--hsk-primary, #ff6a33);
   flex-shrink: 0;
+  --hsk-rocket-ink: var(--hsk-primary, #ff6a33);
 }
 
-.hsk-cb-thinking-icon .hsk-brand-mark {
+.hsk-rocket canvas,
+.hsk-rocket-glyph {
   position: absolute;
   inset: 0;
-  fill: currentColor;
-  opacity: 0.16;
 }
 
-/* The base glyph stays dim while the dots orbit, then lights up full and gives
-   a small bounce exactly as the handle lands — so the dots read as settling
-   into a solid, visible A rather than into a greyed one. */
-.hsk-cb-thinking-icon .hsk-brand-mark:not(.hsk-brand-mark--sheen) {
-  transform-origin: 50% 100%;
-  animation: hsk-glyph-settle 2.8s infinite;
+.hsk-rocket-glyph { transform-origin: 50% 60%; }
+
+/* Holding altitude: a slow rise and fall with a fine tremble over it. Two
+   animations so the tremble does not have to restate the hover's offset. */
+.hsk-rocket--flying .hsk-rocket-glyph {
+  animation: hsk-rocket-hover 1.6s ease-in-out infinite,
+             hsk-rocket-tremble .1s linear infinite;
 }
 
-@keyframes hsk-glyph-settle {
-  0%, 72% { opacity: 0.16; transform: scale(1); }
-  82% { opacity: 1; transform: scale(1.07); animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
-  90% { transform: scale(0.97); }
-  95% { opacity: 1; transform: scale(1); }
-  100% { opacity: 0.16; transform: scale(1); }
+@keyframes hsk-rocket-hover {
+  0%, 100% { translate: 0 -1.5px; }
+  50%      { translate: 0 -3.5px; }
 }
 
-.hsk-cb-thinking-icon .hsk-brand-mark--sheen {
+@keyframes hsk-rocket-tremble {
+  0%   { transform: translate(.25px, 0); }
+  50%  { transform: translate(-.22px, .16px); }
+  100% { transform: translate(.14px, -.14px); }
+}
+
+/* Descend, compress on contact, rebound, settle. */
+.hsk-rocket--landed .hsk-rocket-glyph {
+  animation: hsk-rocket-land .8s cubic-bezier(.18,.7,.3,1) both;
+}
+
+@keyframes hsk-rocket-land {
+  0%   { translate: 0 -3.5px; transform: scaleY(1); }
+  55%  { translate: 0 1.5px;  transform: scaleY(.92); }
+  75%  { translate: 0 -1.2px; transform: scaleY(1.04); }
+  90%  { translate: 0 .4px;   transform: scaleY(.99); }
+  100% { translate: 0 0;      transform: scaleY(1); }
+}
+
+/* The handle never blinks out: under thrust it has dropped from the door and
+   rides in the exhaust, then climbs back and seats itself on touchdown.
+   Percentage translate is relative to the handle's own box, so one set of
+   numbers holds at every size. */
+.hsk-rocket-handle {
+  position: absolute;
+  /* Re-derived for the cropped viewBox: the handle sits at (56.8, 69.84) in
+     the source artboard, which is (56.8-10.2)/79.5 and (69.84-17.4)/79.5 of
+     the visible frame. Size scaled by the same 100/79.5 crop factor. */
+  left: 58.6%;
+  top: 66%;
+  width: 12.6%;
+  height: 12.6%;
+  margin: -6.3% 0 0 -6.3%;
+  border-radius: 50%;
+  background: var(--hsk-rocket-ink);
+  translate: 0 0;
+  scale: 1;
   opacity: 1;
-  -webkit-mask-image: linear-gradient(115deg, transparent 38%, #000 50%, transparent 62%);
-  mask-image: linear-gradient(115deg, transparent 38%, #000 50%, transparent 62%);
-  -webkit-mask-size: 300% 100%;
-  mask-size: 300% 100%;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  animation: hsk-glyph-sheen 2.8s linear infinite;
+  transition: translate .66s cubic-bezier(.34,1.45,.5,1) .42s,
+              scale .5s cubic-bezier(.34,1.6,.5,1) .42s,
+              opacity .3s ease .42s,
+              filter .3s ease .42s;
 }
 
-@keyframes hsk-glyph-sheen {
-  0% { -webkit-mask-position: 130% 0; mask-position: 130% 0; }
-  100% { -webkit-mask-position: -30% 0; mask-position: -30% 0; }
+.hsk-rocket--flying .hsk-rocket-handle {
+  animation: hsk-rocket-handle-ride 1.05s ease-in-out infinite;
+  filter: blur(.3px);
 }
 
-.hsk-arch-glow {
-  position: absolute;
-  left: 37.58%;
-  top: 42.56%;
-  width: 24.8%;
-  height: 38.44%;
-  border-radius: 4px 4px 0 0;
-  overflow: hidden;
-  pointer-events: none;
-  transform-origin: 0% 50%;
-  animation: hsk-arch-door-knock 2.8s infinite;
-  z-index: 1;
+/* Percentages are of the handle's own box, which grew with the crop — so the
+   travel down into the plume is shorter in percentage terms than before. */
+@keyframes hsk-rocket-handle-ride {
+  0%, 100% { translate: -44% 190%; scale: .78; opacity: .5; }
+  35%      { translate: -27% 224%; scale: 1.02; opacity: .85; }
+  70%      { translate: -58% 205%; scale: .86; opacity: .62; }
 }
 
-.hsk-arch-noise {
-  position: absolute;
-  inset: 0;
-  background-image:
-    radial-gradient(ellipse at 80% 80%, rgba(255, 120, 60, 0.95) 0%, rgba(255, 80, 20, 0.6) 50%, transparent 85%),
-    url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.35'/%3E%3C/svg%3E");
-  background-size: cover;
-}
-
-@keyframes hsk-arch-door-knock {
-  0% {
-    opacity: 0.85;
-    transform: scaleX(1);
-    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+@media (prefers-reduced-motion: reduce) {
+  .hsk-rocket--flying .hsk-rocket-glyph,
+  .hsk-rocket--landed .hsk-rocket-glyph { animation: none; }
+  .hsk-rocket--flying .hsk-rocket-handle {
+    animation: none;
+    translate: -44% 190%;
+    opacity: .6;
   }
-  14%, 74% {
-    opacity: 0;
-    transform: scaleX(0);
-  }
-  84% {
-    opacity: 1;
-    transform: scaleX(1);
-    animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
-  }
-  92% {
-    opacity: 0.75;
-    transform: scaleX(0.85);
-  }
-  100% {
-    opacity: 0.85;
-    transform: scaleX(1);
-  }
-}
-
-/* Positioned at the real handle's coordinates: (22.7 + 55*0.62)%, (19 + 82*0.62)% of the 100x100 glyph box. */
-.hsk-handle-orbit {
-  position: absolute;
-  left: 55.4%;
-  top: 69.84%;
-  width: 0;
-  height: 0;
-  animation: hsk-orbit-scale 2.8s infinite;
-}
-
-.hsk-handle-ring {
-  position: absolute;
-  inset: 0;
-  animation: hsk-orbit-spin 2.8s infinite;
-}
-
-.hsk-handle-ball {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 4px;
-  height: 4px;
-  margin: -2px 0 0 -2px;
-  border-radius: 50%;
-  background: currentColor;
-  transform: rotate(calc(var(--i) * 72deg)) translateX(12px) scale(calc(1 - var(--i) * 0.15));
-  opacity: calc(1 - var(--i) * 0.19);
-}
-.hsk-handle-ball:nth-child(1) { --i: 0; }
-.hsk-handle-ball:nth-child(2) { --i: 1; }
-.hsk-handle-ball:nth-child(3) { --i: 2; }
-.hsk-handle-ball:nth-child(4) { --i: 3; }
-.hsk-handle-ball:nth-child(5) { --i: 4; }
-
-.hsk-handle-rest {
-  position: absolute;
-  left: 55.4%;
-  top: 69.84%;
-  width: 4px;
-  height: 4px;
-  margin: -2px 0 0 -2px;
-  border-radius: 50%;
-  background: currentColor;
-  animation: hsk-handle-pop 2.8s infinite;
-}
-
-@keyframes hsk-orbit-scale {
-  0% { transform: scale(0); animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
-  12% { transform: scale(1); animation-timing-function: linear; }
-  60% { transform: scale(1); animation-timing-function: cubic-bezier(0.55, 0, 0.85, 0.35); }
-  76%, 100% { transform: scale(0); }
-}
-
-@keyframes hsk-orbit-spin {
-  0% { transform: rotate(0deg); animation-timing-function: ease-in; }
-  60% { transform: rotate(560deg); animation-timing-function: linear; }
-  76%, 100% { transform: rotate(650deg); }
-}
-
-@keyframes hsk-handle-pop {
-  0%, 74% { opacity: 0; transform: scale(0); }
-  84% { opacity: 1; transform: scale(1.4); animation-timing-function: ease-out; }
-  92% { transform: scale(0.9); }
-  100% { opacity: 1; transform: scale(1); }
 }
 
 .hsk-cb-thinking-text {
@@ -1915,7 +2314,13 @@
      input area — without this it anchors to the modal and lands above it,
      leaving only its shadow visible. */
   position: relative;
-  padding: 16px 28px 28px;
+  /* Published as variables so the ghost, which is positioned against the input
+     card's edge, tracks the padding instead of hardcoding a copy of it — the
+     hardcoded desktop values put it on top of the send button on mobile, where
+     this padding is much tighter. */
+  --hsk-composer-pad-top: 16px;
+  --hsk-composer-pad-x: 28px;
+  padding: var(--hsk-composer-pad-top) var(--hsk-composer-pad-x) 28px;
   flex-shrink: 0;
   background: var(--hsk-chat-bg, #ffffff);
   z-index: 10;
@@ -2203,7 +2608,7 @@
 
 .hsk-cb-hint {
   text-align: center;
-  font-size: 10px;
+  font-size: 9px;
   color: var(--hsk-chat-muted, #bbb);
   margin-top: 10px;
 }
@@ -2248,11 +2653,13 @@
 }
 
 /* ── Image attachment strip ──────────────────────────────────────────────── */
+/* Inset to match the input row: the card clips to a 20px radius, so a thumb
+   flush in the corner loses its own corner and its remove button entirely. */
 .hsk-cb-img-strip {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 0 0 10px 0;
+  padding: 12px 14px 4px 18px;
   animation: hsk-msg-in .2s ease-out both;
 }
 
@@ -2322,6 +2729,27 @@
 .hsk-cb-attach-btn:disabled {
   opacity: .35;
   cursor: not-allowed;
+}
+
+/* Inactive controls sit quieter than the text they flank — they are always
+   available but never the thing being read. Full strength returns on hover
+   and focus, where the intent to use them is explicit. */
+.hsk-cb-attach-btn,
+.hsk-cb-mic-btn,
+.hsk-cb-voice-mode-btn {
+  opacity: .62;
+  transition: opacity .18s ease;
+}
+
+.hsk-cb-attach-btn:hover:not(:disabled),
+.hsk-cb-mic-btn:hover:not(:disabled),
+.hsk-cb-voice-mode-btn:hover:not(:disabled),
+.hsk-cb-attach-btn:focus-visible,
+.hsk-cb-mic-btn:focus-visible,
+.hsk-cb-voice-mode-btn:focus-visible,
+.hsk-cb-mic-btn--listening,
+.hsk-cb-voice-mode-btn--active {
+  opacity: 1;
 }
 
 /* ── Mic / voice button ──────────────────────────────────────────────────── */
@@ -2628,8 +3056,8 @@
   }
   .hsk-cb-topbar-title { color: #f0efed; }
   .hsk-cb-topbar-sub { color: #888; }
-  .hsk-cb-topbar-btn { border-color: rgba(255,255,255,.07); color: #888; }
-  .hsk-cb-close { border-color: rgba(255,255,255,.07); color: #888; }
+  .hsk-cb-topbar-btn { background: rgba(255,255,255,.06); color: #888; }
+  .hsk-cb-close { background: rgba(255,255,255,.06); color: #888; }
   .hsk-cb-hello { color: #f0efed; }
   .hsk-cb-hello-ask { color: #f0efed; }
   .hsk-cb-hello-lead { color: #888; }
@@ -2642,8 +3070,6 @@
   .hsk-cb-sources-next { border-color: rgba(255,255,255,.12); background: #0a0a0a; color: #f0efed; }
   .hsk-cb-src-imgwrap-empty { background: rgba(255,255,255,.06); color: #555; }
   .hsk-cb-src-name { color: #f0efed; }
-  .hsk-cb-selected-product { border-color: rgba(255,255,255,.08); background: rgba(255,255,255,.03); }
-  .hsk-cb-selected-name { color: #f0efed; }
   .hsk-cb-dot { background: #555; }
   .hsk-cb-input-box { background: rgba(255,255,255,.05); border: none !important; }
   .hsk-cb-textarea { color: #f0efed; }
@@ -3298,6 +3724,8 @@
   .hsk-cb-input-wrap {
     margin-top: auto !important;
     flex-shrink: 0 !important;
+    --hsk-composer-pad-top: 8px;
+    --hsk-composer-pad-x: 12px;
     padding: 8px 12px !important;
     padding-bottom: max(12px, env(safe-area-inset-bottom)) !important;
     background: var(--hsk-chat-bg, #0a0a0a) !important;
@@ -3813,14 +4241,18 @@
   }
 }
 
-/* Firefox scrollbar compatibility */
-.hsk-cb-msgs, .hsk-sp-details-pane, .hsk-sp-results, .hsk-chat-messages {
+/* Firefox scrollbar compatibility. The message list is deliberately absent:
+   it hides its scrollbar outright (see .hsk-cb-msgs above) because a reserved
+   track shifts every bubble the moment the conversation grows tall enough to
+   scroll. Listing it here re-declared `thin` further down the file and won on
+   source order. */
+.hsk-sp-details-pane, .hsk-sp-results, .hsk-chat-messages {
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 0, 0, 0.06) transparent;
 }
 
 @media (prefers-color-scheme: dark) {
-  .hsk-cb-msgs, .hsk-sp-details-pane, .hsk-sp-results, .hsk-chat-messages {
+  .hsk-sp-details-pane, .hsk-sp-results, .hsk-chat-messages {
     scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
   }
 }
@@ -5073,6 +5505,30 @@
   color: var(--hsk-chat-muted, #9aa0a6);
 }
 
+.hsk-cb-stale {
+  max-width: 420px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(220, 38, 38, 0.35);
+  border-left-width: 3px;
+  border-radius: 6px;
+  background: rgba(220, 38, 38, 0.06);
+}
+.hsk-cb-stale-title {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #dc2626;
+}
+.hsk-cb-stale-item {
+  margin-top: 3px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--hsk-chat-text, #202124);
+}
+.hsk-cb-stale-reason { color: var(--hsk-chat-muted, #9aa0a6); }
+
 .hsk-cb-viz-imgwrap { position: relative; display: inline-block; max-width: 100%; }
 .hsk-cb-viz-mark {
   position: absolute;
@@ -5607,8 +6063,37 @@
   50% { opacity: 1; }
 }
 
+/* Connecting is not listening. The filament animates in every phase, so on its
+   own it reads as a live microphone — dimmed here so the difference is visible
+   before anyone starts talking into a mic that is not open yet. */
+.hsk-voice-stage--connecting {
+  opacity: .4;
+  transition: opacity .25s ease;
+}
+
+.hsk-voice-connecting {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--hsk-font);
+  font-size: 12.5px;
+  color: var(--hsk-chat-muted, #8a8f98);
+  animation: hsk-sent-in .2s ease-out both;
+}
+
+.hsk-voice-connecting-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+  animation: hsk-queued-pulse 1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-voice-connecting-dot { animation: none; opacity: .7; }
+}
+
 .hsk-voice-heard {
-  min-height: 2.6em;
   font-family: var(--hsk-font);
   font-size: 1.05rem;
   line-height: 1.5;
@@ -5751,20 +6236,24 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 7px 14px;
+  padding: 5px 11px;
   border-radius: 999px;
   border: 1px solid rgba(0, 0, 0, 0.09);
   background: rgba(255, 255, 255, 0.72);
   backdrop-filter: blur(8px);
   font: inherit;
-  font-size: 12px;
+  font-size: 11px;
   letter-spacing: 0.01em;
   color: #5b5b5b;
   cursor: pointer;
   transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
 }
 
-.hsk-voice-pill:hover { background: rgba(255, 255, 255, 0.95); transform: translateY(-1px); }
+/* No lift on hover. These sit in a wrapping row, so a transform on one made
+   the row look like it was twitching as the pointer crossed it, and the active
+   pill lightened on hover into something close to the unselected state. */
+.hsk-voice-pill:hover { background: rgba(255, 255, 255, 0.95); border-color: rgba(0, 0, 0, 0.16); }
+.hsk-voice-pill--on:hover { background: #1c1c1c; border-color: #1c1c1c; color: #fff; }
 
 .hsk-voice-pill--on {
   background: #1a1a1a;
@@ -5789,5 +6278,76 @@
     color: #cfcfcf;
   }
   .hsk-voice-pill:hover { background: rgba(45, 45, 45, 0.9); }
+  .hsk-voice-pill--on:hover { background: #f2f2f2; border-color: #f2f2f2; color: #141414; }
   .hsk-voice-pill--on { background: #f2f2f2; border-color: #f2f2f2; color: #141414; }
 }
+
+/* Narrow viewports: five controls plus a textarea do not fit at 36px each. */
+@media (max-width: 520px) {
+  .hsk-cb-input-box {
+    gap: 6px;
+    padding: 10px 10px 10px 12px;
+  }
+
+  .hsk-cb-attach-btn,
+  .hsk-cb-mic-btn,
+  .hsk-cb-send,
+  .hsk-cb-voice-mode-btn,
+  .hsk-chat-send {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+  }
+
+  /* The textarea must win the space, not share it evenly. */
+  .hsk-cb-textarea {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 16px; /* below 16px iOS zooms the page on focus */
+  }
+
+  /* Live transcript competes with the controls for the same row. */
+  .hsk-cb-input-box .hsk-cb-listening {
+    display: none;
+  }
+}
+
+/* Procedural texture behind the chat thread, painted by KikuDoodles. Composed
+   at runtime because any repeating tile shows its seam. The radial mask keeps
+   the marks off the edges so they never resolve into an obvious field. */
+.hsk-cb-main { position: relative; }
+/* Voice mode covers the panel whole, so it needs the same ink tokens or the
+   canvas draws near-black on a near-black ground and simply is not there. */
+.hsk-cb-main,
+.hsk-voice-overlay { --hsk-doodle-ink: 31, 31, 31; --hsk-doodle-tint: 255, 106, 51; }
+
+.hsk-cb-doodles {
+  position: absolute;
+  inset: 0;
+  /* A canvas is a replaced element: with width auto it takes its intrinsic
+     300x150 and ignores the insets. */
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  -webkit-mask-image: radial-gradient(122% 90% at 50% 46%, #000 34%, transparent 88%);
+  mask-image: radial-gradient(122% 90% at 50% 46%, #000 34%, transparent 88%);
+}
+
+/* No z-index here: this selector outranks .hsk-cb-topbar's own z-index:10 and
+   would silently demote it. The canvas is the first positioned child at 0, so
+   auto-z siblings already paint above it in tree order. */
+.hsk-cb-main > *:not(.hsk-cb-doodles) { position: relative; }
+
+@media (prefers-color-scheme: dark) {
+  .hsk-cb-main,
+  .hsk-voice-overlay { --hsk-doodle-ink: 240, 239, 237; --hsk-doodle-tint: 255, 150, 110; }
+}
+
+/* An explicit theme prop must beat the OS in both directions, or a widget set
+   to dark on a light machine draws near-black ink on a near-black panel and
+   the texture simply is not there. Higher specificity, so order cannot matter. */
+[data-hsk-theme="light"] .hsk-cb-main,
+[data-hsk-theme="light"] .hsk-voice-overlay { --hsk-doodle-ink: 31, 31, 31; --hsk-doodle-tint: 255, 106, 51; }
+[data-hsk-theme="dark"] .hsk-cb-main,
+[data-hsk-theme="dark"] .hsk-voice-overlay { --hsk-doodle-ink: 240, 239, 237; --hsk-doodle-tint: 255, 150, 110; }

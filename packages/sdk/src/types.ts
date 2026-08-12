@@ -162,6 +162,20 @@ export interface ChatAttachment {
   data: string;
   /** true when the image is the current scene marked up by the shopper to show WHERE an edit goes */
   annotated?: boolean;
+  /** Drawn marks as geometry; `data` stays a clean copy of the scene. */
+  marks?: ImageMarkRegion[];
+  /** true when the shopper typed the change themselves, so the marks only point. */
+  instructed?: boolean;
+  /** The scene with the marks drawn on, shown back to the shopper. Never uploaded. */
+  preview?: string;
+}
+
+/** One drawn gesture; box is [ymin, xmin, ymax, xmax] normalised 0-1000. */
+export interface ImageMarkRegion {
+  gesture: 'ring' | 'cross' | 'scribble' | 'arrow' | 'text';
+  box: [number, number, number, number];
+  to?: [number, number];
+  text?: string;
 }
 
 /** A single product to be captured via @kiku capture_all. */

@@ -11,7 +11,7 @@ export { useListIngest } from './hooks/useListIngest';
 export { usePageIngest } from './hooks/usePageIngest';
 export { useKiku } from './hooks/useKiku';
 export { useLiveContext } from './hooks/useLiveContext';
-export type { ChatMessage, ChatSource, ChatMetadata } from './stream';
+export type { ChatMessage, ChatSource, ChatMetadata, StaleNotice } from './stream';
 export type {
   Entity,
   Product,
@@ -26,7 +26,7 @@ export type {
   AkropolysTheme,
   ChatAction,
   ContentIngestPayload,
-  ChatAttachment,
+  ChatAttachment, ImageMarkRegion,
   StyleDNA,
   VisualSearchResponse,
   CaptureTarget,

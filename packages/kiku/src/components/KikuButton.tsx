@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { useKiku, ChatMessage, ChatSource } from '@akropolys/sdk';
 import { useAkropolysContext } from '@akropolys/sdk';
@@ -17,8 +17,10 @@ import { ArrowUpIcon } from '../utils/icons';
 import { speak, stopSpeech, speechLevel, speechSpectrum, spectrumBins, isSpeaking } from '../utils/tts';
 import { useVoiceSession, type VoicePhase } from '../utils/voiceSession';
 import { useLiveVoice } from '../utils/liveVoice';
-import { floorReducer, initialFloor, uiPhase, micPaused } from '../utils/voiceFloor';
 import { VoiceCanvas } from './VoiceCanvas';
+import { KikuRocket } from './KikuRocket';
+import KikuDoodles from './KikuDoodles';
+import KikuGhost from './KikuGhost';
 
 
 export interface KikuButtonProps {
@@ -61,12 +63,16 @@ export interface KikuButtonProps {
 
 // kiku brand mark — glyph extracted from public/brand/akropolys-icon.svg, fill
 // only (no background rect) so it drops into the existing colored circles/badges.
-const KikuIcon = ({ className, size = 18 }: { className?: string; size?: number }) => (
+// `tight` crops the viewBox to the glyph's own bounds. The source artboard
+// leaves ~38% of the box empty, so at a given size the untight mark renders
+// noticeably smaller — which is exactly the mismatch that appeared next to the
+// rocket, whose viewBox is cropped the same way.
+const KikuIcon = ({ className, size = 18, tight = false }: { className?: string; size?: number; tight?: boolean }) => (
   <svg
     className={cn("hsk-brand-mark", className)}
     width={size}
     height={size}
-    viewBox="0 0 100 100"
+    viewBox={tight ? "10.2 17.4 79.5 79.5" : "0 0 100 100"}
     xmlns="http://www.w3.org/2000/svg"
     aria-label="kiku"
   >
@@ -177,8 +183,8 @@ const PaperclipIcon = () => (
   </svg>
 );
 
-const MicIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+const MicIcon = ({ className, size = 18 }: { className?: string; size?: number } = {}) => (
+  <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
     <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
     <line x1="12" y1="19" x2="12" y2="22"/>
@@ -380,6 +386,12 @@ const DEFAULT_UI_STRINGS = {
   // literals these replaced disagreed with each other.
   vizDisclaimerImage: 'Generated using Artificial Intelligence — colours, size and placement may differ from the real product.',
   vizDisclaimerVideo: 'Generated using Artificial Intelligence — colours, size and movement may differ from the real product.',
+  // Shown when something the shopper asked about has been withdrawn. Worded so
+  // it fits any vertical — a retracted article, a booked property, a delisted
+  // product — since the site owner's own reason follows it.
+  staleTitle: 'No longer available',
+  staleRemoved: '{title} has been removed and is no longer on offer.',
+  staleUnavailable: '{title} is currently unavailable.',
   // The kiku-key flow. These were hardcoded English literals in the JSX, so a
   // shopper being asked to mint a portable identity read the whole exchange in
   // a language they may not have.
@@ -459,11 +471,40 @@ const DEFAULT_UI_STRINGS = {
   errAccessRevoked: 'Your access to the assistant has been revoked by the store.',
   errAccountRequired: 'Please create an account to continue using the chat assistant.',
   errStreamInterrupted: 'The reply was interrupted. Please try again.',
+  errNetwork: "The assistant couldn't respond just now — please try again in a moment.",
+  errGeneric: 'Something went wrong. Please try again.',
+  vizWorking: 'Visualizing…',
+  vizMarkEdit: 'Mark & edit',
+  // The markup editor's own chrome. It opens on top of a panel already speaking
+  // the shopper's language, so English here reads as a different product.
+  markupTitle: 'Mark where you want the change',
+  markupCancel: 'Cancel',
+  markupSketch: 'Sketch',
+  markupText: 'Text',
+  markupEraser: 'Eraser',
+  markupUndo: 'Undo',
+  markupClear: 'Clear',
+  markupSend: 'Send',
+  markupTextHint: 'Type, then Enter',
+  markupInstruction: 'Describe the change — e.g. add the sofa here',
+  markupDialogLabel: 'Mark up image',
+  markupColorLabel: 'Colour {colour}',
+  markupError: "Couldn't process this image — try a newer visualization.",
+  markupLoadError: "This image can't be edited here.",
+  markupLoading: 'Loading image…',
+  // Becomes the shopper's own message when they marked without typing.
+  markupApplyMarks: 'Apply the change I marked on the image.',
+  openMemory: 'Open my memory on mimi',
   errTooManyRequests: 'The assistant is currently receiving too many requests. Please try again in a few moments.',
   errTokenLimit: "You've reached your usage limit. Please update your billing limits in your dashboard to continue.",
 
   statusSent: 'Sent',
   statusStopped: 'Sent · reply stopped',
+  queuedWaiting: 'Queued',
+  queuedSendNow: 'Send now',
+  jumpToLatest: 'Scroll to latest',
+  timelineLabel: 'Questions in this conversation',
+  voiceConnecting: 'Connecting — wait for the tone before speaking',
 
   stoppedByYou: 'You stopped this response.',
   stoppedInterrupted: 'This response was interrupted.',
@@ -728,12 +769,17 @@ function SourcesCarousel({ sources, defaultCurrency, onSelectSource, onImageClic
   const measure = useCallback(() => {
     const el = railRef.current;
     if (!el || display.length === 0) return;
-    setShowPrev(el.scrollLeft > 10);
-    const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 12;
-    setShowNext(el.scrollWidth > el.clientWidth + 4 && !atEnd);
+    // In an RTL container scrollLeft starts at 0 and runs NEGATIVE toward the
+    // end, so `scrollLeft > 10` was never true and the previous arrow never
+    // appeared. Distance travelled from the start is the direction-free
+    // quantity both arrows actually care about.
+    const travelled = Math.abs(el.scrollLeft);
+    const maxScroll = el.scrollWidth - el.clientWidth;
+    setShowPrev(travelled > 10);
+    setShowNext(maxScroll > 4 && travelled < maxScroll - 12);
 
     const cardWidth = 190;
-    const idx = Math.round(el.scrollLeft / cardWidth);
+    const idx = Math.round(travelled / cardWidth);
     setActiveIndex(Math.min(Math.max(0, idx), display.length - 1));
   }, [display.length]);
 
@@ -747,13 +793,17 @@ function SourcesCarousel({ sources, defaultCurrency, onSelectSource, onImageClic
     return () => { ro.disconnect(); el.removeEventListener('scroll', measure); };
   }, [measure, sources]);
 
-  const scrollNext = () => {
-    railRef.current?.scrollBy({ left: 190, behavior: 'smooth' });
+  // scrollBy's `left` is signed in layout terms, not visual ones: in RTL,
+  // "further along the rail" is a negative delta.
+  const railStep = (dir: 1 | -1) => {
+    const el = railRef.current;
+    if (!el) return;
+    const rtl = getComputedStyle(el).direction === 'rtl';
+    el.scrollBy({ left: 190 * dir * (rtl ? -1 : 1), behavior: 'smooth' });
   };
 
-  const scrollPrev = () => {
-    railRef.current?.scrollBy({ left: -190, behavior: 'smooth' });
-  };
+  const scrollNext = () => railStep(1);
+  const scrollPrev = () => railStep(-1);
 
   if (display.length === 0) return null;
 
@@ -837,13 +887,98 @@ function SourcesCarousel({ sources, defaultCurrency, onSelectSource, onImageClic
               key={i}
               className={cn("hsk-cb-dot-item", i === activeIndex && "hsk-cb-dot-item--active")}
               onClick={() => {
-                railRef.current?.scrollTo({ left: i * 190, behavior: 'smooth' });
+                {
+                  const el = railRef.current;
+                  if (el) {
+                    const rtl = getComputedStyle(el).direction === 'rtl';
+                    el.scrollTo({ left: i * 190 * (rtl ? -1 : 1), behavior: 'smooth' });
+                  }
+                }
               }}
             />
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+// ─── Conversation timeline ────────────────────────────────────────────────────
+
+/**
+ * Every question asked so far, as dots down the gutter, with the connecting
+ * line filling as the transcript scrolls.
+ *
+ * Reads nothing but message role and text, which is the point: a rail of
+ * products with prices would assume the site sells things, and this platform
+ * is domain-blind. A question is a landmark on any vertical.
+ *
+ * It also restores what hiding the scrollbar took away — where you are in a
+ * long conversation — but says what is there rather than just how far down.
+ */
+function ConversationTimeline({
+  items,
+  activeIdx,
+  progress,
+  onJump,
+}: {
+  items: { idx: number; text: string }[];
+  activeIdx: number;
+  progress: number;
+  onJump: (idx: number) => void;
+}) {
+  const tr = useT();
+  const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const cursorRef = useRef<HTMLSpanElement>(null);
+
+  // activeIdx is an index into the whole transcript, but only questions get an
+  // entry here — so it usually points at an answer, which matches no entry at
+  // all. Resolve it to the question that answer belongs to: the last one at or
+  // above it. Matching exactly meant every answer left the list unanchored,
+  // and the offsets below snapped to the far end on each scroll tick.
+  let anchor = 0;
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].idx <= activeIdx) anchor = i;
+  }
+
+  // One bright dot travels the spine rather than each marker taking its turn
+  // being lit — switching a class from one dot to the next has nothing to
+  // animate between them, so the highlight teleported.
+  useEffect(() => {
+    const node = itemRefs.current[anchor];
+    const cursor = cursorRef.current;
+    if (!node || !cursor) return;
+    cursor.style.transform = `translateY(${node.offsetTop + node.offsetHeight / 2}px)`;
+  }, [anchor, items.length]);
+
+  // One question is not yet a timeline; two is where navigating starts to pay.
+  // Guarded after the hooks, never before — the effect above has to run on
+  // every render for the rules of hooks to hold.
+  if (items.length < 2) return null;
+
+  // Focus falls off with distance from that anchor, so the entries either side
+  // shrink away toward the feathered edges and come back as you scroll. The
+  // distance rides a custom property; the easing lives in CSS.
+  return (
+    <nav className="hsk-cb-timeline" aria-label={tr('timelineLabel')}>
+      <div className="hsk-cb-timeline-track" style={{ '--hsk-tl-progress': progress } as React.CSSProperties}>
+        <span className="hsk-cb-tl-cursor" ref={cursorRef} aria-hidden="true" />
+        {items.map((item, i) => (
+          <button
+            key={item.idx}
+            ref={(el) => { itemRefs.current[i] = el; }}
+            type="button"
+            className={cn('hsk-cb-tl-item', i === anchor && 'hsk-cb-tl-item--on')}
+            style={{ '--hsk-tl-d': Math.min(Math.abs(i - anchor), 4) } as React.CSSProperties}
+            onClick={() => onJump(item.idx)}
+            title={item.text}
+          >
+            <span className="hsk-cb-tl-dot" />
+            <span className="hsk-cb-tl-label">{item.text}</span>
+          </button>
+        ))}
+      </div>
+    </nav>
   );
 }
 
@@ -1025,15 +1160,17 @@ const getFriendlyError = (err: any, tr: Translate) => {
 
   // Never let a raw status or network failure reach a shopper.
   if (lower.includes('failed to fetch') || lower.includes('networkerror') || lower.includes('request failed')) {
-    return "The assistant couldn't respond just now — please try again in a moment.";
+    return tr('errNetwork');
   }
 
-  try {
-    const parsed = JSON.parse(str);
-    return parsed.error || parsed.message || str;
-  } catch {
-    return str;
+  // Anything unrecognised is server text, and server text is English. Showing
+  // it verbatim dropped an English sentence into an otherwise translated
+  // conversation, so the shopper gets a translated line instead and the raw
+  // detail goes to the console for whoever is debugging.
+  if (str) {
+    try { console.warn('[kiku] untranslated error:', str); } catch { /* no console */ }
   }
+  return tr('errGeneric');
 };
 
 // The kiku key is the shopper's portable, anonymous identity (kiku_<hex>) —
@@ -1123,10 +1260,8 @@ function ThinkingBlock({ text, isComplete, seconds: fixedSeconds }: { text: stri
         onClick={expandable ? () => setIsOpen(o => !o) : undefined}
         aria-expanded={expandable ? isOpen : undefined}
       >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={!isComplete ? 'hsk-cb-think-spin' : undefined}>
-          <circle cx="12" cy="12" r="10" />
-          <path d="M12 6v6l4 2" />
-        </svg>
+        {/* No clock: the rocket beside this already says work is happening,
+            and the label already carries the elapsed seconds. */}
         <span>{label}</span>
         {expandable && <span className={cn('hsk-cb-think-chevron', isOpen && 'hsk-cb-think-chevron--open')}>▶</span>}
       </button>
@@ -1143,7 +1278,9 @@ function ChatModal({
   backdropBlur,
   onClose,
   onSelectSource,
-  defaultCurrency = 'KES',
+  // Empty by default: a currency the developer never configured must not be
+  // asserted to a shopper. Sites that price in one pass it explicitly.
+  defaultCurrency = '',
   chips = DEFAULT_CHIPS,
   theme,
   classNames = {},
@@ -1156,7 +1293,7 @@ function ChatModal({
   autoSpeakResponses = true,
 }: ChatModalProps) {
   const client = useAkropolysContext();
-  const { messages, sources, loading, streaming, error, errorCode, lastAction, lastIntent, allowedActions, send, stop, stopped, interrupted, continueGenerating, reset, referencedIds } = useKiku();
+  const { messages, sources, loading, streaming, error, errorCode, lastAction, lastIntent, allowedActions, send, queuedMessage, sendQueuedNow, appendSpokenExchange, stop, stopped, interrupted, continueGenerating, reset, referencedIds } = useKiku();
 
   // What the @kiku picker offers to capture. Entity refs are model-emitted and
   // routinely cover only some of the products an answer names — a two-way
@@ -1281,6 +1418,19 @@ function ChatModal({
   // a developer whose font already covers the script keeps it, and ours draws
   // only the characters theirs actually lacks — which is the whole reason this
   // is a stack and not a replacement.
+  // The rocket paints into a canvas sized in JS, so a media query cannot shrink
+  // it — scaling the element instead would just resample the bitmap. Matched to
+  // the same 768px the panel's own mobile layout uses.
+  const [isNarrow, setIsNarrow] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia?.('(max-width: 768px)');
+    if (!mq) return;
+    const apply = () => setIsNarrow(mq.matches);
+    apply();
+    mq.addEventListener?.('change', apply);
+    return () => mq.removeEventListener?.('change', apply);
+  }, []);
+
   const fontStack = React.useMemo(() => {
     if (!scriptFont) return undefined;
     // Only the developer's OWN font name, never their whole stack. theme.fontFamily
@@ -1292,8 +1442,14 @@ function ChatModal({
     // this same single name, and the stack must agree with what it measured or the
     // two silently contradict each other.
     const declared = typeof theme === 'object' && theme?.fontFamily ? theme.fontFamily : '';
-    const hostName = declared.split(',')[0].trim().replace(/^['"]|['"]$/g, '');
-    const host = hostName ? `"${hostName}", ` : '';
+    const first = declared.split(',')[0].trim();
+    // A var() reference has to be passed through untouched. next/font and most
+    // design systems hand out a CSS variable rather than a literal family name,
+    // and quoting one turns it into a family called "var(--x)", which matches
+    // nothing — the developer's font would silently never apply.
+    const isVarRef = /^var\(/i.test(first);
+    const hostName = first.replace(/^['"]|['"]$/g, '');
+    const host = hostName ? (isVarRef ? `${first}, ` : `"${hostName}", `) : '';
     // Deliberately NOT var(--chat-font-family, var(--hsk-default-font)) here. Both
     // resolve to Latin fallback chains ending in Segoe UI / Arial / sans-serif —
     // our OWN default included — and per-glyph resolution stops at the first font
@@ -1301,7 +1457,15 @@ function ChatModal({
     // winning ahead of Noto Sans Arabic even after the developer's stack was
     // trimmed to one name; the widget's own default chain reintroduced the exact
     // bug it was supposed to fix.
-    return `${host}"${scriptFont.family}", system-ui, sans-serif`;
+    // Latin ahead of the script font, but only faces that carry NO Arabic or
+    // Persian glyphs. A script font like Noto Sans Arabic also ships Latin, and
+    // per-glyph fallback stops at the first font that has the glyph — so with
+    // the script font first, English rendered in its Latin cut: wide, loose and
+    // visibly not a UI face. Helvetica Neue (Apple) and Roboto (Android) are
+    // Latin-only, so they take the Latin run and the script font still wins
+    // every glyph they lack. system-ui must stay behind the script font for the
+    // reason above it: Segoe UI does carry Arabic.
+    return `${host}"Helvetica Neue", Roboto, "${scriptFont.family}", system-ui, sans-serif`;
   }, [scriptFont, typeof theme === 'object' && theme ? theme.fontFamily : undefined]);
 
   // The brand display font covers Latin only, so in another script the glyphs
@@ -1443,24 +1607,14 @@ function ChatModal({
   };
 
   // ── Voice ─────────────────────────────────────────────────────────────────
-  // 'dictate' fills the composer from speech. 'converse' is the hands-free
-  // loop: listen → send → read the answer back → listen again, with barge-in.
+  // 'dictate' fills the composer from speech. 'converse' is the live session.
   const [voiceMode, setVoiceMode] = useState<'off' | 'dictate' | 'converse'>('off');
-  // Single owner of the conversational floor. Nothing sets a phase directly:
-  // recognition, the watchdog, the chat stream, TTS and the error handler all
-  // dispatch, and the reducer decides. `voicePhase` is the projection the
-  // interface has always rendered — the extra internal states are a distinction
-  // the shopper has no way to perceive.
-  const [floor, dispatchFloor] = React.useReducer(floorReducer, initialFloor);
-  const dictatePhase: VoicePhase = uiPhase(floor.state);
-  // Async work captures this and drops its result if the floor moved on.
-  const floorTurnRef = useRef(floor.turn);
-  useEffect(() => { floorTurnRef.current = floor.turn; }, [floor.turn]);
+  // Dictation is one utterance: listen, send, close. No floor to negotiate.
+  const [dictateState, setDictateState] = useState<'idle' | 'listening' | 'thinking'>('idle');
+  const dictatePhase: VoicePhase = dictateState;
   const [voiceError, setVoiceError] = useState<string>('');
   const [voiceMuted, setVoiceMuted] = useState(false);
-  // A guest's remaining spoken seconds, reported by the server after each
-  // answer so the countdown tracks audio actually produced rather than wall
-  // time. null = no allowance applies (signed in, or the site sets no cap).
+  // null = no allowance applies (signed in, or the site sets no cap).
   const [voiceSecondsLeft, setVoiceSecondsLeft] = useState<number | null>(null);
   // Set once the allowance is spent: voice stays closed until they sign in.
   const [voiceBlocked, setVoiceBlocked] = useState(false);
@@ -1500,7 +1654,7 @@ function ChatModal({
   const stopSessionRef = useRef<() => void>(() => {});
   const handleUtterance = useCallback((text: string) => {
     setInput('');
-    dispatchFloor({ type: 'UTTERANCE' });
+    setDictateState('thinking');
     // Dictation is one utterance, not a conversation: close the mic rather
     // than leaving it open behind a sent message.
     if (voiceModeRef.current === 'dictate') {
@@ -1511,24 +1665,13 @@ function ChatModal({
     handleSendRef.current(text);
   }, []);
 
-  const handleBargeIn = useCallback(() => {
-    // No isSpeaking() guard: the reducer rejects a barge-in from any state that
-    // does not hold the floor, and it accepts one during `preparing`, where
-    // isSpeaking() is still false because the audio has not arrived yet — the
-    // exact window in which cutting in used to do nothing.
-    stopSpeech();
-    setSpeakingMsgIndex(null);
-    dispatchFloor({ type: 'BARGE_IN' });
-  }, []);
-
   const voice = useVoiceSession({
     lang: speechBCP47,
     onUtterance: handleUtterance,
     onError: handleVoiceError,
-    onBargeIn: handleBargeIn,
     // The mic stays open through both, but recognition is torn down so the
     // assistant's own answer is never transcribed back as a new question.
-    paused: voiceMuted || micPaused(floor.state),
+    paused: voiceMuted || dictateState === 'thinking',
   });
 
   useEffect(() => { stopSessionRef.current = voice.stop; }, [voice.stop]);
@@ -1553,6 +1696,14 @@ function ChatModal({
     kikuId: (client as any)?.api?.getShopperId?.(),
     language: shopperLanguage,
     voice: liveVoiceName,
+    // The mute button drove only the dictation session's `paused`; live mode
+    // never saw it, so the mic stayed open and streaming with the icon crossed
+    // out — the tab's own recording indicator gave that away.
+    muted: voiceMuted,
+    // Each finished spoken turn joins the transcript, so closing voice mode
+    // leaves the conversation behind and a typed follow-up can refer back to
+    // what was said aloud.
+    onExchange: ({ heard, said }) => appendSpokenExchange(heard, said),
     onError: handleVoiceError,
     onRefused: (reason) => {
       setVoiceSecondsLeft(0);
@@ -1563,19 +1714,31 @@ function ChatModal({
   });
 
   const conversing = voiceMode === 'converse';
+  // Conversation needs a microphone and a socket, not SpeechRecognition —
+  // gating it on Web Speech hid it entirely on mobile Safari.
+  const canConverse = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
 
   // The voice is fixed when the session opens, so changing it mid-conversation
   // means reconnecting. Done in an effect rather than in the click handler so
   // the restart reads the name React has actually committed.
   const prevVoiceRef = useRef(liveVoiceName);
+  // Reached through refs, and `live` is deliberately NOT a dependency: the hook
+  // returns a fresh object every render, so depending on it re-ran this effect
+  // on the very re-render that live.stop() caused. The cleanup then cleared the
+  // pending restart, and the guard above returned early on the way back in — so
+  // the session stopped and never came back. That was the silence.
+  const liveStartRef = useRef(live.start);
+  const liveStopRef = useRef(live.stop);
+  liveStartRef.current = live.start;
+  liveStopRef.current = live.stop;
   useEffect(() => {
     if (prevVoiceRef.current === liveVoiceName) return;
     prevVoiceRef.current = liveVoiceName;
     if (!conversing) return;
-    live.stop();
-    const id = setTimeout(() => { void live.start(); }, 120);
+    liveStopRef.current();
+    const id = setTimeout(() => { void liveStartRef.current(); }, 120);
     return () => clearTimeout(id);
-  }, [liveVoiceName, conversing, live]);
+  }, [liveVoiceName, conversing]);
 
   // In conversation the server says what it retrieved, so there is nothing to
   // guess: cards land with the sentence rather than after it. The keyword
@@ -1590,9 +1753,17 @@ function ChatModal({
   // reducer still owns dictation, the live session owns conversation.
   const voicePhase: VoicePhase = conversing
     ? (live.state === 'speaking' ? 'speaking'
-      : live.state === 'connecting' ? 'thinking'
+      : live.state === 'connecting' || live.state === 'thinking' ? 'thinking'
       : live.state === 'listening' ? 'listening' : 'idle')
     : dictatePhase;
+
+  // The microphone genuinely is not open until the session is ready — capture
+  // arms on the server's ready frame, because audio sent before then reaches
+  // the model as one compressed burst it reads as a single unfinished turn.
+  // So the interface has to say so: this state used to draw the same animated
+  // filament as thinking, which reads as listening, and people spoke into a
+  // dead mic and lost their opening words.
+  const voiceConnecting = conversing && live.state === 'connecting';
 
   useEffect(() => {
     if (conversing) setVoiceSecondsLeft(live.secondsLeft);
@@ -1606,43 +1777,7 @@ function ChatModal({
     [voicePhase, voice]
   );
 
-  // A send that never settles would otherwise leave the loop stuck in
-  // 'thinking' with the microphone shut. `loading` alone cannot be trusted to
-  // recover it: an aborted stream emits neither 'done' nor 'error', so the flag
-  // can stay true indefinitely. Hence the hard ceiling as well as the fast path.
-  // The 1200ms fast path this used to carry was the race itself: it handed the
-  // floor back on `!loading && !streaming`, which is true throughout the
-  // /speech round trip, so it reopened the microphone into audio that was
-  // about to play. The stream now reports completion explicitly through
-  // REPLY_DONE, leaving this as what its name always claimed — a last resort
-  // against a turn that never settles at all.
-  useEffect(() => {
-    if (!micPaused(floor.state)) return;
-    const id = setTimeout(() => dispatchFloor({ type: 'WATCHDOG' }), 30000);
-    return () => clearTimeout(id);
-  }, [floor.state, floor.turn]);
 
-  // `committing` waits on a stream that may never begin — a send can be refused
-  // or fail before emitting a single token, and REPLY_DONE only ever fires off
-  // the END of a stream that started. Without this the floor sat in committing
-  // with the microphone shut, which is heard as the assistant going deaf: the
-  // shopper talks, the words are recognised, and nothing is ever sent.
-  //
-  // This is deliberately scoped to `committing` alone. The old version ran in
-  // every waiting state, which is what let it fire during the /speech round
-  // trip and reopen the mic into audio about to play — the race the machine
-  // exists to remove. Recovering a turn that never started and stealing the
-  // floor from one already under way are not the same thing.
-  useEffect(() => {
-    if (floor.state !== 'committing') return;
-    const since = Date.now();
-    const id = setInterval(() => {
-      if (!loading && !streaming && Date.now() - since > 1800) {
-        dispatchFloor({ type: 'WATCHDOG' });
-      }
-    }, 400);
-    return () => clearInterval(id);
-  }, [floor.state, floor.turn, loading, streaming]);
 
   // Live feedback: partial words appear in the composer as they are heard.
   useEffect(() => {
@@ -1668,7 +1803,7 @@ function ChatModal({
       setTimeout(() => { void live.start(); }, 220);
       return;
     }
-    dispatchFloor({ type: 'START', mode });
+    setDictateState('listening');
     // Opening the microphone is a ~60ms blocking task. Running it in the same
     // frame as the overlay's entrance made the animation visibly stutter, so
     // the surface paints first and the device is acquired right after.
@@ -1681,7 +1816,7 @@ function ChatModal({
     stopSpeech();
     voiceModeRef.current = 'off';
     setVoiceMode('off');
-    dispatchFloor({ type: 'STOP' });
+    setDictateState('idle');
     setSpeakingMsgIndex(null);
   }, [voice, live]);
 
@@ -1713,80 +1848,11 @@ function ChatModal({
     stopSessionRef.current();
     stopSpeech();
     setSpeakingMsgIndex(null);
-    dispatchFloor({ type: 'TERMINAL' });
+    setDictateState('idle');
   }, [errorCode]);
 
-  // The answer is read back only in the hands-free loop — a typed question in a
-  // quiet room should not suddenly start talking.
-  useEffect(() => {
-    const wasStreaming = prevStreamingRef.current;
-    prevStreamingRef.current = streaming;
-    if (!wasStreaming || streaming) return;
-    if (voiceModeRef.current !== 'converse') {
-      dispatchFloor({ type: 'REPLY_DONE', willSpeak: false });
-      return;
-    }
-
-    const idx = messages.length - 1;
-    const last = messages[idx];
-    const wantsAudio = (enableAudioResponse ?? true) && (autoSpeakResponses ?? true);
-    if (!wantsAudio || !last || last.role !== 'assistant' || !last.content) {
-      dispatchFloor({ type: 'REPLY_DONE', willSpeak: false });
-      return;
-    }
-    // Enters `preparing`, not `speaking`: nothing is audible until /speech has
-    // answered and the buffer has decoded, and pretending otherwise is what
-    // left that whole window unowned.
-    dispatchFloor({ type: 'REPLY_DONE', willSpeak: true });
-    // The turn this playback belongs to. A barge-in or watchdog moves the floor
-    // on, and every callback below then drops its result rather than steering a
-    // turn that has already ended.
-    const turn = floorTurnRef.current;
-    const mine = () => floorTurnRef.current === turn;
-    const resume = () => {
-      if (!mine()) return;
-      setSpeakingMsgIndex(null);
-      dispatchFloor({ type: 'AUDIO_ENDED' });
-    };
-    setSpeakingMsgIndex(idx);
-    void speak({
-      onStart: () => { if (mine()) dispatchFloor({ type: 'AUDIO_PLAYING' }); },
-      client: client as any,
-      text: last.content,
-      voice: ttsVoice,
-      language: shopperLanguage,
-      bcp47: speechLang,
-      onEnd: resume,
-      onError: resume,
-      onSecondsLeft: setVoiceSecondsLeft,
-      // The loop ends here rather than listening again. Only a guest can act on
-      // it, so only a guest is asked to.
-      onRefused: (reason) => {
-        setVoiceSecondsLeft(0);
-        voiceModeRef.current = 'off';
-        setVoiceMode('off');
-        stopSessionRef.current();
-        setSpeakingMsgIndex(null);
-        dispatchFloor({ type: 'TERMINAL' });
-        if (reason === 'guest') setVoiceBlocked(true);
-      },
-    });
-  }, [streaming, messages, enableAudioResponse, autoSpeakResponses, client, ttsVoice, shopperLanguage, speechLang]);
 
   useEffect(() => () => { stopSpeech(); }, []);
-
-  // The spoken answer, trimmed to its opening sentences. The full text belongs
-  // in the transcript behind the overlay, not stacked under a waveform.
-  const voiceSpokenAnswer = React.useMemo(() => {
-    // In conversation the answer never passes through the message list — the
-    // transcript arrives with the audio it belongs to.
-    if (conversing) return live.said.replace(/\s+/g, ' ').trim().slice(-180);
-    if (voicePhase === 'listening' && voice.interim) return '';
-    const last = [...messages].reverse().find(m => m.role === 'assistant');
-    const text = (last?.content ?? '').replace(/[*_`#>|]/g, '').replace(/\s+/g, ' ').trim();
-    if (!text) return '';
-    return text.length > 180 ? text.slice(0, 177).trimEnd() + '…' : text;
-  }, [messages, voicePhase, voice.interim, conversing, live.said]);
 
   // No vertical pre-determination: chips and placeholder are whatever the
   // integrator passed (blank by default). One widget can't guess what a given
@@ -1813,7 +1879,6 @@ function ChatModal({
           : placeholder;
 
 
-  const [selectedProduct, setSelectedProduct] = useState<ChatSource | null>(null);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [markupSrc, setMarkupSrc] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -1926,6 +1991,15 @@ function ChatModal({
     quiescent: useCallback(() => performance.now() - lastExternalScrollRef.current > 90, []),
   });
   const messageRefs = useRef<(HTMLDivElement | null)[]>([]);
+  // The scrollbar itself used to be the only way to tell there was more below
+  // — and on Windows/Chrome its track reserves width, shifting every bubble
+  // a few pixels the moment scrolling becomes possible. Hidden in CSS now;
+  // this replaces it as the "there's more" signal.
+  const [showJumpToBottom, setShowJumpToBottom] = useState(false);
+  // Drives the timeline: how far through the transcript we are, and which
+  // question owns the part of it currently on screen.
+  const [scrollProgress, setScrollProgress] = useState(1);
+  const [activeMsgIdx, setActiveMsgIdx] = useState(0);
   // Lets a programmatic scroll re-seed the wheel interpolator below, so the
   // next wheel tick doesn't yank the list back to a stale target.
   const resyncScrollRef = useRef<() => void>(() => {});
@@ -1937,6 +2011,22 @@ function ChatModal({
   // flick during streaming stops short. Track the gesture — including the
   // momentum that outlives touchend — and leave the list alone until it rests.
   const touchScrollingRef = useRef(false);
+
+  // Whether the reader is parked at the bottom and wants the stream to carry
+  // them along. A distance test alone is not enough: within the old 120px band
+  // the autoscroll kept overwriting the wheel's own target every token, so the
+  // two took turns writing scrollTop and the list shook.
+  const stickToBottomRef = useRef(true);
+  const [alertTick, setAlertTick] = useState(0);
+  // Bumped each time the reader leaves the bottom, so leaving again during one
+  // long answer counts as a fresh reason to speak up.
+  const awayEpochRef = useRef(0);
+  const lastAlertKeyRef = useRef('');
+  // Declared here so the scroll effect below can reach them; filled in once the
+  // alert state exists further down.
+  const dismissJumpAlertRef = useRef<() => void>(() => {});
+  const resetAlertArmingRef = useRef<() => void>(() => {});
+
   useEffect(() => {
     const el = msgsContainerRef.current;
     if (!el) return;
@@ -1945,7 +2035,11 @@ function ChatModal({
       clearTimeout(idle);
       idle = setTimeout(() => { touchScrollingRef.current = false; }, 150);
     };
-    const onTouchStart = () => { clearTimeout(idle); touchScrollingRef.current = true; };
+    const onTouchStart = () => {
+      clearTimeout(idle);
+      touchScrollingRef.current = true;
+      dismissJumpAlertRef.current();
+    };
     const onScroll = () => { if (touchScrollingRef.current) settle(); };
     el.addEventListener('touchstart', onTouchStart, { passive: true });
     el.addEventListener('touchend', settle, { passive: true });
@@ -1961,6 +2055,138 @@ function ChatModal({
   }, []);
 
   useEffect(() => {
+    const el = msgsContainerRef.current;
+    if (!el) return;
+    const JUMP_THRESHOLD = 160;
+    const STICK_ON = 8;
+    let queued = 0;
+
+    const measure = () => {
+      queued = 0;
+      const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+      // Distance can only ever switch following back ON. Letting it switch
+      // following OFF conflated two different things: the reader scrolling up,
+      // and the content growing underneath them. Clicking a product inserts a
+      // whole card block at once, which spikes the distance while the reader
+      // has not moved at all — that read as "they left", so the ghost fired and
+      // the stream stopped being followed. Leaving is a decision, so only real
+      // input makes it (see the wheel and external-scroll handlers).
+      if (distance <= STICK_ON) {
+        if (!stickToBottomRef.current) resetAlertArmingRef.current();
+        stickToBottomRef.current = true;
+      }
+
+      // Gated on following, not on distance alone. While the stream is being
+      // followed every chunk spikes the distance for the frames it takes the
+      // glide to catch up, so a pure distance test mounted and unmounted the
+      // button once per chunk — that flashing was the "patched up" look. If the
+      // reader is being carried along there is nothing to jump to anyway.
+      setShowJumpToBottom(distance > JUMP_THRESHOLD && !stickToBottomRef.current);
+
+      const max = el.scrollHeight - el.clientHeight;
+      setScrollProgress(max > 8 ? Math.min(1, Math.max(0, el.scrollTop / max)) : 1);
+
+      // The question that owns the screen is the last one to have passed the
+      // upper third — the same point a reader's eye is actually resting on.
+      const line = el.scrollTop + el.clientHeight * 0.33;
+      let active = 0;
+      for (let i = 0; i < messageRefs.current.length; i++) {
+        const node = messageRefs.current[i];
+        if (node && node.offsetTop - el.offsetTop <= line) active = i;
+      }
+      setActiveMsgIdx(active);
+    };
+
+    // Coalesced to one measurement per frame. A flick fires scroll events far
+    // faster than paint, and re-rendering the timeline on every one of them is
+    // what made a fast scroll look like it was fighting itself. Reading layout
+    // inside rAF also keeps it out of the event handler's critical path.
+    const onScroll = () => {
+      if (queued) return;
+      queued = requestAnimationFrame(measure);
+    };
+
+    measure();
+    el.addEventListener('scroll', onScroll, { passive: true });
+    const ro = new ResizeObserver(onScroll);
+    ro.observe(el);
+    return () => {
+      if (queued) cancelAnimationFrame(queued);
+      el.removeEventListener('scroll', onScroll);
+      ro.disconnect();
+    };
+  }, [messages.length]);
+
+  // Keyed on the turn plus which trip away from the bottom this is, so the
+  // ghost fires once for each — a new answer while the reader is away, or the
+  // reader leaving mid-answer. A plain 0/1 latch here alerted exactly once and
+  // then went silent for the rest of the session, because the effect watching
+  // it never saw the value change again.
+  const notifyNewBelow = useCallback((turn: number) => {
+    const key = `${turn}:${awayEpochRef.current}`;
+    if (lastAlertKeyRef.current === key) return;
+    lastAlertKeyRef.current = key;
+    setAlertTick(t => t + 1);
+  }, []);
+
+  // The ghost rests tucked into the edge and only travels out to say something
+  // arrived. Parked in the middle it would sit on top of whatever is being
+  // read, so it retreats on its own once it has had its moment.
+  const [jumpAlert, setJumpAlert] = useState(false);
+  // Namespaced per mount: an SVG filter id is global to the document, and two
+  // embeds of the widget on one page would otherwise collide on the same id.
+  const gooId = `hsk-goo-${useId()}`;
+  const jumpAlertRef = useRef(false);
+  const alertShownAtRef = useRef(0);
+  const clearAlert = useCallback(() => {
+    jumpAlertRef.current = false;
+    setJumpAlert(false);
+  }, []);
+  // Rearms the trigger outright: after returning to the bottom the next thing
+  // to arrive should summon the ghost again, whatever it is.
+  const resetAlertArming = useCallback(() => {
+    lastAlertKeyRef.current = '';
+    clearAlert();
+  }, [clearAlert]);
+  // The scroll that carries the reader away is still settling when the alert
+  // fires, and those frames are not an acknowledgement — without this window
+  // the ghost was dismissed by the very gesture that summoned it.
+  const dismissJumpAlert = useCallback(() => {
+    if (!jumpAlertRef.current) return;
+    if (performance.now() - alertShownAtRef.current < 700) return;
+    clearAlert();
+  }, [clearAlert]);
+  dismissJumpAlertRef.current = dismissJumpAlert;
+  resetAlertArmingRef.current = resetAlertArming;
+  useEffect(() => {
+    if (alertTick === 0) return;
+    jumpAlertRef.current = true;
+    alertShownAtRef.current = performance.now();
+    setJumpAlert(true);
+    const t = setTimeout(clearAlert, 4200);
+    return () => clearTimeout(t);
+  }, [alertTick, clearAlert]);
+
+  const jumpToMessage = useCallback((idx: number) => {
+    const el = msgsContainerRef.current;
+    const node = messageRefs.current[idx];
+    if (!el || !node) return;
+    const to = node.offsetTop - el.offsetTop - 12;
+    if (glideScrollRef.current) glideScrollRef.current(to);
+    else el.scrollTo({ top: to, behavior: 'smooth' });
+  }, []);
+
+  const jumpToBottom = useCallback(() => {
+    const el = msgsContainerRef.current;
+    if (!el) return;
+    stickToBottomRef.current = true;
+    resetAlertArmingRef.current();
+    const bottom = el.scrollHeight - el.clientHeight;
+    if (glideScrollRef.current) glideScrollRef.current(bottom);
+    else el.scrollTo({ top: bottom, behavior: 'smooth' });
+  }, []);
+
+  useEffect(() => {
     const container = msgsContainerRef.current;
     if (!container) return;
     const lastMsg = messages[messages.length - 1];
@@ -1971,9 +2197,13 @@ function ChatModal({
       if (lastMsg?.role === 'user') {
         const el = messageRefs.current[messages.length - 1];
         if (el) container.scrollTop = el.offsetTop - container.offsetTop;
+        // Asking a question is a request to be taken to the answer.
+        stickToBottomRef.current = true;
+        resetAlertArmingRef.current();
+      } else if (!stickToBottomRef.current) {
+        notifyNewBelow(messages.length);
       } else {
-        const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-        if (distanceFromBottom < 120 && !touchScrollingRef.current) {
+        if (!touchScrollingRef.current) {
           const bottom = container.scrollHeight - container.clientHeight;
           // Glide when we can — a hard write per token is what made following
           // the stream feel like a series of jerks rather than one motion.
@@ -1986,7 +2216,7 @@ function ChatModal({
       if (container.scrollTop !== before) resyncScrollRef.current();
     });
     return () => cancelAnimationFrame(raf);
-  }, [messages, loading, selectedProduct]);
+  }, [messages, loading]);
 
   // ── Lenis-style Smooth Momentum Wheel Scroll ─────────────────────────────────
   useEffect(() => {
@@ -1995,7 +2225,10 @@ function ChatModal({
 
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
 
-    const LAMBDA = 12; // exponential damping rate — higher is snappier
+    // Lenis defaults to lerp 0.1 per frame at 60Hz, which is this curve at ~6.3.
+    // 12 reached the target in half the time and read as a stop rather than a
+    // glide; 7 keeps the long tail that makes the settle feel unforced.
+    const LAMBDA = 7;
     const LINE_PX = 16;
 
     // Writes land on the device-pixel grid. Without this the tail of the easing
@@ -2012,8 +2245,12 @@ function ChatModal({
 
     const write = (v: number) => {
       if (v === written) return;
-      written = v;
       el.scrollTop = v;
+      // Record what the browser accepted, not what we asked for. It clamps to
+      // max scroll, and max scroll moves under us while an answer streams in —
+      // storing the request made every clamp look like a user scroll, so the
+      // glide cancelled and restarted once per token. That was the shake.
+      written = el.scrollTop;
     };
 
     const resync = () => {
@@ -2060,6 +2297,19 @@ function ChatModal({
       // re-seed from reality before applying the delta, or we snap backwards.
       if (Math.abs(el.scrollTop - written) > 1) target = current = written = el.scrollTop;
 
+      // Scrolling up is an explicit request to stop being carried along. Waiting
+      // for the distance to cross a threshold lets the autoscroll win the first
+      // few frames, and that argument is what the eye reads as a shake.
+      if (e.deltaY < 0) {
+        if (stickToBottomRef.current) awayEpochRef.current += 1;
+        stickToBottomRef.current = false;
+      }
+
+      // Dismissal keys off real input, not scroll events: the list keeps
+      // emitting those as the answer grows and as our own glide settles, and
+      // none of that is the reader acknowledging anything.
+      dismissJumpAlertRef.current();
+
       const scale = e.deltaMode === 1 ? LINE_PX : e.deltaMode === 2 ? el.clientHeight : 1;
       const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight);
       const next = Math.round(Math.max(0, Math.min(maxScroll, target + e.deltaY * scale)));
@@ -2081,12 +2331,25 @@ function ChatModal({
     // its old target, so the two fought all the way down — visible as a jitter
     // as the scroll settled. Yielding outright is always the right call: the
     // user's input outranks an animation we started.
+    let lastTop = el.scrollTop;
     const handleScroll = () => {
       // Only scrolls we did NOT write count as "the list is moving on its own".
       // Counting ours meant streaming autoscroll kept the list permanently
       // non-quiescent, and the sheet could never be dragged during a reply.
-      if (Math.abs(el.scrollTop - written) > 1) lastExternalScrollRef.current = performance.now();
-      if (rafId !== null && Math.abs(el.scrollTop - written) > 1) {
+      const external = Math.abs(el.scrollTop - written) > 1;
+      if (external) {
+        lastExternalScrollRef.current = performance.now();
+        // The wheel handler cannot see scrollbar drags, keyboard paging or
+        // touch momentum, so the same "the reader chose to leave" decision has
+        // to be made here too. Tested on direction, never on distance: content
+        // growing below moves the distance without moving scrollTop at all.
+        if (el.scrollTop < lastTop - 1 && stickToBottomRef.current) {
+          awayEpochRef.current += 1;
+          stickToBottomRef.current = false;
+        }
+      }
+      lastTop = el.scrollTop;
+      if (rafId !== null && external) {
         cancelAnimationFrame(rafId);
         rafId = null;
         el.classList.remove('hsk-scrolling');
@@ -2155,7 +2418,6 @@ function ChatModal({
   }, [reset]);
 
   const handleSourceClick = (src: ChatSource) => {
-    setSelectedProduct(src);
     onSelectSource?.(src);
     // If the assistant just asked a question ("Which sofa would you like…?"),
     // clicking a card answers it with that product instead of pivoting to specs.
@@ -2170,7 +2432,11 @@ function ChatModal({
 
   const handleSend = async (text?: string, extraAttachments?: ChatAttachment[], forcedIntent?: string, captureTargets?: CaptureTarget[]) => {
     const raw = (text ?? input).trim();
-    if (!raw || loading || chromeLoading) return;
+    // Not gated on `loading`: a message typed while one is already in flight
+    // is queued by useKiku's send() itself, not dropped here. One queued
+    // message at a time though — leave a third attempt sitting in the
+    // composer rather than clearing it for a send that won't happen.
+    if (!raw || chromeLoading || queuedMessage) return;
 
     // Onboarding: the first thing typed is treated as the shopper's name when it
     // reads like one; we store it and greet them, with no backend call. If it
@@ -2202,7 +2468,6 @@ function ChatModal({
     const q = raw;
     const resolvedForcedIntent = forcedIntent;
 
-    setSelectedProduct(null);
     setShowKikuPicker(false);
     setShowAtPicker(false);
     setInput('');
@@ -2229,7 +2494,6 @@ function ChatModal({
     const display = `@kiku ${t('displayCapture', { name }).trim()}`;
     const q = name || 'capture current page';
     setInput('');
-    setSelectedProduct(null);
     const toSend = attachments;
     setAttachments([]);
     send(q, display, toSend.length > 0 ? toSend : undefined, 'capture');
@@ -2248,7 +2512,6 @@ function ChatModal({
     const names = products.map(p => p.name).filter(Boolean).join(', ');
     const display = `@kiku ${t('displayCaptureAll', { count: String(products.length) })}`;
     setInput('');
-    setSelectedProduct(null);
     setAttachments([]);
     send(names || 'capture all', display, undefined, 'capture_all', targets);
   }, [defaultCurrency, send, t]);
@@ -2256,7 +2519,6 @@ function ChatModal({
   const handleKikuViewHistory = useCallback(() => {
     const display = `@kiku ${t('displayViewHistory')}`;
     setInput('');
-    setSelectedProduct(null);
     setAttachments([]);
     send('show my saved items', display, undefined, 'view_history');
   }, [send, t]);
@@ -2264,7 +2526,6 @@ function ChatModal({
   const handleKikuDelete = useCallback(() => {
     const display = `@kiku ${t('displayDelete')}`;
     setInput('');
-    setSelectedProduct(null);
     setAttachments([]);
     send('delete this', display, undefined, 'delete');
   }, [send, t]);
@@ -2303,9 +2564,37 @@ function ChatModal({
   // Rendering it anyway drew the brand mark over an empty column, which read as
   // an answer that had failed to paint rather than as one that never started.
   const halted = (stopped || interrupted) && !loading && !streaming;
-  const displayMessages = halted
-    ? messages.filter((m, i) => !(i === messages.length - 1 && m.role === 'assistant' && !m.content))
-    : messages;
+  const displayMessages = React.useMemo(() => {
+    const inFlight = loading || streaming;
+    return messages.filter((m, i) => {
+      if (m.role !== 'assistant') return true;
+      const isLastMsg = i === messages.length - 1;
+      // The live turn is empty on purpose until its first token arrives — that
+      // is the thinking indicator, not a blank answer.
+      if (isLastMsg && inFlight) return true;
+      // Anything the turn may have produced other than prose still counts as
+      // an answer worth its row.
+      const hasBody = !!m.content || !!m.visualization || m.visualizing ||
+        (m.knowledgeImages?.length ?? 0) > 0 || (m.referencedIds?.length ?? 0) > 0;
+      // A settled turn that produced nothing at all: the server closed the
+      // stream without ever sending a token. Drawing it left the brand mark
+      // floating over a column of white space between two real messages.
+      return hasBody;
+    });
+  }, [messages, loading, streaming]);
+
+  // One entry per question asked. Answers are not landmarks — nobody scrolls
+  // back looking for "the reply", they look for what they asked.
+  const timelineItems = React.useMemo(
+    () => displayMessages
+      .map((m, idx) => ({ m, idx }))
+      .filter(({ m }) => m.role === 'user' && !!m.content.trim())
+      .map(({ m, idx }) => {
+        const clean = m.content.replace(/^@kiku\s*/i, '').replace(/\s+/g, ' ').trim();
+        return { idx, text: clean.length > 30 ? clean.slice(0, 29).trimEnd() + '…' : clean };
+      }),
+    [displayMessages]
+  );
 
   // Nothing was generated at all, so the notice has no answer to sit beneath
   // and is centred on its own instead of hanging off the leading edge.
@@ -2356,12 +2645,13 @@ function ChatModal({
           <div className="hsk-markup-overlay">
             <MarkupEditor
               src={markupSrc}
+              t={t as (key: string, vars?: Record<string, string>) => string}
               onCancel={() => setMarkupSrc(null)}
-              onSend={(dataUrl, instruction) => {
+              onSend={(dataUrl, instruction, marks, preview) => {
                 setMarkupSrc(null);
                 handleSend(
-                  instruction || 'Apply the change indicated by the markings on the image.',
-                  [{ type: 'image', data: dataUrl, annotated: true }],
+                  instruction || t('markupApplyMarks'),
+                  [{ type: 'image', data: dataUrl, annotated: true, marks, instructed: !!instruction, preview }],
                 );
               }}
             />
@@ -2371,15 +2661,14 @@ function ChatModal({
         {/* ── Main Chat Area ── */}
         <div className="hsk-cb-main" ref={mainRef}>
 
+          <KikuDoodles seed={(client as any)?.api?.siteId ?? ''} theme={hskThemeAttr} />
+
           {/* Top bar */}
           <div className="hsk-cb-topbar">
             <div className="hsk-cb-topbar-left">
-              <span className="hsk-cb-topbar-icon" style={{ display: 'flex', alignItems: 'center' }}>
-                <SparkleIcon />
-              </span>
-              <div>
-                <div className="hsk-cb-topbar-title">{activeTitle}</div>
-              </div>
+              {/* Name only: the mark already appears beside every answer, and
+                  twice over read as branding rather than as an assistant. */}
+              <div className="hsk-cb-topbar-title">{activeTitle}</div>
             </div>
             <div className="hsk-cb-topbar-actions">
               {messages.length > 0 && (
@@ -2516,6 +2805,10 @@ function ChatModal({
                 const isUser = msg.role === 'user';
                 // iMessage grouping: only the last bubble in a consecutive same-sender run gets a tail.
                 const isRunEnd = isUser && displayMessages[idx + 1]?.role !== 'user';
+                // …and the run closes up: consecutive bubbles from one sender
+                // sit a couple of pixels apart, not a turn's worth of space.
+                const runMid = isUser && !isRunEnd;
+                const runCont = isUser && displayMessages[idx - 1]?.role === 'user';
                 // The matrix can only stand in for the LLM's table when BOTH compared
                 // products came from this turn's retrieval; a follow-up compare against
                 // an item from memory must keep the markdown table.
@@ -2524,7 +2817,15 @@ function ChatModal({
                 const displayContent =
                   !isUser && showMatrix ? stripMarkdownTables(msg.content) : msg.content;
                 return (
-                  <div key={idx} className="hsk-cb-msg-group" ref={(el) => { messageRefs.current[idx] = el; }}>
+                  <div
+                    key={idx}
+                    className={cn(
+                      'hsk-cb-msg-group',
+                      runMid && 'hsk-cb-msg-group--run-mid',
+                      runCont && 'hsk-cb-msg-group--run-cont',
+                    )}
+                    ref={(el) => { messageRefs.current[idx] = el; }}
+                  >
                     {isUser ? (
                       <div className={`hsk-cb-user-msg${isLastUser ? ' hsk-sent' : ''}`}>
                         {/* Image thumbnails in user bubble */}
@@ -2549,7 +2850,16 @@ function ChatModal({
                           </div>
                         )}
                         {msg.content && (
-                          <div className={`hsk-cb-user-bubble${isRunEnd ? '' : ' hsk-cb-user-bubble--grouped'}`}>
+                          <div className={cn(
+                            'hsk-cb-user-bubble',
+                            isRunEnd && 'hsk-cb-user-bubble--tail',
+                            msg.spoken && 'hsk-cb-user-bubble--spoken',
+                          )}>
+                            {/* Marked as spoken: transcription is imperfect, and
+                                a bubble nobody typed needs to say why it is
+                                there. Absolutely positioned, so it adds no
+                                height to the bubble it annotates. */}
+                            {msg.spoken && <MicIcon className="hsk-cb-spoken-mark" size={10} />}
                             {/^@kiku\b/i.test(msg.content) ? (
                               <>
                                 <span className="hsk-kiku-badge">@kiku</span>
@@ -2571,27 +2881,16 @@ function ChatModal({
                       <div className="hsk-cb-ai-msg">
                         <div className="hsk-cb-ai-icon" style={{ display: 'flex', alignItems: 'center' }}>
                           {isLast && (loading || streaming) ? (
-                            <div className="hsk-cb-thinking-icon">
-                              <svg className="hsk-brand-mark" viewBox="0 0 100 100" aria-hidden="true">
-                                <path d="M39.4 10.4 Q44 0 48.6 10.4 L86.1 95.8 Q88 100 83.4 100 L4.6 100 Q0 100 1.9 95.8 Z M24 100 L24 65 Q24 60 27.4 56.3 Q44 38 60.6 56.3 Q64 60 64 65 L64 100 Z" transform="translate(22.7 19) scale(0.62)" fillRule="evenodd" />
-                              </svg>
-                              <svg className="hsk-brand-mark hsk-brand-mark--sheen" viewBox="0 0 100 100" aria-hidden="true">
-                                <path d="M39.4 10.4 Q44 0 48.6 10.4 L86.1 95.8 Q88 100 83.4 100 L4.6 100 Q0 100 1.9 95.8 Z M24 100 L24 65 Q24 60 27.4 56.3 Q44 38 60.6 56.3 Q64 60 64 65 L64 100 Z" transform="translate(22.7 19) scale(0.62)" fillRule="evenodd" />
-                              </svg>
-                              <span className="hsk-arch-glow"><span className="hsk-arch-noise" /></span>
-                              <span className="hsk-handle-orbit">
-                                <span className="hsk-handle-ring">
-                                  <span className="hsk-handle-ball" />
-                                  <span className="hsk-handle-ball" />
-                                  <span className="hsk-handle-ball" />
-                                  <span className="hsk-handle-ball" />
-                                  <span className="hsk-handle-ball" />
-                                </span>
-                              </span>
-                              <span className="hsk-handle-rest" />
-                            </div>
+                            // Lands on the first character of the ANSWER, not
+                            // on `loading`: that flips false as soon as any
+                            // event arrives — a thinking chunk included — so
+                            // tying it there parked the rocket for the whole
+                            // reasoning phase, however long it ran.
+                            <KikuRocket landed={!!msg.content.trim()} size={isNarrow ? 26 : 40} />
                           ) : (
-                            <SparkleIcon />
+                            // Same crop and same box as the rocket, so the mark
+                            // does not shrink the instant the turn finishes.
+                            <SparkleIcon tight size={40} className="hsk-cb-ai-mark" />
                           )}
                         </div>
                         <div className="hsk-cb-ai-body">
@@ -2604,7 +2903,10 @@ function ChatModal({
                             const isComplete = msg.thoughtForSeconds != null || content.length > 0 || !(isLast && (streaming || loading));
                             return (
                               <>
-                                {(thinking || msg.thoughtForSeconds != null || (isLast && (streaming || loading))) && (
+                                {/* A spoken reply was never "thought about" in
+                                    the streaming sense — it already happened,
+                                    out loud, in the voice session. */}
+                                {!msg.spoken && (thinking || msg.thoughtForSeconds != null || (isLast && (streaming || loading))) && (
                                   <ThinkingBlock text={thinking} isComplete={isComplete} seconds={msg.thoughtForSeconds} />
                                 )}
                                 {content && (
@@ -2612,6 +2914,10 @@ function ChatModal({
                                     <MarkdownBlock content={content} streaming={isLast && streaming} />
                                   </div>
                                 )}
+                                {/* Per-message speaker, parked rather than deleted — the whole
+                                    TTS path behind it (speakMessage, speakingMsgIndex,
+                                    enableAudioResponse) is still wired, so restoring it is
+                                    uncommenting this block and nothing else.
                                 {content && enableAudioResponse !== false && !(isLast && streaming) && (
                                   <button
                                     type="button"
@@ -2623,6 +2929,7 @@ function ChatModal({
                                     <SpeakerIcon active={speakingMsgIndex === idx} />
                                   </button>
                                 )}
+                                */}
                               </>
                             );
                           })()}
@@ -2630,7 +2937,7 @@ function ChatModal({
                           {msg.visualizing && (
                             <div className="hsk-cb-viz hsk-cb-viz--loading">
                               <span className="hsk-cb-viz-spinner" />
-                              <span>{msg.visualizingText || 'Visualizing…'}</span>
+                              <span>{msg.visualizingText || t('vizWorking')}</span>
                             </div>
                           )}
                           {msg.visualization && (
@@ -2665,7 +2972,7 @@ function ChatModal({
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                                       <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
                                     </svg>
-                                    Mark &amp; edit
+                                    {t('vizMarkEdit')}
                                   </button>
                                 )}
                               </div>
@@ -2698,6 +3005,21 @@ function ChatModal({
                                   {(ref.title || ref.images[0]?.note) && (
                                     <div className="hsk-cb-kimg-caption">{ref.title || ref.images[0]?.note}</div>
                                   )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Withdrawn entries — structured, so the warning survives however the model phrased the answer */}
+                          {!isUser && (msg.staleNotices?.length ?? 0) > 0 && (
+                            <div className="hsk-cb-stale" role="status">
+                              <div className="hsk-cb-stale-title">{t('staleTitle')}</div>
+                              {msg.staleNotices!.map((n, i) => (
+                                <div key={i} className="hsk-cb-stale-item">
+                                  {n.state === 'removed'
+                                    ? t('staleRemoved', { title: n.title })
+                                    : t('staleUnavailable', { title: n.title })}
+                                  {n.reason && <span className="hsk-cb-stale-reason"> {n.reason}</span>}
                                 </div>
                               ))}
                             </div>
@@ -2737,7 +3059,7 @@ function ChatModal({
                               target="_blank"
                               rel="noopener noreferrer"
                             >
-                              Open my memory on mimi
+                              {t('openMemory')}
                               <ExternalIcon />
                             </a>
                           )}
@@ -2767,26 +3089,6 @@ function ChatModal({
                   </div>
                 );
               })
-            )}
-
-            {/* Selected product pinned card — shows while LLM fetches details */}
-            {selectedProduct && loading && (
-              <div
-                className="hsk-cb-selected-product"
-                onClick={() => selectedProduct.url && window.open(selectedProduct.url, '_blank')}
-              >
-                {selectedProduct.image && (
-                  <img className="hsk-cb-selected-img" src={selectedProduct.image} alt={selectedProduct.name} />
-                )}
-                <div className="hsk-cb-selected-info">
-                  <div className="hsk-cb-selected-name">{selectedProduct.name}</div>
-                  {selectedProduct.price && (
-                    <div className="hsk-cb-selected-price">
-                      {selectedProduct.currency ?? defaultCurrency} {parseFloat(String(selectedProduct.price ?? '').replace(/[^0-9.]/g, '') || '0').toLocaleString()}
-                    </div>
-                  )}
-                </div>
-              </div>
             )}
 
 
@@ -2899,10 +3201,76 @@ function ChatModal({
               </div>
             )}
 
+            {/* Held outside `messages` until it dispatches: every stream write
+                targets the last message expecting the assistant's turn, and a
+                queued user bubble in that slot swallowed the whole answer. */}
+            {queuedMessage && (
+              <div className={cn(
+                'hsk-cb-msg-group',
+                displayMessages[displayMessages.length - 1]?.role === 'user' && 'hsk-cb-msg-group--run-cont',
+              )}>
+                <div className="hsk-cb-user-msg">
+                  <div className="hsk-cb-user-bubble hsk-cb-user-bubble--tail hsk-cb-user-bubble--queued">
+                    {queuedMessage.content}
+                  </div>
+                  <button type="button" className="hsk-cb-queued-status" onClick={sendQueuedNow}>
+                    <span className="hsk-cb-queued-dot" />
+                    {t('queuedWaiting')}
+                    <span className="hsk-cb-queued-now">{t('queuedSendNow')}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div ref={bottomRef} style={{ height: 1 }} />
+
           </div>
 
           <div className="hsk-cb-input-wrap">
+              {showJumpToBottom && (
+                <div className="hsk-cb-jump-wrap">
+                  {/* Blur enough to let a nearby circle and the strip below it
+                      merge, then a contrast ramp steep enough to snap the
+                      blur's soft gradient back to a hard edge — the classic
+                      metaball recipe. Only the plain-colour shapes sit inside
+                      this filter; the ghost glyph is layered on top afterwards
+                      so it stays crisp instead of blurring with them. */}
+                  <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
+                    <defs>
+                      <filter id={gooId}>
+                        <feGaussianBlur in="SourceGraphic" stdDeviation="9" result="blur" />
+                        <feColorMatrix in="blur" mode="matrix"
+                          values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -9" />
+                      </filter>
+                    </defs>
+                  </svg>
+                  {/* drop-shadow is chained after the goo so it outlines the
+                      already-fused silhouette rather than each shape — this is
+                      what makes the bulge readable in light mode, where the
+                      card and the panel behind it are both white. */}
+                  <div
+                    className="hsk-cb-jump-goo"
+                    style={{ filter: `url(#${gooId}) drop-shadow(0 -1px 2px rgba(0,0,0,.13))` }}
+                  >
+                    {/* Spans the full card width: the bump has to melt into the
+                        card's whole top edge for the edge itself to look like
+                        it is being raised. Kept shallow so it only covers the
+                        card's top few pixels and never the send button. */}
+                    <div className="hsk-cb-jump-seam" />
+                    <div className={cn('hsk-cb-jump-bump', jumpAlert && 'hsk-cb-jump-bump--alert')} />
+                  </div>
+                  <button
+                    type="button"
+                    className={cn('hsk-cb-jump-bottom', jumpAlert && 'hsk-cb-jump-bottom--alert')}
+                    onClick={jumpToBottom}
+                    aria-label={t('jumpToLatest')}
+                    title={t('jumpToLatest')}
+                  >
+                    <span className="hsk-cb-jump-arrow"><KikuGhost /></span>
+                  </button>
+                </div>
+              )}
+
               <div className="hsk-cb-input-card">
                 {/* Seamless Top Docked Header (Antigravity IDE style) */}
                 {(/^@kiku\b/i.test(input) || showKikuPicker || showAtPicker) && (
@@ -3038,7 +3406,7 @@ function ChatModal({
                       <PaperclipIcon />
                     </button>
                   )}
-                  {enableVoice && voice.supported && (
+                  {enableVoice && canConverse && (
                     <button
                       className={cn("hsk-cb-voice-mode-btn", voiceMode === 'converse' && "hsk-cb-voice-mode-btn--active")}
                       onClick={() => voiceMode === 'converse' ? stopVoice() : startVoice('converse')}
@@ -3117,10 +3485,23 @@ function ChatModal({
 
         </div>{/* end .hsk-cb-main */}
 
+        {/* Desktop only — CSS removes it below the breakpoint, where the
+            jump-to-bottom pill is the only navigation affordance needed. */}
+        <ConversationTimeline
+          items={timelineItems}
+          activeIdx={activeMsgIdx}
+          progress={scrollProgress}
+          onJump={jumpToMessage}
+        />
+
         {/* Hands-free conversation. The transcript stays behind it, so the
             overlay is a mode of the same chat rather than a separate screen. */}
         {voiceMode === 'converse' && (
           <div className="hsk-voice-overlay" role="dialog" aria-label={t('voiceModeStart')}>
+            {/* Same ground as the thread — voice mode covers the panel whole, so
+                without this it is the one screen with a bare background. */}
+            <KikuDoodles seed={(client as any)?.api?.siteId ?? ''} theme={hskThemeAttr} />
+
             <button
               className="hsk-voice-exit"
               onClick={stopVoice}
@@ -3158,7 +3539,7 @@ function ChatModal({
               </div>
             )}
 
-            <div className="hsk-voice-stage">
+            <div className={cn('hsk-voice-stage', voiceConnecting && 'hsk-voice-stage--connecting')}>
               <VoiceCanvas
                 className="hsk-voice-canvas"
                 phase={voicePhase}
@@ -3167,6 +3548,15 @@ function ChatModal({
                 bins={live.spectrumBins}
               />
             </div>
+
+            {/* Said plainly, because the waveform alone cannot distinguish a
+                mic that is open from one that is about to be. */}
+            {voiceConnecting && (
+              <div className="hsk-voice-connecting" role="status">
+                <span className="hsk-voice-connecting-dot" />
+                {t('voiceConnecting')}
+              </div>
+            )}
 
             {/* No phase label. The waveform already says whether anyone is
                 talking, and naming the state was only ever narrating what the
@@ -3178,12 +3568,7 @@ function ChatModal({
                   : voicePhase === 'thinking' ? t('voicePhaseThinking')
                   : t('voicePhaseListening')}
               </span>
-              <span className="hsk-voice-heard">
-                {voiceMuted ? t('voiceMutedHint')
-                  : voice.interim ? voice.interim
-                  : voiceSpokenAnswer ? voiceSpokenAnswer
-                  : ''}
-              </span>
+              {voiceMuted && <span className="hsk-voice-heard">{t('voiceMutedHint')}</span>}
             </div>
 
             {/* What is being talked about. Hearing "the black sneakers are

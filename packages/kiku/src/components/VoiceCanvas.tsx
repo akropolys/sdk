@@ -70,7 +70,7 @@ export function VoiceCanvas({ phase, level, spectrum, bins, className }: VoiceCa
     let h = 0;
 
     const resize = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const dpr = Math.min(window.devicePixelRatio || 1, 3);
       const rect = canvas.getBoundingClientRect();
       w = Math.max(1, rect.width);
       h = Math.max(1, rect.height);

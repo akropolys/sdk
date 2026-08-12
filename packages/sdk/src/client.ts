@@ -580,7 +580,7 @@ export class AkropolysClient {
    * once per session. Bump CHROME_STRINGS_CACHE_VERSION if the defaults dict
    * changes shape, so stale cached keys can't linger.
    */
-  private static CHROME_STRINGS_CACHE_VERSION = 3;
+  private static CHROME_STRINGS_CACHE_VERSION = 4;
 
   async getUIStrings(language: string, defaults: Record<string, string>): Promise<UIStrings> {
     // The server owns the canonical dictionary; `defaults` stays only as the

@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { buildMarkRegions, type MarkRegion } from '../utils/markRegions';
 
-// Gemini-style image markup: the shopper sketches, erases, or writes on the
-// current scene to show exactly WHERE an edit should happen. The flattened
-// image is sent as an annotated attachment; the backend tells the model to
-// apply the change at the marks and scrub them from the output.
+// The shopper marks WHERE an edit goes. Marks are sent as geometry beside a
+// clean copy of the scene, never burned into it — `preview` carries the drawn
+// version, which is shown back to the shopper but never uploaded.
 
 type Tool = 'pen' | 'eraser' | 'text';
 
@@ -15,10 +15,11 @@ type Action = StrokeAction | TextAction;
 const COLORS = ['#111111', '#ff5a5a', '#ffb300', '#22c55e', '#06b6d4', '#d946ef', '#9ca3af'];
 const MAX_EXPORT_DIM = 1280;
 
-export function MarkupEditor({ src, onCancel, onSend }: {
+export function MarkupEditor({ src, onCancel, onSend, t }: {
   src: string;
   onCancel: () => void;
-  onSend: (dataUrl: string, instruction: string) => void;
+  onSend: (dataUrl: string, instruction: string, marks: MarkRegion[], preview: string) => void;
+  t: (key: string, vars?: Record<string, string>) => string;
 }) {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [loadError, setLoadError] = useState(false);
@@ -136,12 +137,17 @@ export function MarkupEditor({ src, onCancel, onSend }: {
   };
 
   const handleSend = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!img) return;
     try {
-      paint();
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
-      onSend(dataUrl, instruction.trim());
+      const clean = document.createElement('canvas');
+      clean.width = dims.w;
+      clean.height = dims.h;
+      const cctx = clean.getContext('2d');
+      if (!cctx) { setExportError(true); return; }
+      cctx.drawImage(img, 0, 0, dims.w, dims.h);
+      const dataUrl = clean.toDataURL('image/jpeg', 0.92);
+      const drawn = canvasRef.current?.toDataURL('image/jpeg', 0.85) || dataUrl;
+      onSend(dataUrl, instruction.trim(), buildMarkRegions(actions, dims.w, dims.h), drawn);
     } catch {
       setExportError(true);
     }
@@ -150,17 +156,17 @@ export function MarkupEditor({ src, onCancel, onSend }: {
   const hasMarks = actions.length > 0;
 
   return (
-    <div className="hsk-markup" role="dialog" aria-label="Mark up image">
+    <div className="hsk-markup" role="dialog" aria-label={t('markupDialogLabel')}>
       <div className="hsk-markup-head">
-        <span className="hsk-markup-title">Mark where you want the change</span>
-        <button className="hsk-markup-cancel" onClick={onCancel}>Cancel</button>
+        <span className="hsk-markup-title">{t('markupTitle')}</span>
+        <button className="hsk-markup-cancel" onClick={onCancel}>{t('markupCancel')}</button>
       </div>
 
       <div className="hsk-markup-stage">
         {loadError ? (
-          <div className="hsk-markup-error">This image can't be edited here.</div>
+          <div className="hsk-markup-error">{t('markupLoadError')}</div>
         ) : !img ? (
-          <div className="hsk-markup-loading">Loading image…</div>
+          <div className="hsk-markup-loading">{t('markupLoading')}</div>
         ) : (
           <div className="hsk-markup-canvas-wrap">
             <canvas
@@ -183,7 +189,7 @@ export function MarkupEditor({ src, onCancel, onSend }: {
                   color,
                 }}
                 value={textValue}
-                placeholder="Type, then Enter"
+                placeholder={t('markupTextHint')}
                 onChange={e => setTextValue(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') commitText(); if (e.key === 'Escape') { setPendingText(null); setTextValue(''); } }}
                 onBlur={commitText}
@@ -201,16 +207,16 @@ export function MarkupEditor({ src, onCancel, onSend }: {
               className={`hsk-markup-color${color === c ? ' hsk-markup-color--on' : ''}`}
               style={{ background: c }}
               onClick={() => { setColor(c); if (tool === 'eraser') setTool('pen'); }}
-              aria-label={`Colour ${c}`}
+              aria-label={t('markupColorLabel', { colour: c })}
             />
           ))}
         </div>
         <div className="hsk-markup-actions">
-          <button className={`hsk-markup-tool${tool === 'pen' ? ' hsk-markup-tool--on' : ''}`} onClick={() => setTool('pen')}>Sketch</button>
-          <button className={`hsk-markup-tool${tool === 'text' ? ' hsk-markup-tool--on' : ''}`} onClick={() => setTool('text')}>Text</button>
-          <button className={`hsk-markup-tool${tool === 'eraser' ? ' hsk-markup-tool--on' : ''}`} onClick={() => setTool('eraser')}>Eraser</button>
-          <button className="hsk-markup-tool" onClick={() => setActions(prev => prev.slice(0, -1))} disabled={!hasMarks}>Undo</button>
-          <button className="hsk-markup-tool" onClick={() => setActions([])} disabled={!hasMarks}>Clear</button>
+          <button className={`hsk-markup-tool${tool === 'pen' ? ' hsk-markup-tool--on' : ''}`} onClick={() => setTool('pen')}>{t('markupSketch')}</button>
+          <button className={`hsk-markup-tool${tool === 'text' ? ' hsk-markup-tool--on' : ''}`} onClick={() => setTool('text')}>{t('markupText')}</button>
+          <button className={`hsk-markup-tool${tool === 'eraser' ? ' hsk-markup-tool--on' : ''}`} onClick={() => setTool('eraser')}>{t('markupEraser')}</button>
+          <button className="hsk-markup-tool" onClick={() => setActions(prev => prev.slice(0, -1))} disabled={!hasMarks}>{t('markupUndo')}</button>
+          <button className="hsk-markup-tool" onClick={() => setActions([])} disabled={!hasMarks}>{t('markupClear')}</button>
         </div>
       </div>
 
@@ -218,7 +224,7 @@ export function MarkupEditor({ src, onCancel, onSend }: {
         <input
           className="hsk-markup-instruction"
           value={instruction}
-          placeholder="Describe the change — e.g. add the sofa here"
+          placeholder={t('markupInstruction')}
           onChange={e => setInstruction(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && (hasMarks || instruction.trim())) handleSend(); }}
         />
@@ -227,10 +233,10 @@ export function MarkupEditor({ src, onCancel, onSend }: {
           onClick={handleSend}
           disabled={!img || (!hasMarks && !instruction.trim())}
         >
-          Send
+          {t('markupSend')}
         </button>
       </div>
-      {exportError && <div className="hsk-markup-error">Couldn't process this image — try a newer visualization.</div>}
+      {exportError && <div className="hsk-markup-error">{t('markupError')}</div>}
     </div>
   );
 }

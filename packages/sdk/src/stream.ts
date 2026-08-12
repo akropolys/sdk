@@ -14,11 +14,21 @@ export interface KnowledgeImageRef {
   images: KnowledgeImage[];
 }
 
+// An entry the shopper asked about that is no longer on offer. 'removed' is
+// gone for good; 'unavailable' may return. Delivered as a structured
+// stale_notice SSE event so the warning is shown even if the answer buries it.
+export interface StaleNotice {
+  title: string;
+  state: 'removed' | 'unavailable';
+  reason?: string;
+}
+
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   images?: string[]; // base64 data URLs attached by the user
   knowledgeImages?: KnowledgeImageRef[]; // owner-authored reference images backing this answer
+  staleNotices?: StaleNotice[]; // entries referenced here that are no longer available
   actionType?: string;
   sources?: ChatSource[]; // this turn's candidate entities, for rendering referenced products
   referencedIds?: string[]; // ids from `sources` this specific answer actually mentioned
@@ -30,6 +40,10 @@ export interface ChatMessage {
   thinking?: string; // the model's reasoning, delivered separately from the answer
   thoughtForSeconds?: number; // wall-clock time from send until the answer began
   statusMessage?: string; // live status update (e.g. "Searching 2,431 products...")
+  /** Typed while the previous turn is still in flight; waiting to be dispatched. */
+  queued?: boolean;
+  /** Spoken aloud in voice mode rather than typed — transcribed, not authored. */
+  spoken?: boolean;
 }
 
 export interface ChatSource {
@@ -77,21 +91,23 @@ function parseSSEChunk(raw: string): SSEFrame[] {
     if (!block.trim()) continue;
     let event = '';
     let data = '';
+    let seenData = false;
     for (const line of block.split('\n')) {
       if (line.startsWith('event:')) event = line.slice(6).trim();
       else if (line.startsWith('data:')) {
-        data = line.slice(5);
+        let d = line.slice(5);
         // Per the SSE spec a single space after the colon is a delimiter, not
-        // content. Keeping it prepended a space to EVERY token: in Latin text
-        // the duplicates collapsed in HTML and went unnoticed, but in Tamil,
-        // Thai and other complex scripts a token boundary falls inside a
-        // grapheme, so the space landed between a consonant and its vowel sign
-        // and split the ligature apart.
-        if (data.startsWith(' ')) data = data.slice(1);
+        // content — keeping it split ligatures in Tamil, Thai and other scripts
+        // where a token boundary can fall inside a grapheme.
+        if (d.startsWith(' ')) d = d.slice(1);
+        // Multiple data: lines in one block concatenate with a newline. Assigning
+        // instead kept only the last, silently truncating any multi-line frame.
+        data = seenData ? data + '\n' + d : d;
+        seenData = true;
       }
     }
     // An event with empty data is still a frame — `done` carries no payload.
-    if (data !== '' || event !== '') frames.push({ event, data });
+    if (seenData || event !== '') frames.push({ event, data });
   }
   return frames;
 }
@@ -108,7 +124,7 @@ export class KikuStream {
     this.startReading();
   }
 
-  on(event: 'token' | 'meta' | 'done' | 'error' | 'entity_ref' | 'viz' | 'thinking' | 'knowledge_images', callback: Function): this {
+  on(event: 'token' | 'meta' | 'done' | 'error' | 'entity_ref' | 'viz' | 'thinking' | 'knowledge_images' | 'stale_notice', callback: Function): this {
     if (!this.listeners[event]) {
       this.listeners[event] = [];
     }
@@ -116,7 +132,7 @@ export class KikuStream {
     return this;
   }
 
-  off(event: 'token' | 'meta' | 'done' | 'error' | 'entity_ref' | 'viz' | 'thinking' | 'knowledge_images', callback: Function): this {
+  off(event: 'token' | 'meta' | 'done' | 'error' | 'entity_ref' | 'viz' | 'thinking' | 'knowledge_images' | 'stale_notice', callback: Function): this {
     if (!this.listeners[event]) return this;
     this.listeners[event] = this.listeners[event].filter(cb => cb !== callback);
     return this;
@@ -154,17 +170,30 @@ export class KikuStream {
       let accumulatedMessage = '';
 
       let isDoneEvent = false;
-      while (true) {
+      let ended = false;
+      while (!ended) {
         const { done, value } = await reader.read();
-        if (done || this.aborted || isDoneEvent) break;
+        if (this.aborted || isDoneEvent) break;
 
-        buffer += decoder.decode(value, { stream: true });
+        if (done) {
+          buffer += decoder.decode();
+          ended = true;
+        } else {
+          buffer += decoder.decode(value, { stream: true });
+        }
 
-        const lastBoundary = buffer.lastIndexOf('\n\n');
-        if (lastBoundary === -1) continue;
-
-        const complete = buffer.slice(0, lastBoundary + 2);
-        buffer = buffer.slice(lastBoundary + 2);
+        let complete: string;
+        if (ended) {
+          // The stream is closed, so whatever is left is the last frame whether
+          // or not it got its terminator — dropping it lost the final tokens.
+          complete = buffer;
+          buffer = '';
+        } else {
+          const lastBoundary = buffer.lastIndexOf('\n\n');
+          if (lastBoundary === -1) continue;
+          complete = buffer.slice(0, lastBoundary + 2);
+          buffer = buffer.slice(lastBoundary + 2);
+        }
 
         const frames = parseSSEChunk(complete);
 
@@ -196,6 +225,18 @@ export class KikuStream {
               const payload = JSON.parse(data);
               if (Array.isArray(payload?.refs) && payload.refs.length > 0) {
                 this.emit('knowledge_images', payload.refs as KnowledgeImageRef[]);
+              }
+            } catch {
+              // ignore parse errors
+            }
+            continue;
+          }
+
+          if (event === 'stale_notice') {
+            try {
+              const payload = JSON.parse(data);
+              if (Array.isArray(payload?.items) && payload.items.length > 0) {
+                this.emit('stale_notice', payload.items as StaleNotice[]);
               }
             } catch {
               // ignore parse errors
@@ -255,6 +296,8 @@ export class KikuStream {
             if (code) (err as Error & { code?: string }).code = code;
             throw err;
           }
+
+          if (event) continue; // unknown named event is structured data, never answer text
 
           // Plain token — convert literal \n to actual newline
           const token = data.replace(/\\n/g, '\n');

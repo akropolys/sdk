@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { speechLevel, duckSpeech } from './tts';
-import { logVoice } from './voiceLog';
 
 export type VoicePhase = 'idle' | 'listening' | 'thinking' | 'speaking';
 
@@ -19,23 +18,13 @@ export interface VoiceSessionOptions {
   paused?: boolean;
 }
 
-// Web Speech fires isFinal on its own schedule — often mid-thought, after a
-// breath — which is why utterances were being sent before the speaker finished.
-// Endpointing is decided here instead, from actual microphone energy.
+// Web Speech fires isFinal mid-thought, so endpointing is decided here from microphone energy instead.
 const DEFAULT_SILENCE_MS = 1100;
 // Below this RMS the room counts as quiet. Calibrated against the noise floor
 // measured while the session starts, so a noisy café doesn't read as speech.
 const SPEECH_MARGIN = 0.012;
 const BARGE_IN_MS = 320;
-// How much of our own playback level to add to the speech threshold while the
-// assistant is talking. Browser AEC cancels most of what the speakers emit, but
-// never all of it — on laptop speakers at volume, or over Bluetooth, the
-// residue crossed a fixed threshold and read as the shopper interrupting. The
-// assistant then cut itself off, reopened the mic into the tail of its own
-// sentence, and answered that. Gating on the level we are OUTPUTTING is what
-// separates a real interruption from our own echo; it costs one already-computed
-// number, and it also lets the noise floor keep adapting through playback
-// instead of stalling because everything reads as speech.
+// How much of our own playback level to add to the speech threshold, so echo doesn't read as a barge-in.
 const ECHO_REJECT = 0.09;
 
 // How far the assistant drops while an interruption is being adjudicated, and
@@ -43,20 +32,13 @@ const ECHO_REJECT = 0.09;
 const DUCK_LEVEL = 0.25;
 const DUCK_FADE_MS = 130;
 const CONFIRM_MS = 700;
-// Frames of sustained voice-likeness needed to turn a duck into a real
-// interruption — roughly a fifth of a second at 60fps, about the shortest a
-// deliberate word can be.
+// Frames of sustained voice-likeness needed to turn a duck into a real interruption (~0.2s at 60fps).
 const CONFIRM_FRAMES = 12;
 
-// Speech modulates at roughly 4–8 Hz — that is the syllable rate. Fans, road
-// noise, air conditioning and hum carry plenty of energy but almost none of
-// that modulation, which is what separates them from a voice without a model.
+// Speech modulates at roughly 4–8 Hz — that is the syllable rate.
 const MOD_WINDOW = 48; // ~0.8s of envelope history at 60fps
 
-// Evidence weights. Deliberately crude: this score only ever decides whether to
-// DUCK, and the recogniser decides whether that was really an interruption. A
-// mistuned weight costs a brief dip in volume, never a wrong turn boundary —
-// which is the only reason a hand-weighted score is affordable here at all.
+// Evidence weights.
 const W_ENERGY = 0.45;
 const W_MODULATION = 0.35;
 const W_BAND = 0.20;
@@ -87,23 +69,14 @@ export function useVoiceSession({
   const lastLoudRef = useRef(0);
   const loudSinceRef = useRef(0);
   const transcriptRef = useRef('');
-  // How much of the current recognition's result list has already been sent,
-  // and how long that list was when we last looked. Both are per-recognition:
-  // a restart hands back an empty list, so both reset with it.
+  // How much of the current recognition's result list has already been sent. Per-recognition: a restart resets both.
   const consumedRef = useRef(0);
   const resultLenRef = useRef(0);
   const activeRef = useRef(false);
   const pausedRef = useRef(paused);
-  // Should recognition be running? This is now the ONLY answer to that
-  // question. `recognitionRef` says whether an instance exists, which is a
-  // different thing and was being read as if it were the same.
+  // Should recognition be running? This is now the ONLY answer to that question.
   const wantRestartRef = useRef(false);
   // A stop() has been issued but the browser has not answered with onend yet.
-  // Constructing a new recogniser inside this window is what threw
-  // InvalidStateError: the ref had already been cleared, so the guard against
-  // double-starting saw nothing, the exception was caught into a null ref, and
-  // no onend ever arrived to restart it. The session died in silence while the
-  // level meter kept animating off the separate getUserMedia stream.
   const stoppingRef = useRef(false);
 
   const onUtteranceRef = useRef(onUtterance);
@@ -143,19 +116,7 @@ export function useVoiceSession({
   const duckAtRef = useRef(0);
   const bargeEvidenceRef = useRef(0);
 
-  /**
-   * How much the current frame looks like a human voice rather than noise,
-   * 0..1. Two signals, both read off buffers we already fill every frame:
-   *
-   *  - modulation: speech rises and falls at the syllable rate; steady sources
-   *    (fan, engine, hum) hold a near-constant envelope
-   *  - band ratio: voiced speech concentrates in ~300–3400 Hz, while clatter is
-   *    broadband and rumble sits below it
-   *
-   * Neither identifies WHO is speaking. A television or a bystander scores as
-   * high as the shopper, and nothing short of speaker identification changes
-   * that — this rejects noise, not other people.
-   */
+  /** How much the current frame looks like a human voice rather than noise, 0..1. */
   const voiceLikeness = useCallback((rms: number): number => {
     const analyser = analyserRef.current;
     if (!analyser) return 0;
@@ -207,7 +168,6 @@ export function useVoiceSession({
     consumedRef.current = resultLenRef.current;
     setInterim('');
     setHearing(false);
-    logVoice('call', 'commit', text.slice(0, 60) || '(empty)');
     if (text) onUtteranceRef.current(text);
   }, []);
 
@@ -228,8 +188,6 @@ export function useVoiceSession({
 
     const now = Date.now();
     // Only our own output is subtracted, and only while it is actually playing.
-    // While the shopper holds the floor this term is zero and the threshold is
-    // exactly what it always was.
     const echo = pausedRef.current ? speechLevel() * ECHO_REJECT : 0;
     const speech = rms > floorRef.current + SPEECH_MARGIN + echo;
     if (speech) {
@@ -243,24 +201,7 @@ export function useVoiceSession({
     }
 
     if (pausedRef.current) {
-      // Assistant is talking. Acoustics alone cannot tell an interruption from
-      // a lorry, so they no longer decide one: enough evidence DUCKS the
-      // assistant and reopens the mic, and the recogniser — the only component
-      // that actually knows what speech is — settles it. A false alarm costs a
-      // fade nobody consciously registers, where a hard stop used to sever the
-      // sentence and hand the floor to a passing noise.
-      // Confirmation is acoustic, not ASR. Bringing recognition up mid-duck to
-      // adjudicate looked better on paper, but SpeechRecognition.stop() is
-      // asynchronous while the ref clears synchronously, so the restart raced
-      // its own teardown: Chrome aborted both, onerror swallows 'aborted' by
-      // design, and after a couple of interruptions recognition never came back
-      // at all — the microphone appeared live, because the level meter runs off
-      // a separate getUserMedia stream, while nothing was being transcribed.
-      //
-      // Recognition therefore has exactly one owner: the paused effect. What
-      // survives is the part that mattered — evidence only DUCKS, and a duck
-      // has to hold up over time before it takes the floor, so a door slam
-      // fades the answer for a moment instead of ending it.
+      // Assistant is talking.
       if (!duckedRef.current) {
         if (loudSinceRef.current && now - loudSinceRef.current > BARGE_IN_MS &&
             voiceLikeness(rms) > DUCK_SCORE) {
@@ -271,9 +212,7 @@ export function useVoiceSession({
           duckSpeech(DUCK_LEVEL, DUCK_FADE_MS);
         }
       } else {
-        // Sustained voice-likeness is the confirmation. A transient loses its
-        // accumulated evidence faster than it gains it, so only something that
-        // keeps sounding like speech survives the window.
+        // Sustained voice-likeness is the confirmation.
         if (voiceLikeness(rms) > DUCK_SCORE) bargeEvidenceRef.current += 1;
         else bargeEvidenceRef.current = Math.max(0, bargeEvidenceRef.current - 2);
 
@@ -281,7 +220,6 @@ export function useVoiceSession({
           duckedRef.current = false;
           bargeEvidenceRef.current = 0;
           duckSpeech(1, 0);
-          logVoice('call', 'barge-in-confirmed');
           onBargeInRef.current?.();
         } else if (now - duckAtRef.current > CONFIRM_MS) {
           duckedRef.current = false;
@@ -312,12 +250,7 @@ export function useVoiceSession({
     recognition.continuous = true;
 
     recognition.onresult = (event: any) => {
-      // From `consumed`, not from zero. A continuous session keeps every
-      // finalized result in `event.results` for its whole life, so rebuilding
-      // from index 0 after a commit re-sent the previous utterance glued to the
-      // new one — turn two arrived as "Q1 Q2", turn three as "Q1 Q2 Q3". Each
-      // turn re-asked everything already answered, which is what made the loop
-      // sound like it was talking to itself.
+      // From `consumed`, not from zero.
       let text = '';
       for (let i = consumedRef.current; i < event.results.length; i++) {
         text += event.results[i][0].transcript;
@@ -325,35 +258,26 @@ export function useVoiceSession({
       resultLenRef.current = event.results.length;
       text = text.trim();
       if (!text) return;
-      if (!transcriptRef.current) logVoice('event', 'onresult-first', text.slice(0, 40));
       transcriptRef.current = text;
       setInterim(text);
       setHearing(true);
     };
 
-    // Never listened for before. It is the only proof the recogniser actually
-    // came up: a start() with no onstart is a dead session that still looks
-    // alive from the outside.
-    recognition.onstart = () => logVoice('event', 'onstart');
-
+    // Never listened for before.
+    
     recognition.onerror = (event: any) => {
       const code = event?.error || '';
-      // Logged even when benign. 'aborted' is usually harmless, which is
-      // exactly why swallowing it silently hid a recogniser that had gone for
-      // good — the assumption was never checked against what followed.
-      logVoice(code === 'aborted' || code === 'no-speech' ? 'warn' : 'event', 'onerror', code);
+      // Logged even when benign.
       if (code === 'no-speech' || code === 'aborted') return;
       onErrorRef.current?.(code);
     };
 
     recognition.onend = () => {
-      logVoice('event', 'onend', `wantRestart=${wantRestartRef.current} active=${activeRef.current}`);
       recognitionRef.current = null;
       // Chrome ends a continuous session after a stretch of silence. The session
       // is still open, so bring the mic straight back up.
       if (activeRef.current && wantRestartRef.current) {
         setTimeout(() => {
-          logVoice('call', 'restart-timer-fired', `wantRestart=${wantRestartRef.current}`);
           startRecognition();
         }, 120);
       }
@@ -361,13 +285,9 @@ export function useVoiceSession({
 
     recognitionRef.current = recognition;
     try {
-      logVoice('call', 'recognition.start', `lang=${recognition.lang}`);
       recognition.start();
     } catch (e: any) {
-      // The InvalidStateError case: start() rejected because the previous
-      // recogniser has not finished stopping. No onend will follow, so nothing
-      // restarts it and the session is over without a single error surfacing.
-      logVoice('warn', 'start-threw', e?.name || String(e));
+      // The InvalidStateError case:
       recognitionRef.current = null;
       onErrorRef.current?.('failed-to-start');
     }
@@ -377,11 +297,8 @@ export function useVoiceSession({
     wantRestartRef.current = false;
     const r = recognitionRef.current;
     recognitionRef.current = null;
-    // The ref clears here, synchronously, while the browser's own teardown is
-    // still in flight. Anything that reads the ref as "recognition is gone" is
-    // reading it too early — which is the divergence this log exists to catch.
-    logVoice('call', 'recognition.stop', r ? 'had-instance' : 'no-instance');
-    try { r?.stop(); } catch (e: any) { logVoice('warn', 'stop-threw', e?.name || String(e)); }
+    // The ref clears here, synchronously, while the browser's own teardown is still in flight.
+    try { r?.stop(); } catch { /* already stopped */ }
   }, []);
 
   const stop = useCallback(() => {
@@ -444,7 +361,6 @@ export function useVoiceSession({
   // transcribes the answer back as a new question.
   useEffect(() => {
     if (!active) return;
-    logVoice('state', `paused=${paused}`);
     if (paused) {
       transcriptRef.current = '';
       setInterim('');
@@ -462,24 +378,15 @@ export function useVoiceSession({
     }
   }, [paused, active, startRecognition, stopRecognition]);
 
-  /**
-   * Watches for the failure that has no symptom: the session believes it is
-   * listening, the level meter animates off getUserMedia, and SpeechRecognition
-   * is gone. Purely diagnostic — it reports the divergence, it does not repair
-   * it, because what the repair should be depends on which sequence produced it.
-   */
+  /** Watches for the failure that has no symptom: */
   useEffect(() => {
     if (!active || paused) return;
     const id = setInterval(() => {
       const alive = !!recognitionRef.current;
       const hearingSomething = levelRef.current > floorRef.current + SPEECH_MARGIN;
       if (!alive) {
-        logVoice('warn', 'DIVERGENCE', 'listening with no recognition instance');
       } else if (hearingSomething && !transcriptRef.current) {
-        // Sound is reaching the analyser but nothing is being transcribed. One
-        // sample proves nothing — a pause between words looks identical — so
-        // this is a marker to correlate against, not a verdict.
-        logVoice('warn', 'audio-without-transcript', `level=${levelRef.current.toFixed(3)}`);
+        // Sound is reaching the analyser but nothing is being transcribed.
       }
     }, 2000);
     return () => clearInterval(id);

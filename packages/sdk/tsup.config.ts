@@ -7,6 +7,7 @@ export default defineConfig([
     },
     format: ['cjs', 'esm'],
     dts: true,
+    minify: true,
     splitting: false,
     clean: true,
     banner: {
@@ -21,6 +22,7 @@ export default defineConfig([
     },
     format: ['cjs', 'esm'],
     dts: true,
+    minify: true,
     splitting: false,
     clean: false,
     external: ['react', 'react-dom'],

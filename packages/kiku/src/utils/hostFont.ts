@@ -30,6 +30,9 @@ function safeUrl(url: string): string | null {
 // so nothing that could close the declaration reaches the DOM.
 const safeRange = (r: string): string => (/^[Uu]\+[0-9A-Fa-f,\-+ ]*$/.test(r) ? r : '');
 
+// Same reasoning as safeRange. "400" or a "100 900" axis range, nothing else.
+const safeWeight = (w: string): string => (/^\d{3}( \d{3})?$/.test(w) ? w : '400');
+
 // Shared by both hooks: mount a stylesheet once per distinct key, remove it
 // when the last widget using it unmounts.
 function useMountedFaces(key: string, css: string): void {
@@ -73,8 +76,11 @@ function scriptFontCSS(font: ScriptFont): string {
     .map(f => {
       const url = safeUrl(f.url);
       if (!url) return '';
+      // The face's real weight, never a blanket 100 900: claiming a static
+      // regular covers the axis is what made the browser synthesise bold, and
+      // faux bold on Devanagari, Thai or Nastaliq wrecks the letterforms.
       return `@font-face{font-family:"${font.family}";font-style:normal;` +
-        `font-weight:100 900;font-display:swap;src:url(${url}) format("woff2");` +
+        `font-weight:${safeWeight(f.weight)};font-display:swap;src:url(${url}) format("woff2");` +
         (safeRange(f.unicodeRange) ? `unicode-range:${safeRange(f.unicodeRange)};` : '') + '}';
     })
     .join('');

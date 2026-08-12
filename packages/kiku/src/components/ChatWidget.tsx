@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useKiku, useAkropolysContext, ChatMessage, ChatSource } from '@akropolys/sdk';
+import { useKiku, useAkropolysContext, resolveDisplayFields, ChatMessage, ChatSource } from '@akropolys/sdk';
 import { renderMarkdown } from '../utils/markdown';
 import { AkropolysTheme } from '@akropolys/sdk';
 import { cn } from '../utils/cn';
@@ -280,16 +280,22 @@ export function ChatWidget({
       role: 'assistant',
       content,
       styleDNA: dna,
-      visualSources: results.map((r: any) => ({
-        id: r.id,
-        name: r.product.name,
-        price: r.product.price,
-        currency: r.product.currency,
-        category: r.product.category,
-        url: r.product.url,
-        image: r.product.images && r.product.images.length > 0 ? r.product.images[0] : undefined,
-        brand: r.product.brand,
-      })),
+      // Resolved the same way chat sources are, so a blog keeps its author and
+      // date instead of being flattened into a product.
+      visualSources: results.map((r: any) => {
+        const fields = r.entity ?? {};
+        const d = resolveDisplayFields(fields, undefined);
+        return {
+          id: r.id,
+          url: r.url ?? fields.url,
+          fields,
+          name: d.title,
+          price: d.price,
+          image: d.image,
+          brand: d.subtitle,
+          currency: typeof fields.currency === 'string' ? fields.currency : undefined,
+        };
+      }),
     };
 
     setChatHistory(prev => [...prev, userMsg, assistantMsg]);

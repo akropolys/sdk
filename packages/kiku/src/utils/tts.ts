@@ -36,11 +36,7 @@ function audio(): { ctx: AudioContext; analyser: AnalyserNode } | null {
     analyser = ctx!.createAnalyser();
     analyser.fftSize = 1024;
     analyser.smoothingTimeConstant = 0.25;
-    // Gain sits AFTER the analyser, so speechLevel() keeps reporting the true
-    // output level while ducked. The echo gate subtracts what the speakers are
-    // actually emitting, and a ducked signal leaks proportionally less — if the
-    // analyser read post-gain the two would cancel and the gate would go blind
-    // at exactly the moment it is being asked to adjudicate an interruption.
+    // Gain sits AFTER the analyser, so speechLevel() reports the true output level even while ducked.
     duckGain = ctx!.createGain();
     duckGain.gain.value = 1;
     analyser.connect(duckGain);
@@ -50,14 +46,7 @@ function audio(): { ctx: AudioContext; analyser: AnalyserNode } | null {
   return { ctx: ctx!, analyser: analyser! };
 }
 
-/**
- * Rides the output gain to `level` over `fadeMs`.
- *
- * A step change in gain is audible as a click and reads as a fault; the ear is
- * far more forgiving of a ramp. Ramping is also what makes a provisional duck
- * affordable — restoring after a false alarm is a fade the shopper barely
- * registers rather than a lurch that announces the mistake.
- */
+/** Rides the output gain to `level` over `fadeMs`. */
 export function duckSpeech(level: number, fadeMs = 130): void {
   const g = duckGain;
   if (!g || !ctx) return;
@@ -95,11 +84,7 @@ export function speechLevel(): number {
   return smoothed;
 }
 
-/**
- * Fills out with the current output spectrum, so the visual can be shaped by
- * the timbre of the voice rather than by its loudness alone. False when there
- * is no audio graph to read (the browser-voice fallback).
- */
+/** Fills out with the current output spectrum. False when there is no audio graph to read. */
 export function speechSpectrum(out: Uint8Array): boolean {
   if (!speaking || usingFallback || !analyser) return false;
   if (out.length !== analyser.frequencyBinCount) return false;
@@ -130,10 +115,7 @@ export function stopSpeech() {
   }
 }
 
-/**
- * Strips markup that would otherwise be read aloud, while keeping the
- * punctuation the model needs to phrase a sentence naturally.
- */
+/** Strips markup that would be read aloud, keeping the punctuation needed to phrase a sentence. */
 export function cleanTextForSpeech(text: string): string {
   return text
     .replace(/```[\s\S]*?```/g, ' ')
@@ -151,9 +133,7 @@ export function cleanTextForSpeech(text: string): string {
     .trim();
 }
 
-// Sentence-sized chunks keep time-to-first-word short — a whole answer sent as
-// one request means several seconds of silence before anything is heard. The
-// terminators cover Latin, CJK, Arabic and Devanagari full stops.
+// Sentence-sized chunks keep time-to-first-word short; the terminators cover Latin, CJK, Arabic and Devanagari.
 const SENTENCE_END = /([.!?…。！？؟۔।]+["'”’)\]]*\s+)/;
 const CHUNK_TARGET = 240;
 
@@ -200,11 +180,7 @@ function playBuffer(a: { ctx: AudioContext; analyser: AnalyserNode }, buf: Audio
   });
 }
 
-/**
- * Speaks text with the platform voice, falling back to the browser's own
- * synthesizer only when the server cannot answer. Chunks are synthesized one
- * ahead of playback so speech starts on the first sentence.
- */
+/** Speaks with the platform voice, falling back to the browser synthesizer only when the server cannot answer. */
 export async function speak({
   client,
   text,
@@ -240,9 +216,7 @@ export async function speak({
     const result = await pending;
     pending = i + 1 < chunks.length ? synth(chunks[i + 1]) : Promise.resolve(null);
 
-    // A refusal is a decision, not a hiccup: falling back to the browser voice
-    // here would keep talking to a shopper the server just cut off, which is
-    // how a guest could speak indefinitely for free.
+    // A refusal is a decision, not a hiccup:
     if (result && 'refused' in result && result.refused) {
       onRefused?.(result.refused);
       onEnd?.();
@@ -278,11 +252,7 @@ export async function speak({
   }
 }
 
-/**
- * Picks the browser voice that actually speaks the shopper's language. Without
- * this the default voice reads every language with an English phoneme set,
- * which is where "robotic and can't read my language" comes from.
- */
+/** Picks the browser voice that actually speaks the shopper's language. */
 function pickVoice(tag: string): SpeechSynthesisVoice | undefined {
   const voices = window.speechSynthesis.getVoices?.() ?? [];
   if (!voices.length || !tag) return undefined;

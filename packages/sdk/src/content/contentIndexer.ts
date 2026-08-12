@@ -60,10 +60,17 @@ export function initContentIndexer(client: AkropolysClient): () => void {
     });
 
     // Extract text layout-unaware (since node is detached) and normalize spaces
-    const text = clone.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+    const raw = clone.textContent?.replace(/\s+/g, ' ').trim() ?? '';
 
     // Skip empty or near-empty pages (short boilerplate/routing transitions)
-    if (!text || text.length < 50) return;
+    if (!raw || raw.length < 50) return;
+
+    // Ceiling on what one page may contribute. Without it this sends whatever
+    // textContent returns — and on a site with no <main> that is the entire
+    // body, including comment threads and related-post lists. The server splits
+    // this into passages, so the cap bounds the work rather than the detail.
+    const MAX_PAGE_CHARS = 120_000;
+    const text = raw.length > MAX_PAGE_CHARS ? raw.slice(0, MAX_PAGE_CHARS) : raw;
 
     // Dispatch raw content payload to separate queue
     client.queueContentIngest({
