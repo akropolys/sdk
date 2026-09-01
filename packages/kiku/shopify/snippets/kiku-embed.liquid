@@ -1,0 +1,45 @@
+{% comment %}
+  Direct Liquid snippet for Shopify themes (e.g. theme.liquid before </body>)
+  Usage: {% render 'kiku-embed', site_id: 'your_site_id', api_token: 'your_token' %}
+{% endcomment %}
+
+<script>
+  window.AkropolysConfig = {
+    siteId: {{ site_id | default: settings.akropolys_site_id | json }},
+    apiToken: {{ api_token | default: settings.akropolys_api_token | json }},
+    buttonLabel: {{ button_label | default: "Ask Kiku" | json }},
+    position: {{ position | default: "bottom-right" | json }},
+    theme: {{ theme | default: "dark" | json }},
+    enableVoice: true,
+    enableVision: true,
+    enableAudioResponse: true,
+    {% if product %}
+    product: {
+      id: {{ product.id | json }},
+      title: {{ product.title | json }},
+      handle: {{ product.handle | json }},
+      url: {{ product.url | json }},
+      price: {{ product.price | json }},
+      compare_at_price: {{ product.compare_at_price | json }},
+      featured_image: {{ product.featured_image | image_url: width: 800 | json }},
+      type: {{ product.type | json }},
+      vendor: {{ product.vendor | json }},
+      tags: {{ product.tags | json }},
+      description: {{ product.description | strip_html | json }},
+      available: {{ product.available | json }},
+      variants: [
+        {% for variant in product.variants %}
+          {
+            id: {{ variant.id | json }},
+            title: {{ variant.title | json }},
+            price: {{ variant.price | json }},
+            sku: {{ variant.sku | json }},
+            available: {{ variant.available | json }}
+          }{% unless forloop.last %},{% endunless %}
+        {% endfor %}
+      ]
+    }
+    {% endif %}
+  };
+</script>
+<script src="https://cdn.akropolys.cloud/kiku.iife.js" defer></script>

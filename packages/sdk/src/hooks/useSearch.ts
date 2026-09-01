@@ -50,7 +50,7 @@ export function useSearch(options?: { type?: 'autocomplete' | 'vector'; debounce
         const res = searchType === 'vector'
           ? await client.api.searchVector(query, limit, controller.signal)
           : await client.api.searchAutocomplete(query, limit, controller.signal);
-        
+
         if (!controller.signal.aborted) {
           setResults(res.results ?? []);
           setLoading(false);
@@ -64,7 +64,6 @@ export function useSearch(options?: { type?: 'autocomplete' | 'vector'; debounce
               msg = parsed.error;
             }
           } catch {
-            // keep original text
           }
           setError(msg);
           setLoading(false);
@@ -91,7 +90,6 @@ export function useSearch(options?: { type?: 'autocomplete' | 'vector'; debounce
     setOutput(''); // Flush viewport
 
     try {
-      // Pass an immediate delta consumer directly into the agnostic core
       await client.entities.query(
         { q: query },
         {
@@ -123,7 +121,6 @@ export function useSearch(options?: { type?: 'autocomplete' | 'vector'; debounce
     setLoading(false);
   }, []);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (debounceTimerRef.current) {

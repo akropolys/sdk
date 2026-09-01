@@ -3,10 +3,6 @@ import React from 'react';
 const TAIL_A = 'M5 20.5 V11 a7 7 0 0 1 14 0 v9.5 l-3.5 -2 l-3.5 2 l-3.5 -2 L5 20.5 z';
 const TAIL_B = 'M5 18.5 V11 a7 7 0 0 1 14 0 v7.5 l-3.5 2 l-3.5 -2 l-3.5 2 L5 18.5 z';
 
-/**
- * The jump-to-latest affordance. The hem ripples on its own clock and the eyes
- * look down, so the thing points where it takes you without needing an arrow.
- */
 export default function KikuGhost() {
   return (
     <svg className="hsk-ghost" viewBox="0 0 24 24" aria-hidden="true">

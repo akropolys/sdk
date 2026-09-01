@@ -8,10 +8,6 @@ export interface AkropolysProviderProps extends AkropolysConfig {
   children?: any;
 }
 
-/**
- * Initialises the Akropolys client for your app. Supply `siteId` and `apiToken`
- * as props or via `NEXT_PUBLIC_AKROPOLYS_*` env vars — props take precedence.
- */
 export function AkropolysProvider({
   siteId,
   apiUrl,
@@ -53,17 +49,14 @@ export function AkropolysProvider({
     clientRef.current.reRegister();
   }
 
-  // Update shopperId dynamically when it changes
   useEffect(() => {
     clientRef.current?.setShopperId(shopperId);
   }, [shopperId]);
 
-  // Update authLoading dynamically when it changes
   useEffect(() => {
     clientRef.current?.setAuthLoading(!!authLoading);
   }, [authLoading]);
 
-  // Update dynamic callbacks
   useEffect(() => {
     if (clientRef.current) {
       clientRef.current.onError = onError;
@@ -73,12 +66,10 @@ export function AkropolysProvider({
     }
   }, [onError, onAction, onAddToCart, getCart]);
 
-  // Ensure active instance is registered on mount
   useEffect(() => {
     clientRef.current?.reRegister();
   }, []);
 
-  // Clean up
   useEffect(() => {
     return () => {
       clientRef.current?.destroy();

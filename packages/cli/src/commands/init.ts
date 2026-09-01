@@ -19,8 +19,6 @@ export async function runInit() {
     const siteId = await question(rl, pc.cyan('? Enter your Akropolys Site ID: '));
     const apiToken = await question(rl, pc.cyan('? Enter your Akropolys API Token: '));
 
-    // apiUrl is optional — the SDK defaults to the shared managed backend
-    // (https://api.akropolys.cloud/v1). Only self-hosted/local dev needs to set it.
     const envContent = `NEXT_PUBLIC_AKROPOLYS_SITE_ID=${siteId.trim()}
 NEXT_PUBLIC_AKROPOLYS_API_TOKEN=${apiToken.trim()}
 `;

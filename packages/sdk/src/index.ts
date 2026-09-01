@@ -11,6 +11,27 @@ export { useListIngest } from './hooks/useListIngest';
 export { usePageIngest } from './hooks/usePageIngest';
 export { useKiku } from './hooks/useKiku';
 export { useLiveContext } from './hooks/useLiveContext';
+export { useLiveValue, useLiveValues } from './hooks/useLiveValues';
+export { useLiveData } from './hooks/useLiveData';
+export {
+  setLiveValue,
+  getLiveValue,
+  subscribeLiveValues,
+  clearLiveValues,
+  splitFields,
+  isStale,
+  isFresh,
+  describeAge,
+  labelFor,
+  formatLiveValue,
+  LIVE_STALE_AFTER_MS,
+  LIVE_FLASH_MS,
+} from './liveValues';
+export type { LiveValue, FieldSplit } from './liveValues';
+export { pipeLiveData, stopLiveData } from './liveIngest';
+export type { LiveRecord } from './liveIngest';
+export { subscribeLiveStream } from './liveStream';
+export type { LiveStreamOptions } from './liveStream';
 export type { ChatMessage, ChatSource, ChatMetadata, StaleNotice } from './stream';
 export type {
   Entity,
@@ -26,13 +47,12 @@ export type {
   AkropolysTheme,
   ChatAction,
   ContentIngestPayload,
-  ChatAttachment, ImageMarkRegion,
+  ChatAttachment,
+  ImageMarkRegion,
   StyleDNA,
   VisualSearchResponse,
   CaptureTarget,
   SignedPayload,
   SignedEnvelope,
 } from './types';
-
-
 

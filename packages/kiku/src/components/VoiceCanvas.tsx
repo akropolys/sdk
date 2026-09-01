@@ -3,11 +3,11 @@ import type { VoicePhase } from '../utils/voiceSession';
 
 export interface VoiceCanvasProps {
   phase: VoicePhase;
-  /** Live 0..1 amplitude, read every frame — never passed as state. */
+
   level: () => number;
-  /** Fills the buffer with the current spectrum; false when none is available. */
+
   spectrum?: (out: Uint8Array) => boolean;
-  /** Bin count the spectrum buffer must have, read live. */
+
   bins?: () => number;
   className?: string;
 }
@@ -28,20 +28,9 @@ function rgba(c: RGB, alpha: number): string {
   return `rgba(${c[0] | 0}, ${c[1] | 0}, ${c[2] | 0}, ${alpha})`;
 }
 
-// Bands are mirrored about the centre: low frequencies — where a voice carries
-// most of its energy — swell in the middle, higher ones ripple out to the tips.
-// The filament then reads as one object rather than as a spectrum chart.
 const BANDS = 24;
-// Speech lives well below the top of the range; mapping the whole spectrum
-// across the filament spends most of it on bins that are always near zero.
 const SPECTRUM_FRACTION = 0.42;
 
-/**
- * The voice-mode visual: a luminous filament rather than a pulsing orb. Its
- * shape comes from the live spectrum — the shopper's microphone while
- * listening, the assistant's output while speaking — so what moves on screen
- * is the actual sound, not a fixed animation running beside it.
- */
 export function VoiceCanvas({ phase, level, spectrum, bins, className }: VoiceCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const phaseRef = useRef(phase);
@@ -60,8 +49,6 @@ export function VoiceCanvas({ phase, level, spectrum, bins, className }: VoiceCa
     if (!ctx) return;
 
     const style = getComputedStyle(canvas);
-    // --hsk-chat-* are the modal's own surface variables; --hsk-text is not in
-    // scope here and silently yielded a near-white ink on a white overlay.
     const accent = parseColor(style.getPropertyValue('--hsk-primary') || '', [255, 106, 51]);
     const ink = parseColor(style.getPropertyValue('--hsk-chat-text') || '', [31, 31, 31]);
 
@@ -94,9 +81,6 @@ export function VoiceCanvas({ phase, level, spectrum, bins, className }: VoiceCa
     let sweep = 0;
     const start = performance.now();
 
-    // Attack fast, release slow. A single symmetric filter here — stacked on
-    // the analyser's own smoothing and the level meter's — was what made the
-    // wave trail the voice by a visible beat.
     const follow = (cur: number, target: number, attack: number, release: number) =>
       cur + (target - cur) * (target > cur ? attack : release);
 
@@ -120,8 +104,6 @@ export function VoiceCanvas({ phase, level, spectrum, bins, className }: VoiceCa
       return true;
     };
 
-    // Without a spectrum (the browser-voice fallback, or an idle mic) the bands
-    // fall back to a smooth hump so the filament keeps a voice-like body.
     const synthesizeBands = (t: number, energy: number) => {
       for (let b = 0; b < BANDS; b++) {
         const m = b / (BANDS - 1);
@@ -136,8 +118,6 @@ export function VoiceCanvas({ phase, level, spectrum, bins, className }: VoiceCa
       const f = x - i;
       const a = bands[i];
       const b = bands[Math.min(BANDS - 1, i + 1)];
-      // Smoothstep, not linear: linear interpolation leaves a slope kink at
-      // every band boundary, which is visible as faceting along the curve.
       return a + (b - a) * f * f * (3 - 2 * f);
     };
 
@@ -155,8 +135,6 @@ export function VoiceCanvas({ phase, level, spectrum, bins, className }: VoiceCa
       ctx.clearRect(0, 0, w, h);
       const cy = h / 2;
 
-      // 'thinking' has no audio to show, so a gaussian travels the filament —
-      // motion that reads as work in progress instead of a stalled waveform.
       sweep = p === 'thinking' ? (sweep + 0.012) % 1.6 : 0;
 
       const layers = 3;
@@ -171,8 +149,6 @@ export function VoiceCanvas({ phase, level, spectrum, bins, className }: VoiceCa
           g.addColorStop(1, rgba(hue, 0));
           strokes.push(g);
         }
-        // The glow needs the same horizontal fade as the core stroke; a flat
-        // colour left it ending in two hard vertical edges.
         glow = ctx.createLinearGradient(0, 0, w, 0);
         glow.addColorStop(0, rgba(accent, 0));
         glow.addColorStop(0.5, rgba(accent, 0.14));
@@ -184,9 +160,6 @@ export function VoiceCanvas({ phase, level, spectrum, bins, className }: VoiceCa
 
       for (let l = 0; l < layers; l++) {
         const depth = l / (layers - 1 || 1);
-        // Each layer is the SAME wave a moment earlier, not a different wave.
-        // Independent frequencies per layer made the strands braid through one
-        // another — the twisting that reads as churn rather than flow.
         const lag = l * 0.055;
         const scale = 1 - depth * 0.22;
 
@@ -195,19 +168,12 @@ export function VoiceCanvas({ phase, level, spectrum, bins, className }: VoiceCa
         let py = cy;
         for (let x = 0; x <= w; x += step) {
           const u = x / w;
-          // Tapered at both ends so the filament floats rather than being cut
-          // off by the edge of the canvas.
           const envelope = Math.pow(Math.sin(Math.PI * u), 0.85);
           const focus = p === 'thinking'
             ? Math.exp(-Math.pow((u - (sweep - 0.3)) * 4.5, 2))
             : 1;
 
-          // The band sets how far the filament may travel here; the oscillators
-          // carry it there. Amplitude alone would only give a static hump.
           const band = bandAt(Math.abs(u - 0.5) * 2);
-          // Travelling roughly twice a second rather than every two seconds.
-          // The slower rates read as the filament heaving under its own weight
-          // — the thing that felt like the frame rate had dropped.
           const tl = t - lag;
           const ripple =
             Math.sin(u * Math.PI * 2 * 2.1 + tl * 7.4) * 0.66 +
@@ -217,16 +183,11 @@ export function VoiceCanvas({ phase, level, spectrum, bins, className }: VoiceCa
           const y =
             cy +
             envelope * focus * scale * maxAmp * amp * (0.6 + band * 1.1) * ripple +
-            // A drift keeps an idle filament alive without pretending to hear
-            // anything. Kept small — at any real amplitude it must not read as
-            // a second, slower wave fighting the first.
             Math.sin(u * Math.PI * 2 * 0.6 + (t - lag) * 2.2) * envelope * h * 0.01;
 
           if (x === 0) {
             ctx.moveTo(x, y);
           } else {
-            // Quadratic through the midpoints: straight segments between samples
-            // gave the filament visible facets as soon as it moved quickly.
             ctx.quadraticCurveTo(px, py, (px + x) / 2, (py + y) / 2);
           }
           px = x;
@@ -238,9 +199,6 @@ export function VoiceCanvas({ phase, level, spectrum, bins, className }: VoiceCa
         ctx.lineJoin = 'round';
         const width = (l === 0 ? 3 : 1.6) * (1 + amp * 0.6);
         if (l === 0) {
-          // Glow as a wide, faint under-stroke rather than a canvas shadow:
-          // shadowBlur re-blurs the whole path every frame and was most of the
-          // per-frame cost.
           ctx.strokeStyle = glow!;
           ctx.lineWidth = width * 5;
           ctx.stroke();

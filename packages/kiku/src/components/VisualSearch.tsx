@@ -29,23 +29,12 @@ const SpinnerIcon = () => (
   </svg>
 );
 
-// Shrinks first: visual search only needs enough pixels for style extraction,
-// and a raw phone photo is several MB before base64 adds a third on top.
 function fileToBase64(file: File): Promise<string> {
   return downscaleImage(file);
 }
 
 /**
- * VisualSearch — camera/image-upload button that powers style-match search.
- *
- * User picks a photo → it's base64-encoded in-browser → sent to POST /search/visual
- * → Gemini Flash extracts Style DNA → results returned via onResults().
- *
- * @example
- * <VisualSearch
- *   categoryHint="dress"
- *   onResults={(res, preview) => setVisualResults(res)}
- * />
+ * VisualSearch — camera/image-upload button for style-match search.
  */
 export function VisualSearch({
   onResults,
@@ -69,7 +58,6 @@ export function VisualSearch({
       onError?.(e instanceof Error ? e : new Error(String(e)));
     } finally {
       setLoading(false);
-      // Reset so the same file can be picked again
       if (inputRef.current) inputRef.current.value = '';
     }
   };

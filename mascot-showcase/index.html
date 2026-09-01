@@ -1,0 +1,1612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kiku Mascot Design Studio & Animated Avatar — (:3003)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base: #0a0c12;
+      --bg-surface: #121520;
+      --bg-card: #181d2c;
+      --bg-card-hover: #22293e;
+      --border-subtle: #242b3d;
+      --border-focus: #f43f5e;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --brand-rose: #f43f5e;
+      --brand-rose-soft: rgba(244, 63, 94, 0.14);
+      --brand-pink: #ec4899;
+      --brand-pink-soft: rgba(236, 72, 153, 0.12);
+      --brand-orange: #ff6a33;
+      --brand-orange-soft: rgba(255, 106, 51, 0.12);
+      --accent-cyan: #38bdf8;
+      --accent-emerald: #34d399;
+      --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --radius-full: 9999px;
+      --shadow-card: 0 12px 36px -10px rgba(0, 0, 0, 0.6);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--bg-base);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      line-height: 1.5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    /* Top Bar */
+    header {
+      background: rgba(18, 21, 32, 0.88);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border-subtle);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      padding: 14px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo-badge {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #f43f5e, #fb7185);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      box-shadow: 0 4px 14px rgba(244, 63, 94, 0.35);
+    }
+
+    .brand-title h1 {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .brand-title p {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    .tag-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: var(--radius-full);
+      background: var(--brand-pink-soft);
+      color: #f472b6;
+      border: 1px solid rgba(244, 114, 182, 0.3);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .nav-btn {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-main);
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+
+    .nav-btn:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--brand-rose);
+    }
+
+    .nav-btn.primary {
+      background: linear-gradient(135deg, #f43f5e, #fb7185);
+      color: #fff;
+      border: none;
+      box-shadow: 0 4px 12px rgba(244, 63, 94, 0.3);
+    }
+
+    .nav-btn.primary:hover {
+      opacity: 0.92;
+      transform: translateY(-1px);
+    }
+
+    .container {
+      max-width: 1440px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 28px 24px;
+      flex: 1;
+    }
+
+    /* Live Procedural Avatar Studio Section */
+    .avatar-hero-card {
+      background: linear-gradient(135deg, #141724 0%, #1c1828 50%, #201524 100%);
+      border: 1px solid rgba(244, 63, 94, 0.25);
+      border-radius: var(--radius-lg);
+      padding: 28px;
+      margin-bottom: 32px;
+      box-shadow: var(--shadow-card);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .avatar-hero-card::before {
+      content: '';
+      position: absolute;
+      top: -100px;
+      right: -100px;
+      width: 320px;
+      height: 320px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(244, 63, 94, 0.15) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      gap: 32px;
+      align-items: center;
+    }
+
+    @media (max-width: 900px) {
+      .hero-grid { grid-template-columns: 1fr; }
+    }
+
+    .avatar-stage-box {
+      background: radial-gradient(circle at center, #242038 0%, #151324 100%);
+      border: 1px solid rgba(244, 63, 94, 0.3);
+      border-radius: var(--radius-md);
+      height: 340px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      cursor: pointer;
+      user-select: none;
+      box-shadow: inset 0 2px 20px rgba(0, 0, 0, 0.4);
+      transition: border-color 0.2s ease;
+    }
+
+    .avatar-stage-box:hover {
+      border-color: var(--brand-rose);
+    }
+
+    .avatar-stage-box:active {
+      transform: scale(0.99);
+    }
+
+    .avatar-stage-hint {
+      position: absolute;
+      bottom: 12px;
+      font-size: 11px;
+      color: var(--text-dim);
+      font-family: var(--font-mono);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .avatar-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .controls-group-title {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .pill-btn {
+      background: #111420;
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .pill-btn:hover {
+      background: #1d2233;
+      color: #fff;
+    }
+
+    .pill-btn.active {
+      background: var(--brand-rose-soft);
+      border-color: var(--brand-rose);
+      color: #fff;
+      box-shadow: 0 0 12px rgba(244, 63, 94, 0.25);
+    }
+
+    .toggle-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .toggle-chip {
+      background: #121624;
+      border: 1px solid var(--border-subtle);
+      padding: 8px 14px;
+      border-radius: var(--radius-full);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.2s ease;
+    }
+
+    .toggle-chip:hover {
+      border-color: #f472b6;
+    }
+
+    .toggle-chip.active {
+      background: rgba(244, 114, 182, 0.15);
+      border-color: #f472b6;
+      color: #fff;
+    }
+
+    .toggle-chip input {
+      accent-color: #f43f5e;
+      cursor: pointer;
+    }
+
+    /* Section Headers */
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 36px 0 20px 0;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .section-head h3 {
+      font-size: 20px;
+      font-weight: 800;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* Tabs & Filters */
+    .filter-tabs {
+      display: flex;
+      background: var(--bg-surface);
+      padding: 4px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-subtle);
+      gap: 4px;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 8px 16px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .tab-btn:hover { color: var(--text-main); }
+
+    .tab-btn.active {
+      background: var(--brand-rose);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(244, 63, 94, 0.3);
+    }
+
+    /* Candidate Grid */
+    .candidates-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+      gap: 24px;
+      margin-bottom: 40px;
+    }
+
+    @media (max-width: 480px) {
+      .candidates-grid { grid-template-columns: 1fr; }
+    }
+
+    .candidate-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: var(--shadow-card);
+      position: relative;
+    }
+
+    .candidate-card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(244, 63, 94, 0.5);
+      box-shadow: 0 16px 40px -10px rgba(244, 63, 94, 0.25);
+    }
+
+    .candidate-card.is-blush {
+      border-color: rgba(244, 63, 94, 0.35);
+    }
+
+    .candidate-image-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      background: #080a10;
+      overflow: hidden;
+      cursor: pointer;
+    }
+
+    .candidate-image-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: transform 0.3s ease;
+      display: block;
+    }
+
+    .candidate-card:hover .candidate-image-wrap img {
+      transform: scale(1.03);
+    }
+
+    .card-badges {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      z-index: 2;
+    }
+
+    .badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 8px;
+      border-radius: var(--radius-full);
+      backdrop-filter: blur(12px);
+    }
+
+    .badge-variant {
+      background: rgba(15, 23, 42, 0.85);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .badge-blush {
+      background: rgba(244, 63, 94, 0.85);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .badge-emergence {
+      background: rgba(30, 41, 59, 0.85);
+      color: #cbd5e1;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .card-body {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      flex: 1;
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .card-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.5;
+      flex: 1;
+    }
+
+    .palette-strip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #111420;
+      padding: 8px 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .palette-chips {
+      display: flex;
+      gap: 6px;
+    }
+
+    .color-chip {
+      width: 22px;
+      height: 22px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .card-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .btn-action {
+      flex: 1;
+      background: #151a28;
+      border: 1px solid var(--border-subtle);
+      color: var(--text-main);
+      padding: 8px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      transition: all 0.2s ease;
+    }
+
+    .btn-action:hover {
+      background: #20273c;
+      border-color: var(--brand-rose);
+    }
+
+    /* Live Chat Modal Simulation in Blush */
+    .simulator-card {
+      background: var(--bg-card);
+      border: 1px solid rgba(244, 63, 94, 0.3);
+      border-radius: var(--radius-lg);
+      padding: 28px;
+      margin-bottom: 40px;
+    }
+
+    .sim-viewports {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-top: 20px;
+    }
+
+    @media (max-width: 850px) {
+      .sim-viewports { grid-template-columns: 1fr; }
+    }
+
+    .sim-box {
+      border-radius: var(--radius-md);
+      padding: 20px;
+      min-height: 280px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .sim-box.blush-theme {
+      background: #fff5f7;
+      color: #3d1424;
+      border: 1px solid rgba(236, 72, 153, 0.2);
+      box-shadow: 0 10px 30px rgba(236, 72, 153, 0.1);
+    }
+
+    .sim-box.onyx-theme {
+      background: #0f172a;
+      color: #f8fafc;
+      border: 1px solid #1e293b;
+    }
+
+    .sim-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid currentColor;
+      opacity: 0.9;
+    }
+
+    .sim-bubble-ai {
+      background: rgba(236, 72, 153, 0.12);
+      padding: 12px 16px;
+      border-radius: 14px 14px 14px 2px;
+      font-size: 13px;
+      line-height: 1.5;
+      max-width: 85%;
+      margin-top: 14px;
+    }
+
+    .onyx-theme .sim-bubble-ai {
+      background: #1e293b;
+      color: #f1f5f9;
+    }
+
+    .sim-bubble-user {
+      background: #007aff;
+      color: #fff;
+      padding: 10px 14px;
+      border-radius: 14px 14px 2px 14px;
+      font-size: 13px;
+      align-self: flex-end;
+      margin-top: 12px;
+    }
+
+    /* Lightbox Modal */
+    .modal-backdrop {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(5, 7, 12, 0.85);
+      backdrop-filter: blur(12px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+      padding: 20px;
+    }
+
+    .modal-backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal-content {
+      background: var(--bg-card);
+      border: 1px solid rgba(244, 63, 94, 0.3);
+      border-radius: var(--radius-lg);
+      max-width: 920px;
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      overflow: hidden;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.8);
+      position: relative;
+    }
+
+    @media (max-width: 768px) {
+      .modal-content { grid-template-columns: 1fr; max-height: 90vh; overflow-y: auto; }
+    }
+
+    .modal-close {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      background: rgba(0,0,0,0.5);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.2);
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 10;
+    }
+
+    .modal-image img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .modal-details {
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #f43f5e;
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: var(--radius-md);
+      font-size: 13px;
+      font-weight: 700;
+      box-shadow: 0 10px 30px rgba(244, 63, 94, 0.4);
+      opacity: 0;
+      transform: translateY(12px);
+      transition: all 0.25s ease;
+      z-index: 2000;
+      pointer-events: none;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header>
+    <div class="brand-group">
+      <div class="brand-logo-badge">🌺</div>
+      <div class="brand-title">
+        <h1>Kiku Mascot & Avatar Lab <span class="tag-badge">Blush Theme Preview :3003</span></h1>
+        <p>@akropolys/sdk • IP-as-Logo & Procedural SVG Animation Studio</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <a href="#avatar-studio" class="nav-btn primary">🌸 Live Avatar Studio</a>
+      <a href="#mascot-candidates" class="nav-btn">🦊 IP Candidates</a>
+      <a href="#simulator" class="nav-btn">💬 Widget Demo</a>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- 1. Procedural Animated Avatar Interactive Studio -->
+    <section class="avatar-hero-card" id="avatar-studio">
+      <div class="hero-grid">
+        
+        <!-- Live SVG Stage -->
+        <div class="avatar-stage-box" id="avatar-stage" onclick="triggerHop()" title="Click or Tap to Bounce & Hop!">
+          <div id="svg-avatar-mount" style="width:180px; height:180px;"></div>
+          <div class="avatar-stage-hint">
+            <span>✨ Click anywhere to Hop & Squish</span>
+          </div>
+        </div>
+
+        <!-- Live Controls -->
+        <div class="avatar-controls">
+          <div>
+            <div class="controls-group-title">🎨 Theme Preset (Try Blush Mode!)</div>
+            <div class="btn-row">
+              <button class="pill-btn" onclick="setStudioTheme('light', this)">☀️ Silver (Light)</button>
+              <button class="pill-btn" onclick="setStudioTheme('dark', this)">🌙 Onyx (Dark)</button>
+              <button class="pill-btn" onclick="setStudioTheme('mahogany', this)">🪵 Mahogany</button>
+              <button class="pill-btn active" onclick="setStudioTheme('blush', this)">🌺 Blush (Feminine Mode)</button>
+            </div>
+          </div>
+
+          <div>
+            <div class="controls-group-title">👗 Feminine Blush Accessories</div>
+            <div class="toggle-row">
+              <label class="toggle-chip active" id="chip-flower">
+                <input type="checkbox" id="chk-flower" checked onchange="toggleAccessory('flower', this.checked)">
+                🌺 Hawaiian Hibiscus Flower
+              </label>
+              <label class="toggle-chip active" id="chip-skirt">
+                <input type="checkbox" id="chk-skirt" checked onchange="toggleAccessory('skirt', this.checked)">
+                👗 Wrapped Pleated Skirt
+              </label>
+              <label class="toggle-chip active" id="chip-lashes">
+                <input type="checkbox" id="chk-lashes" checked onchange="toggleAccessory('lashes', this.checked)">
+                ✨ Fluttery Eyelashes
+              </label>
+              <label class="toggle-chip active" id="chip-blush">
+                <input type="checkbox" id="chk-blush" checked onchange="toggleAccessory('blush', this.checked)">
+                🌸 Rosy Cheek Blush
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <div class="controls-group-title">🎭 Mascot States & Animations</div>
+            <div class="btn-row">
+              <button class="pill-btn active" onclick="setStudioState('idle', this)">Idle</button>
+              <button class="pill-btn" onclick="setStudioState('thinking', this)">Thinking (Goo)</button>
+              <button class="pill-btn" onclick="setStudioState('visualizing', this)">Visualizing</button>
+              <button class="pill-btn" onclick="setStudioState('speaking', this)">Speaking</button>
+              <button class="pill-btn" onclick="setStudioState('happy', this)">Happy</button>
+              <button class="pill-btn" onclick="setStudioState('curious', this)">Curious</button>
+              <button class="pill-btn" onclick="setStudioState('welcoming', this)">Welcoming</button>
+              <button class="pill-btn" onclick="setStudioState('guiding', this)">Guiding</button>
+              <button class="pill-btn" onclick="setStudioState('failed', this)">Failed</button>
+            </div>
+          </div>
+
+          <div style="display:flex; gap:12px; align-items:center;">
+            <button class="nav-btn primary" onclick="triggerHop()">🐰 Trigger Bounce Hop</button>
+            <span style="font-size:12px; color:var(--text-dim);">Live physics: squashes, breathes, tilts & sways skirt dynamically!</span>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- 2. Feminine Blush Mascot Candidates Section -->
+    <section id="mascot-candidates">
+      <div class="section-head">
+        <div>
+          <h3>🌺 Feminine Blush Mascot Candidates (Hawaii Flower & Skirt)</h3>
+          <p style="font-size:13px; color:var(--text-muted); margin-top:4px;">
+            Designed under IP-as-Logo Tenets: 4–7 bold geometric shapes, 3 semantic colors, neo-skeuomorphic clay tactile volume.
+          </p>
+        </div>
+        <div class="filter-tabs">
+          <button class="tab-btn active" onclick="filterCandidates('blush', this)">🌸 Blush Edition (6)</button>
+          <button class="tab-btn" onclick="filterCandidates('classic', this)">🦊 Classic Edition (6)</button>
+          <button class="tab-btn" onclick="filterCandidates('all', this)">All (12)</button>
+          <button class="tab-btn" onclick="filterCandidates('left', this)">↙ Lower-Left</button>
+          <button class="tab-btn" onclick="filterCandidates('right', this)">↘ Lower-Right</button>
+        </div>
+      </div>
+
+      <div class="candidates-grid" id="grid">
+        <!-- Rendered via JS -->
+      </div>
+    </section>
+
+    <!-- 3. Live Chat Widget Simulator in Blush Theme -->
+    <section class="simulator-card" id="simulator">
+      <div class="section-head" style="margin-top:0;">
+        <h3>💬 Live UI Widget Simulator in Blush Theme</h3>
+        <span class="tag-badge">Real @akropolys/kiku Styling</span>
+      </div>
+
+      <div class="sim-viewports">
+        <!-- Blush Theme Viewport -->
+        <div class="sim-box blush-theme">
+          <div>
+            <div class="sim-header">
+              <div id="sim-avatar-mount-blush" style="width:36px; height:36px;"></div>
+              <div>
+                <strong style="font-size:14px; font-weight:700; color:#3d1424;">Kiku (Blush Mode)</strong>
+                <div style="font-size:11px; color:#94536d;">Active AI Shopping Assistant</div>
+              </div>
+            </div>
+            <div class="sim-bubble-ai">
+              Aloha! 🌺 I've tailored your recommendations with our blush styling. Would you like to compare sizing or check prices?
+            </div>
+            <div class="sim-bubble-user">
+              Show me top rated summer dresses!
+            </div>
+          </div>
+          <div style="font-size:11px; color:#94536d; text-align:right; margin-top:10px;">
+            Theme: <code>blush</code> • Color: <code>#ec4899</code>
+          </div>
+        </div>
+
+        <!-- Onyx Dark Theme Viewport -->
+        <div class="sim-box onyx-theme">
+          <div>
+            <div class="sim-header">
+              <div id="sim-avatar-mount-onyx" style="width:36px; height:36px;"></div>
+              <div>
+                <strong style="font-size:14px; font-weight:700; color:#f8fafc;">Kiku (Onyx Mode)</strong>
+                <div style="font-size:11px; color:#94a3b8;">Instant Search Engine</div>
+              </div>
+            </div>
+            <div class="sim-bubble-ai">
+              High-contrast Onyx theme active. 3 items match your filters.
+            </div>
+            <div class="sim-bubble-user">
+              Add the first one to my cart.
+            </div>
+          </div>
+          <div style="font-size:11px; color:#64748b; text-align:right; margin-top:10px;">
+            Theme: <code>dark</code> • Color: <code>#171C2E</code>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- Detail Lightbox Modal -->
+  <div class="modal-backdrop" id="modal" onclick="closeModalOnBackdrop(event)">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeModal()">✕</button>
+      <div class="modal-image">
+        <img id="modal-img" src="" alt="Candidate Zoom">
+      </div>
+      <div class="modal-details">
+        <div>
+          <div style="display:flex; gap:8px; margin-bottom:12px;">
+            <span class="badge badge-variant" id="modal-badge-id">Variant</span>
+            <span class="badge badge-emergence" id="modal-badge-emergence">Emergence</span>
+          </div>
+          <h2 id="modal-title" style="font-size:22px; font-weight:800; color:#fff; margin-bottom:8px;">Kiku</h2>
+          <p id="modal-desc" style="font-size:13px; color:var(--text-muted); line-height:1.5; margin-bottom:16px;">Description</p>
+          
+          <div style="background:#111420; padding:14px; border-radius:10px; border:1px solid var(--border-subtle); margin-bottom:14px;">
+            <div style="font-size:11px; font-weight:700; color:var(--text-dim); text-transform:uppercase; margin-bottom:8px;">Generation Prompt:</div>
+            <p id="modal-prompt" style="font-family:var(--font-mono); font-size:12px; color:#cbd5e1; line-height:1.4;"></p>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:12px;">
+          <button class="nav-btn primary" style="flex:1;" onclick="copyCurrentPrompt()">📋 Copy Image Prompt</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast">Copied to clipboard!</div>
+
+  <script>
+    // Candidates Data
+    const CANDIDATES = [
+      {
+        id: 'blush_c1',
+        category: 'blush',
+        direction: 'C',
+        emergence: 'left',
+        title: 'Shiba Pup • 🌺 Hawaiian Hibiscus & Skirt (Lower-Left)',
+        desc: 'Vibrant warm peach coral baby shiba with a tropical pink Hawaiian hibiscus flower on the ear, sweet pleated wrapped skirt with scalloped hem, doe eyes with lashes, and rosy blush cheeks.',
+        img: 'assets/kiku_blush_c1.jpg',
+        prompt: 'A cute, minimalist feminine baby shiba pup character with thick rounded forms emerging from the lower-left corner, tilting head upward cheerfully, occupying 90 percent of the frame. Built from 5 large bold shapes: a big round head with a vibrant pink tropical Hawaiian hibiscus flower tucked behind the left ear, two perky triangular rounded ears, chubby cheeks with soft rosy blush circles, glossy dark button eyes with delicate fluttery eyelashes, and a sweet pleated pastel pink wrapped skirt around the body with a scalloped hem. Primary color vibrant warm peach coral, secondary color soft milk white on muzzle. Subtle neo-skeuomorphic tactile clay depth with soft ambient highlights. Solid dark plum navy background.',
+        palette: ['#F97316', '#FDA4AF', '#FDF8F0', '#251E33']
+      },
+      {
+        id: 'blush_c2',
+        category: 'blush',
+        direction: 'C',
+        emergence: 'right',
+        title: 'Shiba Pup • 🌺 Hawaiian Hibiscus & Skirt (Lower-Right)',
+        desc: 'Warm pumpkin peach coral baby shiba emerging from the lower-right with bright pink hibiscus clip, dainty doe eyelashes, strawberry blush cheeks, and pastel pink pleated wrap skirt.',
+        img: 'assets/kiku_blush_c2.jpg',
+        prompt: 'A cute, minimalist feminine baby shiba pup character with thick rounded forms emerging dynamically from the lower-right corner, tilted inquisitively towards center, occupying 90 percent of the frame. Built from 6 large bold shapes: a big round head, perky rounded ears with a bright pink tropical Hawaiian hibiscus flower clip on the right ear, plush cheeks with strawberry blush spots, shiny dark doe eyes with dainty eyelashes, and a sweet pastel pink wrapped pleated skirt around the lower torso with a scalloped edge. Primary color bright warm pumpkin peach coral, secondary color soft warm cream. Subtle neo-skeuomorphic smooth clay volume with delicate soft lighting. Solid dark slate plum background.',
+        palette: ['#EA580C', '#FB7185', '#FFFBEB', '#221D30']
+      },
+      {
+        id: 'blush_a1',
+        category: 'blush',
+        direction: 'A',
+        emergence: 'left',
+        title: 'Red Panda • Sakura Flower & Ribbon Collar (Lower-Left)',
+        desc: 'Baby red panda scout in warm peach coral with pink sakura flower hairpin, soft cream inner ears, fluttery eyelashes, blush cheeks, and pastel ribbon collar.',
+        img: 'assets/kiku_blush_a1.jpg',
+        prompt: 'A cute, minimalist feminine baby red panda character with thick rounded shapes emerging from the lower-left corner, filling the frame. The character is composed of large simple geometric volumes: a round puffy head, oversized curved ears with soft cream inner pads, a tiny pink sakura cherry blossom flower tucked behind the left ear, smooth chubby cheeks with soft rosy pink blush marks, glossy dark doe eyes with subtle delicate eyelashes, and a tiny button nose with a soft pastel ribbon collar. Primary color warm peach coral and soft rose, secondary color creamy white. Subtle neo-skeuomorphic clay volume with smooth soft ambient shading and gentle warm glow. Set against a solid dark berry navy background.',
+        palette: ['#FB923C', '#F472B6', '#FFF7ED', '#1E1B2E']
+      },
+      {
+        id: 'blush_a2',
+        category: 'blush',
+        direction: 'A',
+        emergence: 'right',
+        title: 'Red Panda • Blush Bow & Scalloped Collar (Lower-Right)',
+        desc: 'Vibrant apricot blush baby red panda with pastel satin ribbon bow, rosy strawberry cheeks, fluttery eyelashes, and a scalloped dress collar.',
+        img: 'assets/kiku_blush_a2.jpg',
+        prompt: 'A cute, minimalist feminine baby red panda character with thick rounded forms emerging dynamically from the lower-right corner, tilted inquisitively towards center, occupying 90 percent of the frame. Built from 5 large bold shapes: a smooth sphere head, thick curved ears, a cute pastel blush ribbon bow on the right ear, soft plush cheeks with rosy strawberry blush spots, two shiny dark eyes with fluttery dainty eyelashes, and a sweet little scalloped dress collar in pastel pink. Primary color warm apricot blush and soft coral, secondary color creamy ivory. Subtle neo-skeuomorphic tactile volume, gentle matte highlights. Solid dark plum slate background.',
+        palette: ['#F97316', '#FDA4AF', '#FFFBEB', '#261F33']
+      },
+      {
+        id: 'blush_b1',
+        category: 'blush',
+        direction: 'B',
+        emergence: 'left',
+        title: 'Sea Otter • Blossom Flower & Ruffle Dress (Lower-Left)',
+        desc: 'Ultra-simplified peach coral baby sea otter with a delicate blossom clip, rosy cheek blush, eyelashes, and a tiered pastel pink ruffle dress.',
+        img: 'assets/kiku_blush_b1.jpg',
+        prompt: 'A cute, ultra-simplified feminine baby seal sea otter character with thick plump rounded shapes emerging from the lower-left corner, tilted playfully upwards. Built from 5 large bold shapes: a big rounded dome head with a tiny pink blossom flower hairpin on the left ear, tiny smooth ears, round puffed snout, two glossy round dark eyes with soft fluttery eyelashes, warm rosy pink cheek blush, and a sweet pastel frill collar dress in soft strawberry pink. Primary color soft peach coral, secondary color warm vanilla cream. Soft neo-skeuomorphic smooth volumetric finish with subtle ambient occlusion. Solid dark midnight berry background.',
+        palette: ['#FB923C', '#F472B6', '#FEF3C7', '#171828']
+      },
+      {
+        id: 'blush_b2',
+        category: 'blush',
+        direction: 'B',
+        emergence: 'right',
+        title: 'Sea Otter • Satin Bow & Scalloped Hem (Lower-Right)',
+        desc: 'Apricot coral baby sea otter with a delicate satin ribbon bow, glowing blush cheeks, doe eyes with lashes, and scalloped pink dress.',
+        img: 'assets/kiku_blush_b2.jpg',
+        prompt: 'A cute, ultra-minimalist feminine baby sea otter character with thick rounded shapes emerging flexibly from the lower-right corner, occupying 90 percent of the frame. Built from 6 large simple shapes: a large round dome head, chubby rounded cheeks with soft blush pink glow, tiny folded ears with a delicate satin ribbon bow, two shiny doe eyes with dainty eyelashes, a smooth muzzle, and soft pastel pink dress with scalloped hem. Primary color warm apricot coral, secondary color soft ivory cream. Subtle neo-skeuomorphic smooth clay volume with delicate ambient occlusion. Solid dark indigo plum background.',
+        palette: ['#F97316', '#FDA4AF', '#FFF7ED', '#1A1C2E']
+      },
+      // Classic Candidates
+      {
+        id: 'classic_a1',
+        category: 'classic',
+        direction: 'A',
+        emergence: 'left',
+        title: 'Classic Red Panda Scout (Lower-Left)',
+        desc: 'Original Red Panda scout built from 5 bold geometric volumes: round puffy head, oversized curved ears, chubby cheeks, dark bead eyes.',
+        img: 'assets/kiku-a1.jpg',
+        prompt: 'A cute, minimalist baby red panda character with thick rounded shapes emerging from the lower-left corner, filling the frame. Primary color warm tangerine orange, secondary color soft creamy white.',
+        palette: ['#F97316', '#FDF8F0', '#1B2134']
+      },
+      {
+        id: 'classic_a2',
+        category: 'classic',
+        direction: 'A',
+        emergence: 'right',
+        title: 'Classic Red Panda Scout (Lower-Right)',
+        desc: 'Dynamic Lower-Right red panda scout in warm amber orange with soft ivory facial patches and slate navy background.',
+        img: 'assets/kiku-a2.jpg',
+        prompt: 'A cute, minimalist baby red panda character with thick rounded forms emerging dynamically from the lower-right corner.',
+        palette: ['#EA580C', '#FFFBEB', '#1E2235']
+      },
+      {
+        id: 'classic_b1',
+        category: 'classic',
+        direction: 'B',
+        emergence: 'left',
+        title: 'Classic Sea Otter Guide (Lower-Left)',
+        desc: 'Ultra-simplified baby sea otter with round dome head, smooth snout, warm peach coral and vanilla cream colors.',
+        img: 'assets/kiku-b1.jpg',
+        prompt: 'A cute, ultra-simplified baby seal character with thick plump rounded shapes emerging from the lower-left corner.',
+        palette: ['#FB923C', '#FEF3C7', '#0F172A']
+      },
+      {
+        id: 'classic_b2',
+        category: 'classic',
+        direction: 'B',
+        emergence: 'right',
+        title: 'Classic Sea Otter Guide (Lower-Right)',
+        desc: 'Smooth pebble-like sea otter emerging from the lower-right with apricot coral tones and midnight indigo backdrop.',
+        img: 'assets/kiku-b2.jpg',
+        prompt: 'A cute, ultra-minimalist baby sea otter character with thick rounded shapes emerging flexibly from the lower-right corner.',
+        palette: ['#F97316', '#FFF7ED', '#171C2E']
+      },
+      {
+        id: 'classic_c1',
+        category: 'classic',
+        direction: 'C',
+        emergence: 'left',
+        title: 'Classic Shiba Pup Companion (Lower-Left)',
+        desc: 'Sunny mango orange shiba pup companion tilting upward with milk white muzzle and charcoal navy background.',
+        img: 'assets/kiku-c1.jpg',
+        prompt: 'A cute, minimalist baby shiba pup character with thick rounded shapes emerging flexibly from the lower-left corner.',
+        palette: ['#F59E0B', '#FAF8F5', '#1B202D']
+      },
+      {
+        id: 'classic_c2',
+        category: 'classic',
+        direction: 'C',
+        emergence: 'right',
+        title: 'Classic Shiba Pup Companion (Lower-Right)',
+        desc: 'Bright pumpkin orange shiba pup companion peeking in from the lower-right with cheerful curious head tilt.',
+        img: 'assets/kiku-c2.jpg',
+        prompt: 'A cute, minimalist baby shiba pup character with thick rounded shapes emerging flexibly from the lower-right corner.',
+        palette: ['#EA580C', '#FFFBEB', '#181E2E']
+      }
+    ];
+
+    function renderGrid(filter = 'blush') {
+      const grid = document.getElementById('grid');
+      grid.innerHTML = '';
+      
+      const filtered = CANDIDATES.filter(c => {
+        if (filter === 'all') return true;
+        if (filter === 'blush') return c.category === 'blush';
+        if (filter === 'classic') return c.category === 'classic';
+        if (filter === 'left') return c.emergence === 'left';
+        if (filter === 'right') return c.emergence === 'right';
+        return true;
+      });
+
+      filtered.forEach(c => {
+        const isBlush = c.category === 'blush';
+        const card = document.createElement('div');
+        card.className = 'candidate-card ' + (isBlush ? 'is-blush' : '');
+        card.innerHTML = `
+          <div class="candidate-image-wrap" onclick="openModal('${c.id}')">
+            <img src="${c.img}" alt="${c.title}" loading="lazy">
+            <div class="card-badges">
+              <span class="badge ${isBlush ? 'badge-blush' : 'badge-variant'}">${isBlush ? '🌺 Blush Edition' : 'Classic'}</span>
+              <span class="badge badge-emergence">${c.emergence === 'left' ? '↙ Lower-Left' : '↘ Lower-Right'}</span>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="card-title">
+              <span>${c.title}</span>
+            </div>
+            <p class="card-desc">${c.desc}</p>
+            <div class="palette-strip">
+              <span style="font-size:11px; font-weight:700; color:var(--text-dim);">PALETTE:</span>
+              <div class="palette-chips">
+                ${c.palette.map(hex => `<div class="color-chip" style="background:${hex};" title="${hex}"></div>`).join('')}
+              </div>
+            </div>
+            <div class="card-actions">
+              <button class="btn-action" onclick="openModal('${c.id}')">🔍 High-Res Zoom</button>
+              <button class="btn-action" onclick="copyPrompt('${c.id}')">📋 Copy Prompt</button>
+            </div>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    function filterCandidates(filter, btn) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderGrid(filter);
+    }
+
+    let currentModalId = 'blush_c1';
+    function openModal(id) {
+      currentModalId = id;
+      const c = CANDIDATES.find(item => item.id === id);
+      if (!c) return;
+      document.getElementById('modal-img').src = c.img;
+      document.getElementById('modal-title').innerText = c.title;
+      document.getElementById('modal-desc').innerText = c.desc;
+      document.getElementById('modal-prompt').innerText = c.prompt;
+      document.getElementById('modal-badge-id').innerText = c.category === 'blush' ? '🌺 Blush Edition' : 'Classic';
+      document.getElementById('modal-badge-emergence').innerText = c.emergence === 'left' ? '↙ Lower-Left' : '↘ Lower-Right';
+      document.getElementById('modal').classList.add('open');
+    }
+
+    function closeModal() {
+      document.getElementById('modal').classList.remove('open');
+    }
+
+    function closeModalOnBackdrop(e) {
+      if (e.target.id === 'modal') closeModal();
+    }
+
+    function copyPrompt(id) {
+      const c = CANDIDATES.find(item => item.id === id);
+      if (!c) return;
+      navigator.clipboard.writeText(c.prompt).then(() => {
+        showToast('Image generation prompt copied!');
+      });
+    }
+
+    function copyCurrentPrompt() {
+      copyPrompt(currentModalId);
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.innerText = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2500);
+    }
+
+    // ==========================================
+    // Procedural SVG KikuAvatar Engine for Browser
+    // ==========================================
+    const BODY = {
+      idle:        { bw: 50, bh: 60, tr: 1,   br: 0.42, bow: 3 },
+      thinking:    { bw: 46, bh: 46, tr: 1,   br: 1,    bow: 2 },
+      visualizing: { bw: 64, bh: 42, tr: 0.42,br: 0.42, bow: 2 },
+      speaking:    { bw: 44, bh: 54, tr: 0.9, br: 0.9,  bow: 3 },
+      failed:      { bw: 53, bh: 45, tr: 0.95,br: 0.55, bow: 4 },
+      curious:     { bw: 48, bh: 52, tr: 0.9, br: 0.7,  bow: 3 },
+      welcoming:   { bw: 50, bh: 58, tr: 1,   br: 0.5,  bow: 2 },
+      guiding:     { bw: 46, bh: 50, tr: 0.8, br: 0.8,  bow: 2 },
+      happy:       { bw: 52, bh: 56, tr: 1,   br: 0.4,  bow: 4 },
+    };
+
+    const MOOD = {
+      idle:        { lid: 1,    warm: 0,    breath: 2100, wob: 1 },
+      thinking:    { lid: 1,    warm: 0.2,  breath: 1700, wob: 1.6 },
+      visualizing: { lid: 1,    warm: 0.9,  breath: 1200, wob: 2.2 },
+      speaking:    { lid: 1,    warm: 0.35, breath: 900,  wob: 1.8 },
+      failed:      { lid: 0.28, warm: 0,    breath: 3000, wob: 0.6 },
+      curious:     { lid: 1,    warm: 0.15, breath: 1800, wob: 1.4 },
+      welcoming:   { lid: 1,    warm: 0.25, breath: 1600, wob: 1.2 },
+      guiding:     { lid: 1,    warm: 0.2,  breath: 1500, wob: 1.3 },
+      happy:       { lid: 1,    warm: 0.4,  breath: 1200, wob: 1.5 },
+    };
+
+    const HOP = [
+      [0, 0, 0], [0.09, 0.54, 0], [0.19, -0.36, 32], [0.31, -0.22, 58],
+      [0.42, -0.12, 68], [0.54, 0.04, 28], [0.63, 0.96, 0], [0.71, 0.18, 0],
+      [0.79, -0.16, 20], [0.88, 0.34, 0], [0.95, -0.05, 4], [1, 0, 0]
+    ];
+
+    function hopAt(f) {
+      let i = 1;
+      while (i < HOP.length - 1 && HOP[i][0] < f) i++;
+      const [t0, s0, l0] = HOP[i - 1], [t1, s1, l1] = HOP[i];
+      const u = t1 === t0 ? 0 : (f - t0) / (t1 - t0);
+      const e = u * u * (3 - 2 * u);
+      return [s0 + (s1 - s0) * e, l0 + (l1 - l0) * e];
+    }
+
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+    function side(x, y0, y1, bow) {
+      const f = (n) => n.toFixed(2);
+      const ym = (y0 + y1) / 2;
+      const xb = x + bow;
+      const a = (ym - y0) * 0.55;
+      const b = (y1 - ym) * 0.55;
+      return (
+        `C${f(x)} ${f(y0 + a)} ${f(xb)} ${f(ym - a)} ${f(xb)} ${f(ym)}` +
+        `C${f(xb)} ${f(ym + b)} ${f(x)} ${f(y1 - b)} ${f(x)} ${f(y1)}`
+      );
+    }
+
+    function bodyPath(bw, bh, tr, br, bow) {
+      const rt = clamp(bw * tr, 8, bh * 0.96);
+      const rb = clamp(bw * br, 8, bh * 0.96);
+      const p = (x, y) => `${x.toFixed(2)} ${y.toFixed(2)}`;
+      const k = 0.46;
+      const ft = clamp((bw - rt) / bw, 0, 1);
+      const fb = clamp((bw - rb) / bw, 0, 1);
+      return (
+        `M${p(-bw, -bh + rt)}` +
+        `C${p(-bw, -bh + rt * k)} ${p(-bw + rt * k, -bh)} ${p(-bw + rt, -bh)}` +
+        `C${p(-bw * 0.3 * ft, -bh - 2 * ft)} ${p(bw * 0.3 * ft, -bh - 2 * ft)} ${p(bw - rt, -bh)}` +
+        `C${p(bw - rt * k, -bh)} ${p(bw, -bh + rt * k)} ${p(bw, -bh + rt)}` +
+        side(bw, -bh + rt, bh - rb, bow) +
+        `C${p(bw, bh - rb * k)} ${p(bw - rb * k, bh)} ${p(bw - rb, bh)}` +
+        `C${p(bw * 0.3 * fb, bh + 2 * fb)} ${p(-bw * 0.3 * fb, bh + 2 * fb)} ${p(-bw + rb, bh)}` +
+        `C${p(-bw + rb * k, bh)} ${p(-bw, bh - rb * k)} ${p(-bw, bh - rb)}` +
+        side(-bw, bh - rb, -bh + rt, -bow) +
+        'Z'
+      );
+    }
+
+    // Studio Avatar Instance Config
+    let studioState = 'idle';
+    let studioTheme = 'blush';
+    let accessories = {
+      flower: true,
+      skirt: true,
+      lashes: true,
+      blush: true
+    };
+    let globalTriggerHop = () => {};
+
+    function createAvatarSVG(containerId, size = 180, configOverride = {}) {
+      const mount = document.getElementById(containerId);
+      if (!mount) return;
+
+      const uid = 'kiku-' + Math.random().toString(36).slice(2, 7);
+      mount.innerHTML = `
+        <svg width="${size}" height="${size}" viewBox="-100 -100 200 200" style="display:block; overflow:visible;" aria-hidden="true">
+          <defs>
+            <linearGradient id="${uid}-marble" x1=".2" y1="0" x2=".42" y2="1">
+              <stop offset="0%" stop-color="#FAF7F2" />
+              <stop offset="40%" stop-color="#F7F0E7" />
+              <stop offset="82%" stop-color="#E7DACB" />
+              <stop offset="100%" stop-color="#C6B29C" />
+            </linearGradient>
+            <linearGradient id="${uid}-contact" x1="0" y1="1" x2="0" y2="0">
+              <stop offset="0%" stop-color="#4B5058" stop-opacity="0.9" />
+              <stop offset="45%" stop-color="#A8AEB6" stop-opacity="0.5" />
+              <stop offset="100%" stop-color="#A8AEB6" stop-opacity="0" />
+            </linearGradient>
+            <radialGradient id="${uid}-sheen" cx=".34" cy=".2" r=".55">
+              <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.9" />
+              <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0" />
+            </radialGradient>
+            <linearGradient id="${uid}-skirt" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#FDA4AF" />
+              <stop offset="60%" stop-color="#FB7185" />
+              <stop offset="100%" stop-color="#F43F5E" />
+            </linearGradient>
+            <linearGradient id="${uid}-hibiscus-petal" x1="0" y1="1" x2="0" y2="0">
+              <stop offset="0%" stop-color="#FF3366" />
+              <stop offset="65%" stop-color="#FF758F" />
+              <stop offset="100%" stop-color="#FFAAA6" />
+            </linearGradient>
+            <radialGradient id="${uid}-blush-cheek" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#FB7185" stop-opacity="0.48" />
+              <stop offset="100%" stop-color="#FB7185" stop-opacity="0" />
+            </radialGradient>
+            <clipPath id="${uid}-skin"><path id="${uid}-skin-body" d="" /></clipPath>
+            <filter id="${uid}-goo" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="b" />
+              <feColorMatrix in="b" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -7" />
+            </filter>
+            <mask id="${uid}-cut">
+              <path id="${uid}-mask-path" d="" fill="#FFFFFF" />
+              <g id="${uid}-slot-group">
+                <rect id="${uid}-slot-0" fill="#000000" />
+                <rect id="${uid}-slot-1" fill="#000000" />
+                <rect id="${uid}-slot-2" fill="#000000" />
+                <rect id="${uid}-slot-3" fill="#000000" />
+                <rect id="${uid}-slot-4" fill="#000000" />
+                <rect id="${uid}-slot-5" fill="#000000" />
+              </g>
+            </mask>
+          </defs>
+
+          <!-- Main Body -->
+          <g id="${uid}-fig" mask="url(#${uid}-cut)">
+            <path id="${uid}-body" d="" fill="url(#${uid}-marble)" />
+            <g clip-path="url(#${uid}-skin)">
+              <ellipse cx="-14" cy="-40" rx="46" ry="34" fill="url(#${uid}-sheen)" />
+              <rect x="-100" y="-20" width="200" height="100" fill="url(#${uid}-contact)" opacity="0.45" />
+            </g>
+          </g>
+
+          <!-- Feminine Accessories Overlay -->
+          <g id="${uid}-decor" style="pointer-events:none;">
+            <!-- Cheeks -->
+            <g id="${uid}-cheeks">
+              <ellipse cx="-28" cy="0" rx="10" ry="5.5" fill="url(#${uid}-blush-cheek)" />
+              <ellipse cx="28" cy="0" rx="10" ry="5.5" fill="url(#${uid}-blush-cheek)" />
+            </g>
+
+            <!-- Skirt -->
+            <g id="${uid}-skirt-g">
+              <path id="${uid}-skirt-path" fill="url(#${uid}-skirt)" stroke="#F43F5E" stroke-width="1.2" stroke-linejoin="round" />
+              <path id="${uid}-skirt-tie" stroke="#E11D48" stroke-width="2.5" stroke-linecap="round" fill="none" />
+              <circle cx="-10" cy="13" r="2.2" fill="#E11D48" />
+              <path d="M -10 13 C -16 8 -18 17 -10 13 C -4 8 -2 17 -10 13 Z" fill="#E11D48" />
+            </g>
+
+            <!-- Eyelashes -->
+            <g id="${uid}-lashes">
+              <path d="M -30 -16 Q -37 -21 -39 -19 M -25 -19 Q -29 -26 -31 -24 M -20 -20 Q -20 -28 -18 -27" stroke="#3D1424" stroke-width="1.8" stroke-linecap="round" fill="none" />
+              <path d="M 30 -16 Q 37 -21 39 -19 M 25 -19 Q 29 -26 31 -24 M 20 -20 Q 20 -28 18 -27" stroke="#3D1424" stroke-width="1.8" stroke-linecap="round" fill="none" />
+            </g>
+
+            <!-- Hawaiian Hibiscus Flower -->
+            <g id="${uid}-flower">
+              <path d="M 0 0 C -12 -7 -15 5 0 0 Z" fill="#10B981" transform="translate(6, 4) rotate(-35)" />
+              <path d="M 0 0 C -6 -13 6 -13 0 0 Z" fill="url(#${uid}-hibiscus-petal)" stroke="#FF2A5F" stroke-width="0.6" transform="rotate(-18)" />
+              <path d="M 0 0 C -6 -13 6 -13 0 0 Z" fill="url(#${uid}-hibiscus-petal)" stroke="#FF2A5F" stroke-width="0.6" transform="rotate(54)" />
+              <path d="M 0 0 C -6 -13 6 -13 0 0 Z" fill="url(#${uid}-hibiscus-petal)" stroke="#FF2A5F" stroke-width="0.6" transform="rotate(126)" />
+              <path d="M 0 0 C -6 -13 6 -13 0 0 Z" fill="url(#${uid}-hibiscus-petal)" stroke="#FF2A5F" stroke-width="0.6" transform="rotate(198)" />
+              <path d="M 0 0 C -6 -13 6 -13 0 0 Z" fill="url(#${uid}-hibiscus-petal)" stroke="#FF2A5F" stroke-width="0.6" transform="rotate(270)" />
+              <path d="M 0 0 Q 3 -10 9 -14" stroke="#F59E0B" stroke-width="1.6" stroke-linecap="round" fill="none" />
+              <circle cx="9" cy="-14" r="1.3" fill="#FDE047" />
+              <circle cx="7" cy="-12" r="1.1" fill="#FDE047" />
+              <circle cx="6.5" cy="-15" r="1.1" fill="#FDE047" />
+              <circle cx="0" cy="0" r="2.2" fill="#881337" />
+            </g>
+          </g>
+        </svg>
+      `;
+
+      const el = {
+        fig: document.getElementById(`${uid}-fig`),
+        decor: document.getElementById(`${uid}-decor`),
+        body: document.getElementById(`${uid}-body`),
+        skinBody: document.getElementById(`${uid}-skin-body`),
+        maskPath: document.getElementById(`${uid}-mask-path`),
+        slotGroup: document.getElementById(`${uid}-slot-group`),
+        slots: [0,1,2,3,4,5].map(i => document.getElementById(`${uid}-slot-${i}`)),
+        skirtG: document.getElementById(`${uid}-skirt-g`),
+        skirtPath: document.getElementById(`${uid}-skirt-path`),
+        skirtTie: document.getElementById(`${uid}-skirt-tie`),
+        flower: document.getElementById(`${uid}-flower`),
+        cheeks: document.getElementById(`${uid}-cheeks`),
+        lashes: document.getElementById(`${uid}-lashes`),
+      };
+
+      const at = { bw: 50, bh: 60, tr: 1, br: 0.42, bow: 3, lid: 1, warm: 0, wob: 1, gx: 0, gy: 0 };
+      const vel = { bw: 0, bh: 0, tr: 0, br: 0, bow: 0, lid: 0, warm: 0, wob: 0, gx: 0, gy: 0 };
+      const slotAt = Array.from({ length: 6 }, () => ({ x: 0, y: 0, w: 0, h: 0, rx: 0, a: 0 }));
+      const slotVel = Array.from({ length: 6 }, () => ({ x: 0, y: 0, w: 0, h: 0, rx: 0, a: 0 }));
+
+      let blinkAt = 1800, blinkPhase = -1, wander = 0, wanderAt = 2600, gooOn = false;
+      let hopPhase = -1, hopDue = 8000;
+      let lean = 0, leanVel = 0, leanWant = 0, leanAt = 4200;
+      let peek = 0, peekVel = 0, peekWant = 0, peekAt = 12000;
+
+      const triggerThisHop = () => {
+        hopPhase = 0;
+      };
+
+      if (containerId === 'svg-avatar-mount') {
+        globalTriggerHop = triggerThisHop;
+      }
+
+      function frame(t) {
+        const activeTheme = configOverride.theme || studioTheme;
+        const activeState = configOverride.state || studioState;
+        const isFeminine = activeTheme === 'blush' || (configOverride.isFeminine ?? true);
+
+        const showFlower = isFeminine && (configOverride.flower ?? accessories.flower);
+        const showSkirt = isFeminine && (configOverride.skirt ?? accessories.skirt);
+        const showLashes = isFeminine && (configOverride.lashes ?? accessories.lashes);
+        const showBlush = isFeminine && (configOverride.blush ?? accessories.blush);
+
+        const shape = BODY[activeState] || BODY.idle;
+        const mood = MOOD[activeState] || MOOD.idle;
+        const facing = activeState === 'idle' || activeState === 'failed';
+
+        if (facing) {
+          if (t > wanderAt) { wander = (Math.random() - 0.5) * 2; wanderAt = t + 1800 + Math.random() * 3600; }
+          at.wantGx = wander * 5;
+        }
+
+        const want = {
+          bw: shape.bw, bh: shape.bh, tr: shape.tr, br: shape.br, bow: shape.bow,
+          warm: mood.warm, wob: mood.wob, lid: mood.lid,
+          gx: facing ? wander * 5 : 0,
+          gy: facing ? Math.sin(t / 2600) * 2 : 0,
+        };
+
+        if (facing) {
+          if (blinkPhase < 0 && t > blinkAt) blinkPhase = 0;
+          if (blinkPhase >= 0) {
+            blinkPhase += 1 / 7;
+            want.lid = mood.lid * Math.abs(blinkPhase - 0.5) * 2;
+            if (blinkPhase >= 1) {
+              blinkPhase = -1;
+              want.lid = mood.lid;
+              blinkAt = t + (Math.random() < 0.22 ? 340 : 2600 + Math.random() * 4200);
+            }
+          }
+        }
+
+        Object.keys(want).forEach(k => {
+          const stiff = k === 'lid' ? 0.42 : 0.11;
+          const damp = k === 'lid' ? 0.55 : 0.78;
+          vel[k] = (vel[k] + (want[k] - at[k]) * stiff) * damp;
+          at[k] += vel[k];
+        });
+
+        let squash = 0, lift = 0;
+        if (hopPhase >= 0) {
+          hopPhase += 1 / 96;
+          [squash, lift] = hopAt(hopPhase);
+          if (hopPhase >= 1) {
+            hopPhase = -1; squash = 0; lift = 0;
+          }
+        }
+        const splat = Math.max(0, squash);
+
+        const wobble = Math.sin(t / 1900) * 0.9 * at.wob;
+        const bwF = at.bw * (1 + squash * 0.55) + wobble * 0.4;
+        const bhF = at.bh * (1 - squash * 0.62);
+
+        const d = bodyPath(
+          bwF, bhF,
+          clamp(at.tr + splat * 0.5, 0, 1.2),
+          clamp(at.br + splat * 0.9, 0, 1),
+          at.bow + wobble + splat * 5
+        );
+
+        el.body.setAttribute('d', d);
+        el.skinBody.setAttribute('d', d);
+        el.maskPath.setAttribute('d', d);
+
+        // Slots / Eyes
+        const wantGoo = activeState === 'thinking';
+        if (wantGoo !== gooOn) {
+          gooOn = wantGoo;
+          el.slotGroup.setAttribute('filter', wantGoo ? `url(#${uid}-goo)` : 'none');
+        }
+
+        // Layout targets
+        const targets = Array.from({ length: 6 }, () => ({ x: 0, y: 0, w: 0, h: 0, rx: 0, a: 0 }));
+        const eye = (i, cx, dy = 0) => {
+          const h = Math.max(4, 54 * Math.max(0.06, at.lid));
+          targets[i] = { x: cx + at.gx, y: -4 + at.gy + dy, w: 21, h, rx: 10.5, a: 1 };
+        };
+
+        if (activeState === 'thinking') {
+          const n = 4;
+          const cycle = (t % 2800) / 2800;
+          const fuse = Math.pow(Math.sin(cycle * Math.PI * 2) * 0.5 + 0.5, 3);
+          for (let i = 0; i < n; i++) {
+            const a = t / 700 + (i / n) * Math.PI * 2;
+            const R = (26 - (i % 2) * 5) * (1 - 0.94 * fuse);
+            const s = 16 + fuse * 6 + Math.sin(t / 420 + i) * 1.4;
+            targets[i] = { x: Math.cos(a) * R, y: Math.sin(a) * R * 0.86 + 2, w: s, h: s, rx: s / 2, a: 1 };
+          }
+        } else if (activeState === 'visualizing') {
+          targets[0] = { x: 0, y: -2, w: 78, h: 26, rx: 13, a: 1 };
+        } else if (activeState === 'speaking') {
+          const n = 5;
+          for (let i = 0; i < n; i++) {
+            const h = 12 + Math.abs(Math.sin(t / 150 + i * 0.9)) * 26;
+            targets[i] = { x: (i - (n - 1) / 2) * 15, y: -2, w: 9, h, rx: 4.5, a: 1 };
+          }
+        } else if (activeState === 'failed') {
+          eye(0, -22, 8); eye(1, 22, 8);
+        } else {
+          eye(0, -22); eye(1, 22);
+        }
+
+        for (let i = 0; i < 6; i++) {
+          const T = targets[i], A = slotAt[i], V = slotVel[i];
+          for (const k of ['x', 'y', 'w', 'h', 'rx', 'a']) {
+            V[k] = (V[k] + (T[k] - A[k]) * 0.16) * 0.74;
+            A[k] += V[k];
+          }
+          const sEl = el.slots[i];
+          sEl.setAttribute('x', (A.x - A.w / 2).toFixed(2));
+          sEl.setAttribute('y', (A.y - A.h / 2).toFixed(2));
+          sEl.setAttribute('width', Math.max(0, A.w).toFixed(2));
+          sEl.setAttribute('height', Math.max(0, A.h).toFixed(2));
+          sEl.setAttribute('rx', Math.max(0, Math.min(A.rx, A.w / 2, A.h / 2)).toFixed(2));
+          sEl.setAttribute('opacity', clamp(A.a, 0, 1).toFixed(2));
+        }
+
+        const breathe = Math.sin(t / mood.breath) * 1.5;
+        if (facing && hopPhase < 0) {
+          if (t > leanAt) {
+            leanWant = (Math.random() < 0.5 ? -1 : 1) * (0.35 + Math.random() * 0.65);
+            leanAt = t + 2600 + Math.random() * 4200;
+          }
+          if (t > peekAt) {
+            peekWant = peekWant > 0.1 ? 0 : 1;
+            peekAt = t + (peekWant > 0.1 ? 900 : 9000 + Math.random() * 11000);
+          }
+        } else {
+          leanWant = 0; peekWant = 0;
+        }
+        leanVel = (leanVel + (leanWant - lean) * 0.028) * 0.9;
+        lean += leanVel;
+        peekVel = (peekVel + (peekWant - peek) * 0.06) * 0.82;
+        peek += peekVel;
+
+        const planted = at.bh - bhF;
+        const tilt = lean * 3.4 + peek * 4.5;
+        const shift = lean * 2.2 + peek * 3;
+        const dip = peek * 2.4;
+
+        const tf = `translate(${shift.toFixed(2)} ${(breathe + planted - lift + dip).toFixed(2)}) rotate(${tilt.toFixed(2)} 0 60)`;
+        el.fig.setAttribute('transform', tf);
+        el.decor.setAttribute('transform', tf);
+
+        // Skirt Update
+        el.skirtG.style.display = showSkirt ? 'block' : 'none';
+        if (showSkirt) {
+          const yTop = bhF * 0.22;
+          const wTop = bwF * 0.94;
+          const yBot = bhF * 0.96 + 6;
+          const wBot = bwF * 1.10;
+          const midY = (yTop + yBot) / 2;
+
+          const ruffles = 5;
+          const step = (wBot * 2) / ruffles;
+          let hem = '';
+          for (let i = 0; i < ruffles; i++) {
+            const x1 = wBot - i * step;
+            const x2 = wBot - (i + 1) * step;
+            const xm = (x1 + x2) / 2;
+            const dipR = 3.5 + Math.sin(t / 800 + i) * 0.8;
+            hem += ` Q ${xm.toFixed(2)} ${(yBot + dipR).toFixed(2)} ${x2.toFixed(2)} ${yBot.toFixed(2)}`;
+          }
+
+          const skirtD = `M ${(-wTop).toFixed(2)} ${yTop.toFixed(2)} Q 0 ${(yTop + 3).toFixed(2)} ${wTop.toFixed(2)} ${yTop.toFixed(2)} Q ${(wBot + 2).toFixed(2)} ${midY.toFixed(2)} ${wBot.toFixed(2)} ${yBot.toFixed(2)}${hem} Q ${(-wBot - 2).toFixed(2)} ${midY.toFixed(2)} ${(-wTop).toFixed(2)} ${yTop.toFixed(2)} Z`;
+          el.skirtPath.setAttribute('d', skirtD);
+
+          const tieD = `M ${(-wTop).toFixed(2)} ${yTop.toFixed(2)} Q 0 ${(yTop + 3).toFixed(2)} ${wTop.toFixed(2)} ${yTop.toFixed(2)}`;
+          el.skirtTie.setAttribute('d', tieD);
+        }
+
+        // Flower Update
+        el.flower.style.display = showFlower ? 'block' : 'none';
+        if (showFlower) {
+          const flowerX = -bwF * 0.62;
+          const flowerY = -bhF * 0.70;
+          const flowerTilt = -16 + Math.sin(t / 1400) * 3 + tilt * 0.4;
+          el.flower.setAttribute('transform', `translate(${flowerX.toFixed(2)}, ${flowerY.toFixed(2)}) rotate(${flowerTilt.toFixed(2)})`);
+        }
+
+        // Cheeks Update
+        el.cheeks.style.display = showBlush ? 'block' : 'none';
+        if (showBlush) {
+          const cheekY = 12 + at.gy * 0.5;
+          el.cheeks.setAttribute('transform', `translate(0, ${cheekY.toFixed(2)})`);
+        }
+
+        // Lashes Update
+        el.lashes.style.display = showLashes ? 'block' : 'none';
+        if (showLashes) {
+          const isEyeFacing = activeState !== 'thinking' && activeState !== 'visualizing' && activeState !== 'speaking';
+          el.lashes.setAttribute('opacity', isEyeFacing ? clamp(at.lid * 1.3, 0, 1).toFixed(2) : '0');
+          el.lashes.setAttribute('transform', `translate(${at.gx.toFixed(2)}, ${at.gy.toFixed(2)})`);
+        }
+
+        requestAnimationFrame(frame);
+      }
+
+      requestAnimationFrame(frame);
+    }
+
+    function setStudioTheme(themeName, btn) {
+      document.querySelectorAll('.btn-row .pill-btn').forEach(b => {
+        if (['Silver (Light)', 'Onyx (Dark)', 'Mahogany', 'Blush (Feminine Mode)'].some(t => b.innerText.includes(t.slice(0, 4)))) {
+          b.classList.remove('active');
+        }
+      });
+      btn.classList.add('active');
+      studioTheme = themeName;
+
+      const isBlush = themeName === 'blush';
+      document.getElementById('chip-flower').style.opacity = isBlush ? '1' : '0.4';
+      document.getElementById('chip-skirt').style.opacity = isBlush ? '1' : '0.4';
+      document.getElementById('chip-lashes').style.opacity = isBlush ? '1' : '0.4';
+      document.getElementById('chip-blush').style.opacity = isBlush ? '1' : '0.4';
+    }
+
+    function setStudioState(stateName, btn) {
+      document.querySelectorAll('.btn-row button').forEach(b => {
+        if (!['Silver', 'Onyx', 'Mahogany', 'Blush'].some(t => b.innerText.includes(t))) {
+          b.classList.remove('active');
+        }
+      });
+      btn.classList.add('active');
+      studioState = stateName;
+    }
+
+    function toggleAccessory(key, checked) {
+      accessories[key] = checked;
+      const chip = document.getElementById('chip-' + key);
+      if (checked) chip.classList.add('active');
+      else chip.classList.remove('active');
+    }
+
+    function triggerHop() {
+      globalTriggerHop();
+    }
+
+    // Initialize Studio on Mount
+    window.addEventListener('DOMContentLoaded', () => {
+      renderGrid('blush');
+      createAvatarSVG('svg-avatar-mount', 180);
+      createAvatarSVG('sim-avatar-mount-blush', 36, { theme: 'blush', isFeminine: true });
+      createAvatarSVG('sim-avatar-mount-onyx', 36, { theme: 'dark', isFeminine: false });
+    });
+  </script>
+</body>
+</html>

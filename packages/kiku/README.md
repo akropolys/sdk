@@ -1,16 +1,22 @@
 # @akropolys/kiku
 
-[![npm](https://img.shields.io/npm/v/@akropolys/kiku?color=orange)](https://www.npmjs.com/package/@akropolys/kiku) [![License](https://img.shields.io/npm/l/@akropolys/kiku)](https://github.com/akropolys/sdk/blob/main/LICENSE) [![TypeScript](https://img.shields.io/badge/types-included-blue)](https://www.typescriptlang.org/)
+Pre-built, blindly agnostic multi-modal conversational AI widget with duplex Live Voice, Computer Vision, and real-time comparative tables for any website or transactional platform.
 
-**[Docs](https://akropolys.io/docs)** &nbsp;•&nbsp; **[GitHub](https://github.com/akropolys/sdk)**
+[![npm](https://img.shields.io/npm/v/@akropolys/kiku?color=orange)](https://www.npmjs.com/package/@akropolys/kiku) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT) [![TypeScript](https://img.shields.io/badge/types-included-blue)](https://www.typescriptlang.org/)
 
 ---
 
-## The pre-built UI for a smarter search bar.
+## Install
 
-`@akropolys/kiku` is the ready-made front end for [`@akropolys/sdk`](https://www.npmjs.com/package/@akropolys/sdk) — a chat button, a search bar, a per-product "ask about this" prompt — so you don't have to design a search experience from scratch. Drop one in and it's already wired up to plain-language search.
+```bash
+npm install @akropolys/kiku @akropolys/sdk
+# or
+pnpm add @akropolys/kiku @akropolys/sdk
+```
 
-Want to build your own UI instead? Use `@akropolys/sdk` directly and skip this package.
+---
+
+## Usage (React / Next.js)
 
 ```tsx
 import { AkropolysProvider } from '@akropolys/sdk';
@@ -20,41 +26,55 @@ import '@akropolys/kiku/styles.css';
 export default function App() {
   return (
     <AkropolysProvider
-      siteId={process.env.NEXT_PUBLIC_AKROPOLYS_SITE_ID}
-      apiToken={process.env.NEXT_PUBLIC_AKROPOLYS_API_TOKEN}
+      siteId={process.env.NEXT_PUBLIC_AKROPOLYS_SITE_ID!}
+      apiUrl={process.env.NEXT_PUBLIC_AKROPOLYS_API_URL!}
+      apiToken={process.env.NEXT_PUBLIC_AKROPOLYS_API_KEY!}
     >
-      <KikuButton />
+      <KikuButton
+        label="Ask me anything"
+        enableVoice={true}
+        enableVision={true}
+        enableAudioResponse={true}
+        theme={{
+          borderRadius: "24px",
+        }}
+      />
     </AkropolysProvider>
   );
 }
 ```
 
+---
+
 ## Components
 
-| Component | What it does |
+| Component | Description |
 |---|---|
-| `<KikuButton />` | Floating chat assistant |
-| `<KikuChat />` | Chat widget embedded inline on the page |
-| `<SearchBar />` | Search box with a live results dropdown |
-| `<Sparkle />` | Small "ask about this" button next to a product |
-| `<ComparisonMatrix />` | Side-by-side product comparison |
-| `<VoiceButton />` | Speak a query instead of typing it |
-| `<VisualSearch />` | Search by uploading a photo |
+| `<KikuButton />` | Floating trigger button and full-screen modal with multi-modal voice & vision. |
+| `<KikuChat />` | Embedded inline conversational chat container. |
+| `<VoiceOverlay />` | Duplex live spoken voice assistant with Apple Siri chromatic animation and real-time audio visualization. |
+| `<LiveTable />` | High-precision comparative financial and sports odds table. |
 
-## Install
+---
 
-```bash
-npm install @akropolys/kiku @akropolys/sdk
+## Standalone Script Tag / Shopify Embed
+
+```html
+<script>
+  window.AkropolysConfig = {
+    siteId: "YOUR_SITE_ID",
+    apiToken: "YOUR_PUBLIC_KEY",
+    buttonLabel: "Ask Kiku",
+    theme: "dark",
+    enableVoice: true,
+    enableVision: true,
+  };
+</script>
+<script src="https://cdn.akropolys.cloud/kiku.iife.js" async></script>
 ```
-
-```ts
-import '@akropolys/kiku/styles.css';
-```
-
-[Read the full docs →](https://akropolys.io/docs)
 
 ---
 
 ## License
 
-MIT © Akropolys
+MIT © [Akropolys](https://akropolys.cloud)

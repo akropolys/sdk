@@ -1,10 +1,5 @@
 import { useEffect, useRef } from 'react';
 
-/**
- * Resistance past a boundary. Displacement approaches an asymptote instead of
- * hitting a wall, so pulling further always moves *something* — the reason a
- * hard clamp reads as broken and this reads as elastic.
- */
 export function rubberBand(offset: number, dimension: number, coeff = 0.55): number {
   if (dimension <= 0) return 0;
   return (offset * dimension * coeff) / (dimension + coeff * Math.abs(offset));
@@ -12,20 +7,6 @@ export function rubberBand(offset: number, dimension: number, coeff = 0.55): num
 
 type SpringOpts = { stiffness?: number; damping?: number; onFrame: (v: number) => void; onRest?: () => void };
 
-/**
- * A spring you push values into, not an animation you play. `to` retargets from
- * the CURRENT position and velocity, so grabbing mid-flight continues the motion
- * rather than restarting it — the difference between this and a CSS transition.
- *
- * Measured at these constants: 90% of the travel lands in ~183ms with no
- * overshoot. Note that initial velocity barely changes the motion (~16ms over a
- * 200px move, none over a 500px one) — critical damping absorbs it. Velocity
- * earns its keep in the dismiss DECISION, not in the animation.
- */
-// Critically damped: 2*sqrt(stiffness) is the exact no-overshoot boundary. A
-// sheet must not bounce, but under-damping it further makes flicks feel absorbed
-// and dead — measured at 220/30 it took ~2s to settle and a 2000px/s flick
-// arrived no sooner than a dead release.
 export function createSpring({ stiffness = 500, damping = 45, onFrame, onRest }: SpringOpts) {
   let value = 0, velocity = 0, target = 0;
   let raf: number | null = null;
@@ -34,7 +15,6 @@ export function createSpring({ stiffness = 500, damping = 45, onFrame, onRest }:
   const tick = (now: number) => {
     const dt = Math.min(0.032, (now - last) / 1000) || 1 / 60;
     last = now;
-    // Semi-implicit Euler, substepped so a long frame can't make it explode.
     const steps = Math.max(1, Math.ceil(dt / 0.008));
     const h = dt / steps;
     for (let i = 0; i < steps; i++) {
@@ -42,8 +22,6 @@ export function createSpring({ stiffness = 500, damping = 45, onFrame, onRest }:
       velocity += a * h;
       value += velocity * h;
     }
-    // Sub-pixel: the last stretch of an exponential tail is invisible, and
-    // resting sooner stops the rAF ~6 frames earlier per gesture.
     if (Math.abs(value - target) < 0.5 && Math.abs(velocity) < 0.5) {
       value = target; velocity = 0; raf = null;
       onFrame(value); onRest?.();
@@ -56,12 +34,12 @@ export function createSpring({ stiffness = 500, damping = 45, onFrame, onRest }:
   const start = () => { if (raf === null) { last = performance.now(); raf = requestAnimationFrame(tick); } };
 
   return {
-    /** Jump to a value without animating — for tracking a finger 1:1. */
+
     track(v: number) {
       if (raf !== null) { cancelAnimationFrame(raf); raf = null; }
       value = v; velocity = 0; onFrame(value);
     },
-    /** Animate to a target, carrying `v0` in as initial velocity (px/s). */
+
     to(t: number, v0 = 0) { target = t; velocity = v0; start(); },
     get value() { return value; },
     stop() { if (raf !== null) { cancelAnimationFrame(raf); raf = null; } },
@@ -72,18 +50,11 @@ type Opts = {
   panel: () => HTMLElement | null;
   scroller: () => HTMLElement | null;
   onDismiss: () => void;
-  /** False while the list is still moving under its own momentum. */
+
   quiescent?: () => boolean;
   enabled?: boolean;
 };
 
-/**
- * Drag-down-to-dismiss. The sheet follows the finger exactly while the scroller
- * is already at the top; past that it rubber-bands. On release the decision uses
- * velocity as well as distance — a short fast flick dismisses, a long slow drag
- * that stalls snaps back — which is where velocity actually matters, since the
- * spring itself absorbs it almost entirely.
- */
 export function useDragToDismiss({ panel, scroller, onDismiss, quiescent, enabled = true }: Opts): void {
   const dismissRef = useRef(onDismiss);
   dismissRef.current = onDismiss;
@@ -106,9 +77,6 @@ export function useDragToDismiss({ panel, scroller, onDismiss, quiescent, enable
       onFrame: apply,
       onRest: () => {
         el.style.willChange = '';
-        // Dismiss AFTER the sheet has flown out. Calling it on release unmounts
-        // the panel immediately, which tears down this effect and cancels the
-        // very animation that was meant to play — the sheet just vanished.
         if (exiting) { exiting = false; dismissRef.current(); }
       },
     });
@@ -135,19 +103,11 @@ export function useDragToDismiss({ panel, scroller, onDismiss, quiescent, enable
 
       if (!decided) {
         if (Math.abs(dy) < 6 && Math.abs(dx) < 6) return;
-        // Claim the gesture only for a downward pull that starts at the top of
-        // the list. Anything else stays with the scroller (or the host page).
         decided = true;
         dragging = dy > 0 && Math.abs(dy) > Math.abs(dx) && atTop();
         if (dragging) {
-          // Capture only once committed. Capturing on pointerdown would claim
-          // every touch on the panel — including ones meant to scroll the list —
-          // and a captured pointer can stop the native scroll from happening.
-          try { el.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
+          try { el.setPointerCapture(e.pointerId); } catch {  }
           spring.stop();
-          // A running CSS animation outranks inline styles for the same
-          // property, so the entrance keyframes would swallow our transform.
-          // Clearing it also makes the entrance itself grabbable mid-flight.
           el.style.animation = 'none';
           el.style.willChange = 'transform';
         }
@@ -165,7 +125,7 @@ export function useDragToDismiss({ panel, scroller, onDismiss, quiescent, enable
 
     const onUp = (e: PointerEvent) => {
       if (e.pointerId !== pointerId) return;
-      try { if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+      try { if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId); } catch {  }
       pointerId = -1;
       if (!dragging) return;
       dragging = false;

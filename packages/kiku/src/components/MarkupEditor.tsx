@@ -1,10 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { buildMarkRegions, type MarkRegion } from '../utils/markRegions';
 
-// The shopper marks WHERE an edit goes. Marks are sent as geometry beside a
-// clean copy of the scene, never burned into it — `preview` carries the drawn
-// version, which is shown back to the shopper but never uploaded.
-
 type Tool = 'pen' | 'eraser' | 'text';
 
 interface Point { x: number; y: number }
@@ -43,14 +39,12 @@ export function MarkupEditor({ src, onCancel, onSend, t }: {
     el.src = src;
   }, [src]);
 
-  // Canvas internal resolution = (capped) natural size so exports stay sharp.
   const dims = (() => {
     if (!img) return { w: 0, h: 0 };
     const scale = Math.min(1, MAX_EXPORT_DIM / Math.max(img.naturalWidth, img.naturalHeight));
     return { w: Math.round(img.naturalWidth * scale), h: Math.round(img.naturalHeight * scale) };
   })();
 
-  // Marks live on their own layer so the eraser only removes ink, never photo.
   const markLayer = useRef<HTMLCanvasElement | null>(null);
   const paint = (live?: StrokeAction | null) => {
     const canvas = canvasRef.current;
@@ -89,7 +83,7 @@ export function MarkupEditor({ src, onCancel, onSend, t }: {
     ctx.drawImage(layer, 0, 0);
   };
 
-  useEffect(() => { paint(); /* eslint-disable-line react-hooks/exhaustive-deps */ }, [img, actions, dims.w, dims.h]);
+  useEffect(() => { paint();  }, [img, actions, dims.w, dims.h]);
   useEffect(() => { if (pendingText) textInputRef.current?.focus(); }, [pendingText]);
 
   const toCanvasPoint = (e: React.PointerEvent): Point => {

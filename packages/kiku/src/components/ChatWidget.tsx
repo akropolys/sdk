@@ -9,7 +9,6 @@ import { VoiceButton } from './VoiceButton';
 import { VisualSearch } from './VisualSearch';
 import { speak, stopSpeech } from '../utils/tts';
 
-
 export interface ChatWidgetProps {
   title?: string;
   placeholder?: string;
@@ -17,35 +16,31 @@ export interface ChatWidgetProps {
   emptyStateSuggestions?: string;
   defaultCurrency?: string;
   className?: string;
-  
-  // Allow overriding styles via standard CSS variables
+
   theme?: AkropolysTheme;
-  
-  // Allow targeting specific elements with custom classes (e.g. Tailwind)
+
   classNames?: {
     root?: string;
     header?: string;
     messageBubble?: string;
     input?: string;
   };
-  
+
   onSelectSource?: (source: ChatSource) => void;
 
-  /** Enable 🎙️ voice input via browser Web Speech API */
   enableVoice?: boolean;
   /** Enable 📷 visual style-match search */
   enableVision?: boolean;
-  /** Optional category hint for visual search (e.g. 'dress', 'curtains') */
+
   visionCategoryHint?: string;
 
   /** Enable 🔊 TTS voice audio responses from AI */
   enableAudioResponse?: boolean;
   /** Optional AI voice preset */
   ttsVoice?: string;
-  /** Auto-speak assistant responses when user sends voice query */
+
   autoSpeakResponses?: boolean;
 }
-
 
 const SparkleIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -105,9 +100,9 @@ interface ChatMessageWithVisual extends ChatMessage {
   visualSources?: ChatSource[];
 }
 
-export function ChatWidget({ 
+export function ChatWidget({
   title = 'kiku',
-  placeholder = 'Ask about anything in our store…', 
+  placeholder = 'Ask about anything in our store…',
   emptyStateText = 'Ask me anything about our products',
   emptyStateSuggestions = '"Find me headphones under KSh 5,000" · "Gift ideas"',
   defaultCurrency = 'KES',
@@ -177,7 +172,6 @@ export function ChatWidget({
     }
   }, [messages]);
 
-  // Handle auto-TTS audio playback when assistant finishes streaming
   useEffect(() => {
     const wasStreaming = prevStreamingRef.current;
     prevStreamingRef.current = streaming;
@@ -201,8 +195,6 @@ export function ChatWidget({
     }
   }, [streaming, audioEnabled, autoSpeakResponses, chatHistory, ttsVoice, client]);
 
-  // Instant while a response streams — restarting a smooth scroll on every
-  // token makes the list crawl and never reach the bottom.
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: loading ? 'auto' : 'smooth' });
   }, [chatHistory, loading]);
@@ -218,7 +210,7 @@ export function ChatWidget({
   };
 
   const handleKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       handleSend();
     }
@@ -280,8 +272,6 @@ export function ChatWidget({
       role: 'assistant',
       content,
       styleDNA: dna,
-      // Resolved the same way chat sources are, so a blog keeps its author and
-      // date instead of being flattened into a product.
       visualSources: results.map((r: any) => {
         const fields = r.entity ?? {};
         const d = resolveDisplayFields(fields, undefined);
@@ -562,6 +552,4 @@ export function ChatWidget({
     </div>
   );
 }
-
-
 

@@ -3,6 +3,7 @@ import { useAkropolysContext } from '../Provider';
 import { ChatMessage, ChatSource, VizEvent } from '../stream';
 import { ChatAction, ChatAttachment, CaptureTarget } from '../types';
 import { resolveDisplayFields } from '../client';
+import { setLiveValue } from '../liveValues';
 
 interface UseKikuOptions {
   initialMessages?: ChatMessage[];
@@ -24,28 +25,20 @@ interface UseKikuReturn {
   lastIntent: string | null;
   allowedActions: string[] | null;
   send: (query: string, displayQuery?: string, attachments?: ChatAttachment[], forcedIntent?: string, captureTargets?: CaptureTarget[]) => Promise<void>;
-  /** The message waiting for the current turn to finish, or null. Deliberately
-   *  kept out of `messages` until it is dispatched — every stream write targets
-   *  the last message and expects it to be the assistant's. */
+
   queuedMessage: ChatMessage | null;
-  /** Interrupts the current turn and dispatches the queued message right away. */
+
   sendQueuedNow: () => void;
-  /**
-   * Records a spoken exchange in the transcript. Voice runs its own session
-   * with its own context, so nothing said aloud reached the text history —
-   * a typed follow-up after a call could not resolve so much as a pronoun.
-   */
+
   appendSpokenExchange: (heard: string, said: string) => void;
   stop: () => void;
   stopped: boolean;
-  /** true when the stream died mid-answer (network, provider) — a partial answer is on screen and continueGenerating can resume it */
+
   interrupted: boolean;
   continueGenerating: () => void;
   reset: () => void;
 }
 
-// A send() that arrived while the previous turn was still in flight, held
-// until that turn settles.
 interface PendingSend {
   query: string;
   displayQuery?: string;
@@ -69,8 +62,6 @@ function appendSpoken(prev: ChatMessage[], heard: string, said: string): ChatMes
 const CONTINUE_QUERY =
   'Continue your previous answer exactly where it stopped. Do not repeat anything already written — just carry on from the last character.';
 
-// Fills a raw ChatSource's display fields (name/price/image/brand/currency) from
-// the developer's display config, leaving any value the server already set.
 function enrichSources(sources: ChatSource[], display?: import('../types').DisplayConfig): ChatSource[] {
   return sources.map(s => {
     const d = resolveDisplayFields(s.fields || s, display);
@@ -80,10 +71,6 @@ function enrichSources(sources: ChatSource[], display?: import('../types').Displ
       price: s.price || d.price,
       image: s.image || d.image,
       brand: s.brand || d.subtitle,
-      // No hardcoded fallback: labelling a USD listing as KES misstates the
-      // price. Prefer the entity's own currency field, then a code embedded in
-      // the price string, then nothing — the card renders the bare number
-      // rather than inventing a denomination.
       currency:
         s.currency ||
         (typeof (s.fields as any)?.currency === 'string' ? (s.fields as any).currency : '') ||
@@ -103,35 +90,19 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
   const [stopped, setStopped] = useState(false);
   const [interrupted, setInterrupted] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Kept beside the message, not folded into it: the message is the server's
-  // English, and this is the only thing that can look up the shopper's own.
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [lastAction, setLastAction] = useState<ChatAction | null>(null);
   const [lastIntent, setLastIntent] = useState<string | null>(null);
-  // Which action tags this site+plan actually permits, as resolved by the
-  // server each turn. null = not yet known (before the first reply).
   const [allowedActions, setAllowedActions] = useState<string[] | null>(null);
   const activeStreamRef = useRef<any | null>(null);
-  // A second send() while a turn is in flight queues here instead of racing
-  // the stream that's already running — the two were sharing one `loading`
-  // flag that goes false on the first token, long before the turn is done.
   const pendingRef = useRef<PendingSend | null>(null);
-  // Held beside the transcript, not inside it: consumeStream writes every
-  // token, thought and status into messages[length-1] on the assumption that
-  // it is the assistant's turn. A queued user bubble sitting there instead
-  // silently swallowed the entire answer.
   const [queuedMessage, setQueuedMessage] = useState<ChatMessage | null>(null);
-  // Spoken turns that landed while a text turn was streaming, waiting for it to
-  // settle. The voice socket fires outside React's render, so the flags it
-  // checks have to be refs — a closure over `loading` would be a stale read.
   const spokenQueueRef = useRef<SpokenExchange[]>([]);
   const loadingRef = useRef(false);
   const streamingRef = useRef(false);
   loadingRef.current = loading;
   streamingRef.current = streaming;
 
-  // Streaming pace buffer — decouples on-screen typing speed from how fast (or
-  // bursty) the network delivers tokens, so a fast backend still "types" smoothly.
   const targetTextRef = useRef('');
   const displayedLenRef = useRef(0);
   const rafRef = useRef<number | null>(null);
@@ -146,7 +117,6 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     }
   }, []);
 
-  // Keep references to options callbacks to avoid hook dependencies issues
   const onTokenRef = useRef(options.onToken);
   const onMetaRef = useRef(options.onMeta);
   const onDoneRef = useRef(options.onDone);
@@ -159,7 +129,6 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     onErrorRef.current = options.onError;
   }, [options.onToken, options.onMeta, options.onDone, options.onError]);
 
-  // Clean up stream on unmount
   useEffect(() => {
     return () => {
       activeStreamRef.current?.destroy();
@@ -167,11 +136,6 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     };
   }, [stopPacing]);
 
-  // Reveal buffered text at a steady characters-per-second rate rather than a
-  // fraction of the backlog: a proportional step decays exponentially, which
-  // dumps each network slab in a few frames and then crawls. Rate is chosen to
-  // clear the current backlog over PACE_CATCHUP seconds, clamped either side so
-  // it never crawls and never flashes.
   const startPacing = useCallback(() => {
     if (rafRef.current != null) return;
     const PACE_CATCHUP = 0.4;   // seconds to absorb the current backlog
@@ -213,8 +177,6 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     rafRef.current = requestAnimationFrame(tick);
   }, []);
 
-  // Video jobs the client is still following, so a re-render or a second video
-  // in the same conversation can't start duplicate pollers for one job.
   const videoPollsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -222,17 +184,6 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     return () => polls.clear();
   }, []);
 
-  /**
-   * Follows a video job after the chat stream has closed.
-   *
-   * Generation takes minutes; the turn ends in seconds. The server therefore
-   * closes the stream with a `pending` event carrying the job id, and nothing
-   * was listening for it — so every finished video was stored and billed while
-   * the shopper watched a spinner that never resolved.
-   *
-   * Backs off as it goes: quick at first for a fast render, then sparse, giving
-   * up after ~10 minutes rather than polling a dead job forever.
-   */
   const followVideoJob = useCallback((jobId: string) => {
     if (!jobId || videoPollsRef.current.has(jobId)) return;
     videoPollsRef.current.add(jobId);
@@ -262,7 +213,11 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
       }
       const res = await client.api?.getVideoStatus?.(jobId);
       if (res?.status === 'SUCCESS' && res.videoUrl) {
-        settle({ visualization: res.videoUrl, visualizationType: 'video' });
+        let videoUrl = res.videoUrl;
+        if (videoUrl.startsWith('/') && client?.apiUrl) {
+          videoUrl = `${client.apiUrl.replace(/\/+$/, '')}${videoUrl}`;
+        }
+        settle({ visualization: videoUrl, visualizationType: 'video' });
         return;
       }
       if (res?.status === 'FAILED') {
@@ -276,8 +231,6 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     setTimeout(tick, delay);
   }, [client]);
 
-  // Wires a chat stream to state. `continuing` resumes into the assistant bubble
-  // already on screen (after a manual stop) instead of opening a new one.
   const consumeStream = useCallback((stream: any, continuing: boolean, baseText: string) => {
     let messageInitialized = continuing;
     let lastMeta: any = null;
@@ -291,8 +244,6 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
       streamDoneRef.current = false;
     }
 
-    // Starts the assistant bubble + pacing loop on first token or viz-generating.
-    // In continue mode the bubble exists; we only flip state + start pacing.
     const ensureAssistantMessage = () => {
       if (!messageInitialized) {
         setLoading(false);
@@ -363,6 +314,24 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
       });
     });
 
+    stream.on('live_ref', (ref: { key: string; fields?: Record<string, string>; at?: number }) => {
+      if (ref?.fields && typeof ref.fields === 'object') {
+        setLiveValue(ref.key, ref.fields, typeof ref.at === 'number' ? ref.at : undefined);
+      }
+      ensureAssistantMessage();
+      setMessages(prev => {
+        const next = [...prev];
+        const last = next[next.length - 1];
+        if (last?.role === 'assistant') {
+          const keys = last.liveKeys ?? [];
+          if (!keys.includes(ref.key)) {
+            next[next.length - 1] = { ...last, liveKeys: [...keys, ref.key] };
+          }
+        }
+        return next;
+      });
+    });
+
     stream.on('thinking', (text: string) => {
       ensureAssistantMessage();
       setMessages(prev => {
@@ -378,7 +347,6 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     stream.on('token', (token: string) => {
       ensureAssistantMessage();
       if (!thoughtStamped) {
-        // First answer token: everything before this was retrieval + reasoning.
         thoughtStamped = true;
         const secs = Math.max(1, Math.round((Date.now() - sentAt) / 1000));
         setMessages(prev => {
@@ -411,20 +379,22 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
         return;
       }
       if (viz.status === 'pending') {
-        // The stream is about to close with the video still rendering. Keep the
-        // placeholder up and follow the job over HTTP instead — otherwise the
-        // finished video is stored, billed, and never shown to anyone.
         followVideoJob(viz.jobId);
         return;
       }
+      ensureAssistantMessage();
       setMessages(prev => {
         const next = [...prev];
         if (next.length > 0 && next[next.length - 1].role === 'assistant') {
-          const mType = viz.status === 'done' ? (viz.mediaType || (viz.url.includes('/videos/') ? 'video' : 'image')) : undefined;
+          let vizUrl = viz.status === 'done' ? viz.url : undefined;
+          if (vizUrl && vizUrl.startsWith('/') && client?.apiUrl) {
+            vizUrl = `${client.apiUrl.replace(/\/+$/, '')}${vizUrl}`;
+          }
+          const mType = viz.status === 'done' ? (viz.mediaType || (vizUrl?.includes('/videos/') ? 'video' : 'image')) : undefined;
           next[next.length - 1] = {
             ...next[next.length - 1],
             visualizing: false,
-            ...(viz.status === 'done' ? { visualization: viz.url, visualizationType: mType } : {}),
+            ...(viz.status === 'done' && vizUrl ? { visualization: vizUrl, visualizationType: mType } : {}),
           };
         }
         return next;
@@ -452,7 +422,6 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
         return next;
       });
 
-      // Developer-registered actions go out as a DOM event + onAction; built-ins (incl. server-driven visualize) don't.
       const metaAction = lastMeta?.action;
       const builtin = ['search', 'capture', 'capture_all', 'delete', 'view_history', 'request_kiku_key', 'visualize', 'open_memory'];
 
@@ -461,8 +430,6 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
         const detail = { ...metaAction, items };
         window.dispatchEvent(new CustomEvent('akropolys:action', { detail }));
         client.onAction?.(detail);
-        // Sugar for the common case: if the resolved action is add-to-cart and the
-        // developer wired onAddToCart, hand them the items to add to their own store.
         const kind = String(metaAction.type).replace(/[^a-z]/gi, '').toLowerCase();
         if ((kind === 'addtocart' || kind === 'cart') && client.onAddToCart && items.length > 0) {
           client.onAddToCart(items);
@@ -479,8 +446,6 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
       setStreaming(false);
       const partial = targetTextRef.current;
       if (continuing || (messageInitialized && partial)) {
-        // A partial answer is on screen — keep it, flush what was buffered, and
-        // offer resume instead of erasing the shopper's question and half an answer.
         displayedLenRef.current = partial.length;
         setMessages(prev => {
           const next = [...prev];
@@ -495,8 +460,9 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
         setErrorCode((err as Error & { code?: string }).code ?? null);
         setMessages(prev => {
           let next = prev;
-          if (next.length > 0 && next[next.length - 1].role === 'assistant') next = next.slice(0, -1);
-          if (next.length > 0 && next[next.length - 1].role === 'user') next = next.slice(0, -1);
+          if (next.length > 0 && next[next.length - 1].role === 'assistant' && !next[next.length - 1].content) {
+            next = next.slice(0, -1);
+          }
           return next;
         });
       }
@@ -504,9 +470,6 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     });
   }, [client, startPacing, stopPacing]);
 
-  // Starts a turn against the given history and wires its stream. Shared by an
-  // immediate send and a queued message being drained once the turn ahead of
-  // it settles — both need the exact same state resets and stream wiring.
   const beginTurn = useCallback((
     history: { role: 'user' | 'assistant'; content: string }[],
     query: string,
@@ -549,10 +512,6 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
       images: attachments?.filter(a => a.type === 'image').map(a => a.preview || a.data),
     };
 
-    // A turn is already running: queue behind it rather than racing it — a
-    // second send() used to arrive while `loading` had already gone false
-    // (it flips on the first token, well before the answer finishes) and
-    // `destroy()` the stream still typing out the first answer.
     if (loading || streaming) {
       if (pendingRef.current) return; // one queued message at a time
       pendingRef.current = { query, displayQuery, attachments, forcedIntent, captureTargets };
@@ -565,15 +524,9 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     beginTurn(history, query, attachments, forcedIntent, captureTargets);
   }, [messages, loading, streaming, beginTurn]);
 
-  // Drains the queued message the instant the turn ahead of it settles,
-  // whichever way it settles (finished, errored, or force-interrupted by
-  // sendQueuedNow below) — one path for all three instead of three copies.
   useEffect(() => {
     if (loading || streaming) return;
 
-    // Spoken turns first: they happened while the text turn was still running,
-    // so they belong ahead of the queued message both in the transcript and in
-    // the history that message is answered against.
     let settled = messages;
     if (spokenQueueRef.current.length > 0) {
       const spoken = spokenQueueRef.current;
@@ -590,9 +543,6 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     const pending = pendingRef.current;
     pendingRef.current = null;
     setQueuedMessage(null);
-    // History is the transcript as it stands, before this message joins it —
-    // the same contract send() uses, so the queued turn sees the answer it
-    // was waiting for.
     const history = settled.map(m => ({ role: m.role, content: m.content }));
     setMessages(prev => [...prev, {
       role: 'user',
@@ -602,9 +552,6 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     beginTurn(history, pending.query, pending.attachments, pending.forcedIntent, pending.captureTargets);
   }, [loading, streaming, messages, beginTurn]);
 
-  // Resume a stopped/interrupted answer. With a partial answer on screen it
-  // appends into the same assistant bubble; stopped before any answer arrived,
-  // it re-runs the question fresh.
   const continueGenerating = useCallback(() => {
     if (loading || streaming) return;
     const last = messages[messages.length - 1];
@@ -658,14 +605,12 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     setLastIntent(null);
   }, []);
 
-  // Halts the in-flight response without reverting the question or the partial answer already shown.
   const stop = useCallback(() => {
     activeStreamRef.current?.destroy();
     stopPacing();
     streamDoneRef.current = true;
     setLoading(false);
     setStreaming(false);
-    // Flush any buffered-but-not-yet-typed text so nothing is lost on resume.
     if (targetTextRef.current) {
       const full = targetTextRef.current;
       displayedLenRef.current = full.length;
@@ -678,23 +623,14 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
       });
     }
     setStopped(true);
-    // A viz 'done'/'failed' event will never arrive now — clear the spinner.
     setMessages(prev => prev.map(m => m.visualizing ? { ...m, visualizing: false } : m));
   }, [stopPacing]);
 
-  // Interrupts the running turn so the queued message goes out now instead of
-  // waiting for the answer ahead of it to finish typing. stop() flips loading
-  // and streaming false, which the drain effect above is watching for — this
-  // just triggers that same path early rather than duplicating it.
   const sendQueuedNow = useCallback(() => {
     if (!pendingRef.current) return;
     stop();
   }, [stop]);
 
-  // Held back while a text turn is streaming, for the same reason a second
-  // send() is: consumeStream writes every token into messages[length-1] on the
-  // assumption that it is the assistant's turn, and appending here mid-stream
-  // moves that slot — the rest of the typed answer lands in the spoken bubble.
   const appendSpokenExchange = useCallback((heard: string, said: string) => {
     const h = heard.trim();
     const s = said.trim();

@@ -31,15 +31,18 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
     },
-    "./styles.css": "./dist/styles.css"
+    "./styles.css": "./dist/styles.css",
+    "./shopify": "./dist/shopify.js",
+    "./kiku.iife.js": "./dist/kiku.iife.js"
   },
   "files": [
     "dist",
+    "shopify",
     "README.md"
   ],
   "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch"
+    "build": "node scripts/gen-css.mjs && tsup && node scripts/postbuild.mjs",
+    "dev": "node scripts/gen-css.mjs && tsup --watch"
   },
   "peerDependencies": {
     "react": ">=17",
@@ -58,10 +61,8 @@
     "@akropolys/sdk": "workspace:*",
     "@types/react": "^18.0.0",
     "@types/react-dom": "^18.0.0",
+    "clsx": "^2.1.1",
     "tsup": "^8.0.0",
     "typescript": "^5.0.0"
-  },
-  "dependencies": {
-    "clsx": "^2.1.1"
   }
 }

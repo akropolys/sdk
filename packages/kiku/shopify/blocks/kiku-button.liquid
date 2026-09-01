@@ -1,0 +1,121 @@
+{% comment %}
+  Kiku AI Assistant App Block for Shopify Online Store 2.0
+  File: blocks/kiku-button.liquid
+{% endcomment %}
+
+<script>
+  window.AkropolysConfig = {
+    siteId: {{ block.settings.site_id | json }},
+    apiToken: {{ block.settings.api_token | json }},
+    {% if block.settings.api_url != blank %}apiUrl: {{ block.settings.api_url | json }},{% endif %}
+    buttonLabel: {{ block.settings.button_label | json }},
+    position: {{ block.settings.position | json }},
+    theme: {{ block.settings.theme | json }},
+    enableVoice: {{ block.settings.enable_voice | json }},
+    enableVision: {{ block.settings.enable_vision | json }},
+    enableAudioResponse: {{ block.settings.enable_audio | json }},
+    {% if product %}
+    product: {
+      id: {{ product.id | json }},
+      title: {{ product.title | json }},
+      handle: {{ product.handle | json }},
+      url: {{ product.url | json }},
+      price: {{ product.price | json }},
+      compare_at_price: {{ product.compare_at_price | json }},
+      featured_image: {{ product.featured_image | image_url: width: 800 | json }},
+      type: {{ product.type | json }},
+      vendor: {{ product.vendor | json }},
+      tags: {{ product.tags | json }},
+      description: {{ product.description | strip_html | json }},
+      available: {{ product.available | json }},
+      variants: [
+        {% for variant in product.variants %}
+          {
+            id: {{ variant.id | json }},
+            title: {{ variant.title | json }},
+            price: {{ variant.price | json }},
+            sku: {{ variant.sku | json }},
+            available: {{ variant.available | json }}
+          }{% unless forloop.last %},{% endunless %}
+        {% endfor %}
+      ]
+    }
+    {% endif %}
+  };
+</script>
+
+<script src="{{ 'kiku.iife.js' | asset_url }}" defer></script>
+
+{% schema %}
+{
+  "name": "Kiku AI Assistant",
+  "target": "body",
+  "settings": [
+    {
+      "type": "text",
+      "id": "site_id",
+      "label": "Akropolys Site ID",
+      "info": "Your Site ID from shell.akropolys.cloud"
+    },
+    {
+      "type": "text",
+      "id": "api_token",
+      "label": "Akropolys API Token",
+      "info": "Public client token with shopper access"
+    },
+    {
+      "type": "text",
+      "id": "api_url",
+      "label": "API URL Override",
+      "default": "https://api.akropolys.cloud/v1"
+    },
+    {
+      "type": "text",
+      "id": "button_label",
+      "label": "Button Label",
+      "default": "Ask Kiku"
+    },
+    {
+      "type": "select",
+      "id": "position",
+      "label": "Widget Position",
+      "options": [
+        { "value": "bottom-right", "label": "Bottom Right" },
+        { "value": "bottom-left", "label": "Bottom Left" },
+        { "value": "top-right", "label": "Top Right" },
+        { "value": "top-left", "label": "Top Left" },
+        { "value": "inline", "label": "Inline Container (#kiku-mount)" }
+      ],
+      "default": "bottom-right"
+    },
+    {
+      "type": "select",
+      "id": "theme",
+      "label": "Theme",
+      "options": [
+        { "value": "dark", "label": "Dark" },
+        { "value": "light", "label": "Light" }
+      ],
+      "default": "dark"
+    },
+    {
+      "type": "checkbox",
+      "id": "enable_voice",
+      "label": "Enable Voice Input & Conversation",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "enable_vision",
+      "label": "Enable Visual Photo Search",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "enable_audio",
+      "label": "Enable Audio Voice Responses",
+      "default": true
+    }
+  ]
+}
+{% endschema %}

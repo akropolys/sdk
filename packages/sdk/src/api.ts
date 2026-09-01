@@ -1,28 +1,17 @@
 import { Product, SearchResponse, IngestResponse, AkropolysError, CaptureTarget } from './types';
 
-/**
- * A translated chrome dictionary plus the writing direction resolved from it.
- * `dir` is decided server-side from the translated text so the widget can set
- * direction on its first paint instead of rendering LTR and flipping.
- * `complete` is false when the set is unusable — callers render English rather
- * than a mix of the two languages.
- */
 export interface UIStrings {
   strings: Record<string, string>;
   complete: boolean;
+
+  curated: boolean;
   dir: 'ltr' | 'rtl';
-  /** BCP-47 tag for speech recognition, e.g. 'sw-KE'. Empty when unresolved. */
+
   bcp47: string;
-  /**
-   * Webfont for the script this language is written in, served from the API
-   * origin. Null when the host's own font or the operating system already
-   * draws it — Latin and CJK never carry one.
-   */
+
   font: ScriptFont | null;
 }
 
-// Why the server declined to speak. 'guest' is the one a shopper can fix, by
-// creating an account.
 export type VoiceRefusal = 'guest' | 'shopper' | 'site' | 'credits' | 'unavailable';
 
 export type SpeechResult =
@@ -31,11 +20,7 @@ export type SpeechResult =
 
 export interface ScriptFont {
   family: string;
-  /**
-   * More than one whenever the foundry splits the family — Space Grotesk ships
-   * latin and latin-ext separately. The unicode-range is what lets the browser
-   * skip the file this shopper will never render a glyph from.
-   */
+
   faces: { url: string; unicodeRange: string; weight: string }[];
 }
 
@@ -53,7 +38,6 @@ async function sleep(ms: number) {
   return new Promise(r => setTimeout(r, ms));
 }
 
-// An explicit `fields` object is merged in, not nested, so its keys stay at fields.<key>.
 function toEntityPayload(product: Record<string, any>): { url: string; fields: Record<string, any> } {
   const url = product.url || '';
   const fields: Record<string, any> = {};
@@ -91,10 +75,6 @@ export class AkropolysAPI {
     private getEntityLanguageMode?: () => string | undefined
   ) {}
 
-  /**
-   * A representative entity from this site, returned both as written and
-   * translated, so onboarding can show the choice rather than describe it.
-   */
   async entityPreview(language: string): Promise<{ original?: any; translated?: any } | null> {
     try {
       const res = await fetch(`${this.apiUrl}/entity-preview`, {
@@ -109,19 +89,6 @@ export class AkropolysAPI {
     }
   }
 
-  /**
-   * Fetches the widget's chrome (onboarding copy, placeholder, footer) in
-   * language. The server owns the canonical dictionary and translates it on
-   * the platform's credits, once per language for every site combined — the
-   * client sends nothing but the language and merges the result over its own
-   * built-in English defaults.
-   */
-  /**
-   * The server sends a path, not a URL — it has no reliable view of its own
-   * public origin behind Cloud Run. Resolved here against apiUrl, and only if
-   * it still points at apiUrl afterwards: a response that could name any host
-   * would be a way to make every widget load a font from somewhere else.
-   */
   private parseFont(raw: unknown): ScriptFont | null {
     const f = raw as { family?: unknown; faces?: unknown } | null | undefined;
     if (!f || typeof f.family !== 'string' || !f.family.trim()) return null;
@@ -139,21 +106,29 @@ export class AkropolysAPI {
       const fc = raw as { url?: unknown; unicodeRange?: unknown; weight?: unknown };
       if (typeof fc?.url !== 'string' || !fc.url.startsWith('/')) continue;
       try {
-        // Concatenated, NOT resolved against the base. apiUrl carries a path
-        // segment (`/v1`), and resolving an absolute path against it replaces
-        // that segment instead of extending it — every font URL would 404
-        // while still passing the origin check below.
         const url = new URL(this.apiUrl.replace(/\/+$/, '') + fc.url);
         if (url.origin !== base.origin) continue;
         faces.push({
           url: url.href,
           unicodeRange: typeof fc.unicodeRange === 'string' ? fc.unicodeRange : '',
-          // A server that predates per-face weights served one static cut.
           weight: typeof fc.weight === 'string' && fc.weight ? fc.weight : '400',
         });
       } catch { /* skip */ }
     }
     return faces.length > 0 ? { family: f.family, faces } : null;
+  }
+
+  async baseFont(): Promise<ScriptFont | null> {
+    try {
+      const res = await fetch(`${this.apiUrl}/fonts/v1/base`, {
+        method: 'GET',
+        headers: this.buildHeaders(),
+      });
+      if (!res.ok) return null;
+      return this.parseFont(await res.json());
+    } catch {
+      return null;
+    }
   }
 
   async uiStrings(language: string): Promise<UIStrings | null> {
@@ -169,6 +144,7 @@ export class AkropolysAPI {
       return {
         strings: data.strings,
         complete: data.complete !== false,
+        curated: data.curated === true,
         dir: data.dir === 'rtl' ? 'rtl' : 'ltr',
         bcp47: typeof data.bcp47 === 'string' ? data.bcp47 : '',
         font: this.parseFont(data.font),
@@ -178,11 +154,6 @@ export class AkropolysAPI {
     }
   }
 
-  /**
-   * Polls a video makeover job. Generation runs for minutes while the chat
-   * stream ends in seconds, so a finished video can only reach the shopper if
-   * someone asks for it after the fact.
-   */
   async getVideoStatus(jobId: string): Promise<
     { status: 'PENDING' | 'SUCCESS' | 'FAILED'; videoUrl?: string; error?: string } | null
   > {
@@ -196,8 +167,6 @@ export class AkropolysAPI {
     }
   }
 
-  // Common request headers: auth + the shopper/session/device identity trio.
-  // includeKikuPub adds the cross-site memory id, which only chat needs.
   private buildHeaders(includeKikuPub = false): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -229,8 +198,6 @@ export class AkropolysAPI {
         headers,
         body: JSON.stringify(body),
         signal,
-        // Survives page navigation — used for fire-and-forget analytics pings
-        // fired right before the caller navigates away (e.g. a search result click).
         ...(keepalive ? { keepalive: true } : {}),
       });
 
@@ -243,17 +210,14 @@ export class AkropolysAPI {
             message = parsed.error;
           }
         } catch {
-          // keep original text
         }
         const err: AkropolysError = { status: res.status, message };
 
-        // Don't retry 4xx — developer errors
         if (res.status >= 400 && res.status < 500) {
           log('error', `${path} failed [${res.status}]`, text);
           throw err;
         }
 
-        // Retry 5xx
         if (attempt < MAX_RETRIES - 1) {
           log('warn', `${path} [${res.status}] retrying (${attempt + 1}/${MAX_RETRIES})...`);
           await sleep(RETRY_DELAYS[attempt]);
@@ -266,12 +230,9 @@ export class AkropolysAPI {
 
       return res.json();
     } catch (e) {
-      // Caller aborted (debounce / cleanup / a newer query superseded this one).
-      // This is expected, not a failure — never retry or log it.
       if ((e as any)?.name === 'AbortError' || signal?.aborted) {
         throw e;
       }
-      // Network error (offline, DNS, etc.)
       if ((e as AkropolysError).status === undefined) {
         if (attempt < MAX_RETRIES - 1) {
           log('warn', `${path} network error, retrying (${attempt + 1}/${MAX_RETRIES})...`);
@@ -284,9 +245,6 @@ export class AkropolysAPI {
     }
   }
 
-  // Mint a fresh kiku key server-side. The key is the shopper's portable,
-  // anonymous identity — shown ONCE; its hash is the memory namespace, so a
-  // lost key means the memory it opens is lost with it.
   async mintKikuKey(): Promise<{ secret: string; publicId: string }> {
     const data = await this.post<{ secret?: string; publicId: string; key?: string }>('/shopper/kiku-key', {});
     return { secret: data.secret ?? data.key ?? '', publicId: data.publicId };
@@ -304,7 +262,7 @@ export class AkropolysAPI {
     log('info', 'ingesting entity', product.name || product.id || product.url || '');
     const formattedEntity = toEntityPayload(product);
     return this.post('/ingest', {
-      siteId: this.siteId, 
+      siteId: this.siteId,
       entity: formattedEntity,
     });
   }
@@ -318,7 +276,7 @@ export class AkropolysAPI {
     log('info', `ingesting batch of ${products.length} entities`);
     const formattedEntities = products.map(toEntityPayload);
     return this.post('/ingest/batch', {
-      siteId: this.siteId, 
+      siteId: this.siteId,
       entities: formattedEntities,
     });
   }
@@ -333,24 +291,19 @@ export class AkropolysAPI {
     return this.post('/search', { query, siteId: this.siteId, limit });
   }
 
-  // Pure vector search — no LLM, instant results.
   async searchVector(query: string, limit = 10, signal?: AbortSignal, keepalive?: boolean): Promise<SearchResponse> {
     return this.post('/search/vector', { query, siteId: this.siteId, limit }, 0, signal, keepalive);
   }
 
-  // Autocomplete — pure in-memory Trie, <1ms, no Upstash call. Only true prefix matches.
   async searchAutocomplete(query: string, limit = 8, signal?: AbortSignal): Promise<SearchResponse> {
     return this.post('/search/autocomplete', { query, siteId: this.siteId, limit }, 0, signal);
   }
 
-  // LLM chat — conversational search with history context.
   async chat(query: string, history: Array<{ role: 'user' | 'assistant'; content: string }> = [], currentContext?: any): Promise<{ answer: string; sources: any[]; intent?: string; action?: any }> {
     log('info', 'chat query', query);
     return this.post('/chat', { query, siteId: this.siteId, history, currentContext });
   }
 
-  // Streaming variant — returns the raw fetch Response.
-  // The caller reads body as a ReadableStream of SSE frames.
   async chatStream(
     query: string,
     history: Array<{ role: 'user' | 'assistant'; content: string }> = [],
@@ -369,12 +322,9 @@ export class AkropolysAPI {
     if (shopperLanguage) body.shopperLanguage = shopperLanguage;
     const entityLanguageMode = this.getEntityLanguageMode?.();
     if (entityLanguageMode) body.entityLanguageMode = entityLanguageMode;
-    // Read-through to the developer's cart, if they exposed one. Only sent when
-    // it's a non-empty array; the SDK reads what they hand back, nothing more.
     const cart = this.getCart?.();
     if (Array.isArray(cart) && cart.length > 0) body.cart = cart.slice(0, 50);
     if (attachments && attachments.length > 0) {
-      // preview is the shopper's own marked copy, for their bubble only — sending it would upload the scene twice.
       body.attachments = attachments.map(({ preview, ...a }: any) => a);
       if (attachments.some((a: any) => a.annotated)) body.imageAnnotated = true;
       if (attachments.some((a: any) => a.instructed)) body.imageInstructed = true;
@@ -390,7 +340,6 @@ export class AkropolysAPI {
       signal,
     });
     if (!res.ok || !res.body) {
-      // Surface the server's message (e.g. the guest chat limit) instead of a bare status.
       let msg = `Stream request failed: ${res.status}`;
       try {
         const parsed = JSON.parse(await res.text());
@@ -401,9 +350,6 @@ export class AkropolysAPI {
     return res;
   }
 
-  // Visual style-match search — "find a dress that matches my shoes"
-  // image: base64 data URI ("data:image/jpeg;base64,...") or public image URL
-  // categoryHint: optional target category e.g. "dress", "curtains"
   async searchByImage(
     image: string,
     categoryHint?: string,
@@ -418,7 +364,6 @@ export class AkropolysAPI {
     });
   }
 
-  // Free-form visual Q&A — "what is this product?"
   async analyzeImage(
     image: string,
     query?: string
@@ -427,11 +372,6 @@ export class AkropolysAPI {
     return this.post('/chat/vision', { siteId: this.siteId, image, query });
   }
 
-  /**
-   * Spoken audio for an assistant answer. Returns the raw bytes so the caller
-   * owns the blob URL's lifetime; null on any failure, which lets the widget
-   * fall back to the browser's own voice rather than going silent.
-   */
   async synthesizeSpeech(
     text: string,
     voice?: string,
@@ -447,9 +387,6 @@ export class AkropolysAPI {
       });
       if (!res.ok) {
         log('warn', `speech failed [${res.status}]`, await res.text().catch(() => ''));
-        // A refusal is not a failure. Returning null for both let the widget
-        // fall back to the browser's own voice, which kept the hands-free loop
-        // running for a shopper the server had just cut off.
         const refused = res.headers.get('X-Akropolys-Voice-Refused');
         return refused ? { refused: refused as VoiceRefusal } : null;
       }
@@ -464,7 +401,6 @@ export class AkropolysAPI {
     }
   }
 
-  // Composite a product into the shopper's own photo. Billed per generation.
   async visualize(
     sceneImage: string,
     productImage: string,

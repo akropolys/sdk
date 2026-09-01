@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { getShadowContainer } from '../utils/shadowRoot';
 import { useSearch, useKiku, useAkropolysContext } from '@akropolys/sdk';
 import { renderMarkdown } from '../utils/markdown';
 import { SearchResult, Product, AkropolysTheme } from '@akropolys/sdk';
@@ -10,13 +11,13 @@ export interface SparkleProps {
   productName: string;
   limit?: number;
   onResult?: (results: SearchResult[]) => void;
-  /** Override the backdrop colour (any CSS colour/gradient) */
+
   backdropColor?: string;
-  /** Override backdrop blur â€” e.g. "8px" or 8 */
+  
   backdropBlur?: string | number;
-  /** Extra classes on the trigger button */
+  
   className?: string;
-  /** Called when user clicks a result â€” return false to prevent default navigation */
+
   onNavigate?: (result: SearchResult) => boolean | void;
   theme?: AkropolysTheme;
   classNames?: {
@@ -29,7 +30,6 @@ export interface SparkleProps {
   children?: React.ReactNode;
 }
 
-/* â”€â”€ Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 interface ModalProps extends Pick<SparkleProps, 'productName' | 'limit' | 'backdropColor' | 'backdropBlur' | 'onNavigate' | 'onResult' | 'theme' | 'classNames' | 'product'> {
   onClose: () => void;
 }
@@ -57,8 +57,6 @@ const CloseIcon = () => (
   </svg>
 );
 
-
-/* â”€â”€ Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 interface ModalProps extends Pick<SparkleProps, 'productName' | 'limit' | 'backdropColor' | 'backdropBlur' | 'onNavigate' | 'onResult' | 'theme' | 'classNames' | 'product'> {
   onClose: () => void;
 }
@@ -81,13 +79,13 @@ const getFriendlyError = (err: any) => {
   }
 };
 
-function SparkleModal({ 
-  productName, 
-  limit, 
-  backdropColor, 
-  backdropBlur, 
-  onClose, 
-  onNavigate, 
+function SparkleModal({
+  productName,
+  limit,
+  backdropColor,
+  backdropBlur,
+  onClose,
+  onNavigate,
   onResult,
   theme,
   classNames = {},
@@ -105,7 +103,7 @@ function SparkleModal({
   const chatBottomRef = useRef<HTMLDivElement>(null);
   const chatTextareaRef = useRef<HTMLTextAreaElement>(null);
 
-  /* auto-search and product fetching on open */
+  
   useEffect(() => {
     if (!initialProduct && !fetchedProduct) {
       client.api.searchVector(productName, 1)
@@ -119,7 +117,7 @@ function SparkleModal({
     search(productName, limit);
   }, [productName, initialProduct, fetchedProduct, client, limit, search]);
 
-  /* handle window resize for mobile check */
+  
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
     handleResize();
@@ -129,10 +127,10 @@ function SparkleModal({
     }
   }, []);
 
-  /* fire callback */
+  
   useEffect(() => { if (results.length > 0) onResult?.(results); }, [results, onResult]);
 
-  /* Escape key */
+  
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', h);
@@ -167,7 +165,7 @@ function SparkleModal({
 
   const chatBodyRef = useRef<HTMLDivElement>(null);
 
-  /* Scroll chat to bottom */
+  
   useEffect(() => {
     if (chatBodyRef.current) {
       chatBodyRef.current.scrollTop = chatBodyRef.current.scrollHeight;
@@ -202,7 +200,7 @@ function SparkleModal({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); handleSend(); }
   };
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -243,7 +241,7 @@ function SparkleModal({
         }}
       >
         <div className={cn("hsk-sp-card hsk-sp-fullscreen hsk-sp-mobile-card", classNames.card)} onClick={e => e.stopPropagation()}>
-          {/* Header */}
+          {}
           <div className="hsk-sp-header">
             <span className="hsk-sp-header-icon" style={{ display: 'flex', alignItems: 'center' }}>
               <SparkleIcon />
@@ -252,8 +250,8 @@ function SparkleModal({
               <div className="hsk-sp-header-title-row">
                 <div className="hsk-sp-header-title">{displayProduct?.name || productName}</div>
                 {displayProduct && (
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     className="hsk-sp-header-specs-btn"
                     onClick={() => setShowSpecs(true)}
                   >
@@ -270,7 +268,7 @@ function SparkleModal({
 
           {searchLoading && <div className="hsk-sp-bar" />}
 
-          {/* Chat Assistant */}
+          {}
           <div className="hsk-sp-mobile-chat-container">
             <div className="hsk-cb-msgs">
               {displayMessages.map((msg, idx) => {
@@ -288,11 +286,11 @@ function SparkleModal({
                         </div>
                         <div className="hsk-cb-ai-body">
                           <div className="hsk-cb-ai-text">{renderMarkdown(msg.content)}</div>
-                          
-                          {/* Inline Claude-like attachments under the first assistant message */}
+
+                          {}
                           {idx === 0 && displayProduct && (
                             <div className="hsk-sp-mobile-attachment-deck">
-                              {/* Main Product Card */}
+                              {}
                               <div className="hsk-sp-mobile-main-card">
                                 <div className="hsk-sp-mobile-main-card-img">
                                   {displayProduct.images?.[0] ? (
@@ -311,7 +309,7 @@ function SparkleModal({
                                   </div>
                                 </div>
                                 {((displayProduct.specs && Object.keys(displayProduct.specs).length > 0) || displayProduct.description) && (
-                                  <button 
+                                  <button
                                     type="button"
                                     className="hsk-sp-mobile-main-card-specs-btn"
                                     onClick={() => setShowSpecs(true)}
@@ -321,7 +319,7 @@ function SparkleModal({
                                 )}
                               </div>
 
-                              {/* Similar Products Carousel */}
+                              {}
                               {(() => {
                                 const similarProducts = results.filter(
                                   r => {
@@ -418,7 +416,7 @@ function SparkleModal({
             </div>
           </div>
 
-          {/* Specs Sheet Drawer Overlay */}
+          {}
           {showSpecs && displayProduct && (
             <div className="hsk-sp-mobile-specs-overlay" onClick={() => setShowSpecs(false)}>
               <div className="hsk-sp-mobile-specs-drawer" onClick={e => e.stopPropagation()}>
@@ -481,9 +479,9 @@ function SparkleModal({
 
         {searchLoading && <div className="hsk-sp-bar" />}
 
-        {/* Split pane body */}
+        {}
         <div className="hsk-sp-body">
-          {/* Left Pane: Product Profile */}
+          {}
           <div className="hsk-sp-details-pane">
             {displayProduct && (
               <div className="hsk-sp-product-profile-container">
@@ -511,7 +509,7 @@ function SparkleModal({
                         <span className="hsk-sp-item-discount">({displayProduct.discount})</span>
                       )}
                     </div>
-                    
+
                     <div className="hsk-sp-item-meta-badges">
                       {displayProduct.rating && (
                         <span className="hsk-sp-meta-badge hsk-sp-meta-badge-rating">
@@ -552,7 +550,7 @@ function SparkleModal({
               </div>
             )}
 
-            {/* Similar Products */}
+            {}
             <div className="hsk-sp-similar-section">
               <h3>Similar Products</h3>
               <div className="hsk-sp-results">
@@ -614,7 +612,7 @@ function SparkleModal({
             </div>
           </div>
 
-          {/* Right Pane: AI Chat Assistant */}
+          {}
           <div className="hsk-sp-chat-pane">
             <div className="hsk-cb-msgs">
               {displayMessages.map((msg, idx) => {
@@ -690,14 +688,13 @@ function SparkleModal({
   );
 }
 
-/* â”€â”€ Exported component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-export function Sparkle({ 
-  productName, 
-  limit = 8, 
-  onResult, 
-  backdropColor, 
-  backdropBlur, 
-  className, 
+export function Sparkle({
+  productName,
+  limit = 8,
+  onResult,
+  backdropColor,
+  backdropBlur,
+  className,
   onNavigate,
   theme,
   classNames = {},
@@ -741,7 +738,7 @@ export function Sparkle({
           classNames={classNames}
           product={product}
         />,
-        document.body
+        getShadowContainer() ?? document.body
       )}
     </>
   );

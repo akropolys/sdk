@@ -1,7 +1,3 @@
-/**
- * Generates a stable, deterministic stringified representation of any value.
- * Objects with identical keys and values in different order will produce the same output.
- */
 export function stableStringify(obj: any): string {
   if (obj === null || typeof obj !== 'object') {
     return JSON.stringify(obj);

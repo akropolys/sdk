@@ -2,8 +2,9 @@
   "name": "akropolys-monorepo",
   "private": true,
   "scripts": {
-    "build": "pnpm --filter \"*\" build",
-    "dev": "pnpm --filter \"*\" dev"
+    "build": "pnpm --filter \"*\" build && node sync-consumers.mjs",
+    "dev": "pnpm --filter \"*\" dev",
+    "sync": "node sync-consumers.mjs"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",

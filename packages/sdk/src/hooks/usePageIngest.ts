@@ -5,15 +5,7 @@ import { stableStringify } from '../utils/stableStringify';
 declare const process: any;
 
 /**
- * usePageIngest — drop this into any page component.
- * The moment a customer's browser renders the page, the item is
- * automatically captured and queued for ingestion.
- *
- * @example
- * export function ProductPage({ product }) {
- *   usePageIngest(product);
- *   return <div>...</div>;
- * }
+ * Automatically captures and queues a page entity for ingestion on render.
  */
 export function usePageIngest(product: Record<string, any> | null | undefined): void {
   const isSigned = !!(product as any)?.envelope;

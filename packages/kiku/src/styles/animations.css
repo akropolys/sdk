@@ -1,0 +1,673 @@
+/* --- Micro-interactions --- */
+
+/* chevron */
+.hsk-cb-back-icon {
+  display: inline-flex;
+  transition: transform .22s cubic-bezier(.22, 1, .36, 1);
+}
+.hsk-cb-back:hover:not(:disabled) .hsk-cb-back-icon { transform: translateX(-2px); }
+.hsk-cb-panel[dir="rtl"] .hsk-cb-back:hover:not(:disabled) .hsk-cb-back-icon {
+  transform: scaleX(-1) translateX(-2px);
+}
+
+/* tools toggle */
+.hsk-cb-tools-toggle {
+  transition: transform .26s cubic-bezier(.34, 1.56, .64, 1), background-color 0.42s cubic-bezier(0.16, 1, 0.3, 1), color 0.42s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.hsk-cb-tools-toggle:hover:not(:disabled) {
+  color: var(--hsk-primary, #ff6a33);
+  transform: rotate(90deg);
+}
+.hsk-cb-tools-toggle--open:hover:not(:disabled) { transform: rotate(135deg); }
+.hsk-cb-tools-toggle:active:not(:disabled) { transform: scale(.9); transition-duration: .1s; }
+
+/* theme trigger */
+.hsk-cb-theme-trigger-icon {
+  display: inline-flex;
+  transition: transform .3s cubic-bezier(.34, 1.56, .64, 1);
+}
+.hsk-cb-theme-squircle-trigger:hover .hsk-cb-theme-trigger-icon {
+  transform: translateY(-1.5px) rotate(-8deg);
+}
+
+.hsk-cb-dot-item:hover:not(.hsk-cb-dot-item--active) {
+  background: var(--hsk-chat-muted, rgba(120, 120, 120, .6));
+  transform: scale(1.35);
+}
+
+.hsk-msg-audio-btn {
+  transition: color .18s ease, transform .22s cubic-bezier(.34, 1.56, .64, 1);
+}
+.hsk-msg-audio-btn:hover:not(:disabled) {
+  color: var(--hsk-primary, #ff6a33);
+  transform: scale(1.12);
+}
+.hsk-msg-audio-btn:active:not(:disabled) { transform: scale(.94); transition-duration: .1s; }
+
+.hsk-markup-color {
+  transition: transform .22s cubic-bezier(.34, 1.56, .64, 1), border-color .18s ease;
+}
+.hsk-markup-color:hover:not(.hsk-markup-color--on) { transform: scale(1.22); }
+.hsk-markup-color--on:hover { transform: scale(1.15); }
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-cb-back:hover:not(:disabled) .hsk-cb-back-icon,
+  .hsk-cb-panel[dir="rtl"] .hsk-cb-back:hover:not(:disabled) .hsk-cb-back-icon,
+  .hsk-cb-theme-squircle-trigger:hover .hsk-cb-theme-trigger-icon,
+  .hsk-cb-dot-item:hover:not(.hsk-cb-dot-item--active),
+  .hsk-msg-audio-btn:hover:not(:disabled),
+  .hsk-markup-color:hover:not(.hsk-markup-color--on) { transform: none; }
+  .hsk-cb-tools-toggle:hover:not(:disabled),
+  .hsk-cb-tools-toggle--open:hover:not(:disabled) { transform: none; }
+}
+
+/* --- Voice Control --- */
+
+.hsk-voice-control {
+  position: relative;
+  isolation: isolate;
+  border-radius: 999px;
+}
+
+/* Apple Siri Chromatic Edge Ring - Razor Sharp */
+.hsk-voice-control:not(.hsk-voice-control--muted)::before {
+  content: '';
+  position: absolute;
+  inset: -1.5px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from 0deg,
+    #ff3b30, #ff9500, #ffd60a, #34c759, #00c7be, #30b0c7, #007aff, #5856d6, #af52de, #ff2d55, #ff3b30
+  );
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
+  animation: hsk-apple-siri-spin 3s linear infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.hsk-voice-control::after {
+  display: none !important;
+}
+
+.hsk-voice-control-icon {
+  will-change: transform;
+}
+
+/* Apple Siri Mic Breathing Pulse when Active */
+.hsk-voice-control:not(.hsk-voice-control--muted) .hsk-voice-control-icon {
+  animation: hsk-apple-siri-mic-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes hsk-apple-siri-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes hsk-apple-siri-breathe {
+  0%, 100% { transform: scale(0.95); opacity: 0.55; }
+  50% { transform: scale(1.15); opacity: 0.95; }
+}
+
+@keyframes hsk-apple-siri-mic-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+.hsk-voice-control--muted::before,
+.hsk-voice-control--muted::after {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-voice-control:not(:hover):not(.hsk-voice-control--muted) .hsk-voice-control-icon,
+  .hsk-voice-control:hover::before,
+  .hsk-voice-control--muted::before,
+  .hsk-voice-control--muted::after { animation: none; }
+  .hsk-voice-control:hover,
+  .hsk-voice-control:hover .hsk-mic-cap { transform: none; }
+}
+
+/* An error earns one short shake — enough to catch the eye, over before it */
+.hsk-cb-voice-error {
+  animation: hsk-error-shake .26s cubic-bezier(.36, .07, .19, .97) both;
+}
+
+@keyframes hsk-error-shake {
+  0%, 100% { transform: translateX(0); }
+  22% { transform: translateX(-3px); }
+  55% { transform: translateX(2px); }
+  80% { transform: translateX(-1px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-cb-voice-error { animation: none; }
+}
+
+/* --- Icon Micro-interactions --- */
+
+.hsk-sun-rays,
+.hsk-sun-core,
+.hsk-moon-body,
+.hsk-wood-layer,
+.hsk-heart-body,
+.hsk-steam,
+.hsk-star-spark,
+.hsk-check-mark,
+.hsk-send-tail,
+.hsk-send-body {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* sun — the rays turn, the core swells */
+.hsk-sun-rays { transform-origin: 12px 12px; transition: transform .5s cubic-bezier(.22,1,.36,1); }
+.hsk-cb-theme-grid-item:hover .hsk-sun-rays,
+.hsk-cb-theme-squircle-trigger:hover .hsk-sun-rays { transform: rotate(45deg); }
+.hsk-sun-core { transition: transform .32s cubic-bezier(.34,1.56,.64,1); }
+.hsk-cb-theme-grid-item:hover .hsk-sun-core,
+.hsk-cb-theme-squircle-trigger:hover .hsk-sun-core { transform: scale(1.14); }
+
+/* moon — tips toward its crescent */
+.hsk-moon-body { transition: transform .34s cubic-bezier(.34,1.56,.64,1); }
+.hsk-cb-theme-grid-item:hover .hsk-moon-body,
+.hsk-cb-theme-squircle-trigger:hover .hsk-moon-body { transform: rotate(-16deg); }
+
+/* wood — the grain settles, top layer last */
+.hsk-wood-layer { transition: transform .34s cubic-bezier(.34,1.56,.64,1); }
+.hsk-wood-layer { transition-delay: calc(var(--hsk-layer, 0) * 45ms); }
+.hsk-cb-theme-grid-item:hover .hsk-wood-layer,
+.hsk-cb-theme-squircle-trigger:hover .hsk-wood-layer { transform: translateY(-1.2px); }
+
+/* heart — a real double beat, not a single pop */
+.hsk-cb-theme-grid-item:hover .hsk-heart-body,
+.hsk-cb-theme-squircle-trigger:hover .hsk-heart-body {
+  animation: hsk-heartbeat 1.1s ease-in-out infinite;
+}
+@keyframes hsk-heartbeat {
+  0%, 100% { transform: scale(1); }
+  14% { transform: scale(1.18); }
+  28% { transform: scale(1); }
+  42% { transform: scale(1.12); }
+  56% { transform: scale(1); }
+}
+
+/* coffee — steam actually rises and fades, each wisp on its own clock */
+.hsk-steam { opacity: .9; }
+.hsk-cb-theme-grid-item:hover .hsk-steam,
+.hsk-cb-theme-squircle-trigger:hover .hsk-steam {
+  animation: hsk-steam-rise 1.6s ease-out infinite;
+  animation-delay: calc(var(--hsk-steam, 0) * 220ms);
+}
+@keyframes hsk-steam-rise {
+  0%   { transform: translateY(2px) scaleY(.5); opacity: 0; }
+  35%  { opacity: .95; }
+  100% { transform: translateY(-3px) scaleY(1.15); opacity: 0; }
+}
+
+/* star — the spark twinkles out of phase with nothing else */
+.hsk-cb-theme-grid-item:hover .hsk-star-spark,
+.hsk-cb-theme-squircle-trigger:hover .hsk-star-spark {
+  animation: hsk-twinkle 1.4s ease-in-out infinite;
+}
+@keyframes hsk-twinkle {
+  0%, 100% { transform: scale(1) rotate(0deg); opacity: .85; }
+  50% { transform: scale(1.45) rotate(20deg); opacity: 1; }
+}
+
+/* check — draws itself rather than appearing */
+.hsk-check-mark {
+  stroke-dasharray: 30;
+  stroke-dashoffset: 30;
+  animation: hsk-check-draw .42s cubic-bezier(.65, 0, .35, 1) forwards;
+}
+@keyframes hsk-check-draw { to { stroke-dashoffset: 0; } }
+
+/* send — the dart leans into its travel, the tail trails a beat behind */
+.hsk-send-body,
+.hsk-send-tail { transition: transform .28s cubic-bezier(.22, 1, .36, 1); }
+.hsk-send-tail { transition-delay: 40ms; }
+.hsk-chat-send:hover:not(:disabled) .hsk-send-body,
+.hsk-cb-send:hover:not(:disabled) .hsk-send-body { transform: translate(1.5px, -1.5px); }
+.hsk-chat-send:hover:not(:disabled) .hsk-send-tail,
+.hsk-cb-send:hover:not(:disabled) .hsk-send-tail { transform: translate(2.5px, -2.5px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-sun-rays, .hsk-sun-core, .hsk-moon-body, .hsk-wood-layer,
+  .hsk-send-body, .hsk-send-tail { transition: none; transform: none !important; }
+  .hsk-cb-theme-grid-item:hover .hsk-heart-body,
+  .hsk-cb-theme-squircle-trigger:hover .hsk-heart-body,
+  .hsk-cb-theme-grid-item:hover .hsk-steam,
+  .hsk-cb-theme-squircle-trigger:hover .hsk-steam,
+  .hsk-cb-theme-grid-item:hover .hsk-star-spark,
+  .hsk-cb-theme-squircle-trigger:hover .hsk-star-spark { animation: none; }
+  .hsk-check-mark { animation: none; stroke-dashoffset: 0; }
+}
+
+/* --- Send Button Gooey Interaction --- */
+
+.hsk-cb-send-stage {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* the seam: a hairline slit, invisible until something passes through it */
+.hsk-cb-send-seam {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2px;
+  height: 15px;
+  border-radius: 2px;
+  background: currentColor;
+  transform: translate(-50%, -50%) rotate(38deg) scaleY(0);
+  transform-origin: center;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.hsk-cb-send-kite {
+  display: inline-flex;
+  transform-origin: center;
+  will-change: transform;
+}
+
+/* rest: the kite leans a touch toward its exit, so it always looks ready */
+.hsk-cb-send:hover:not(:disabled) .hsk-cb-send-kite {
+  transform: translate(1.5px, -1.5px);
+  transition: transform .26s cubic-bezier(.22, 1, .36, 1);
+}
+
+.hsk-cb-send.is-launching .hsk-cb-send-kite {
+  animation: hsk-kite-tear .55s cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.hsk-cb-send.is-launching .hsk-cb-send-seam {
+  animation: hsk-seam-heal .55s cubic-bezier(.4, 0, .3, 1) both;
+}
+
+/* The kite leaves northward, shooting up cleanly into the transcript */
+@keyframes hsk-kite-tear {
+  0%   { transform: translate(0, 0) scale(1) rotate(0deg); opacity: 1; }
+  18%  { transform: translate(-1px, 2.5px) scale(.92, 1.08) rotate(-4deg); opacity: 1; }
+  45%  { transform: translate(3px, -16px) scale(1.2, .8) rotate(6deg); opacity: .95; }
+  75%  { transform: translate(6px, -38px) scale(1.05, .7) rotate(10deg); opacity: .6; }
+  100% { transform: translate(8px, -56px) scale(.6, .4) rotate(12deg); opacity: 0; }
+}
+
+/* the membrane parts where the kite crosses it, then smoothly closes */
+@keyframes hsk-seam-heal {
+  0%   { transform: translate(-50%, -50%) rotate(38deg) scaleY(0); opacity: 0; }
+  22%  { transform: translate(-50%, -50%) rotate(38deg) scaleY(1); opacity: .9; }
+  45%  { transform: translate(-50%, -50%) rotate(38deg) scaleY(1.3); opacity: .8; }
+  72%  { transform: translate(-50%, -50%) rotate(38deg) scaleY(.3); opacity: .35; }
+  100% { transform: translate(-50%, -50%) rotate(38deg) scaleY(0); opacity: 0; }
+}
+
+/* ---- the kite waits, and it is impatient ------------------------------- */
+
+.hsk-kite-wing {
+  transform-box: fill-box;
+  transform-origin: 100% 0;
+}
+
+.hsk-cb-send:not(:disabled):not(.is-launching) .hsk-kite-wing--far {
+  animation: hsk-wing-beat-far .62s ease-in-out infinite;
+}
+
+.hsk-cb-send:not(:disabled):not(.is-launching) .hsk-kite-wing--near {
+  animation: hsk-wing-beat-near .62s ease-in-out .07s infinite;
+}
+
+.hsk-cb-send:not(:disabled):not(.is-launching) .hsk-cb-send-kite {
+  animation: hsk-kite-strain 2.4s cubic-bezier(.45, 0, .35, 1) infinite;
+}
+
+.hsk-cb-send:not(:disabled):not(.is-launching) .hsk-cb-send-seam {
+  animation: hsk-seam-strain 2.4s cubic-bezier(.45, 0, .35, 1) infinite;
+}
+
+@keyframes hsk-kite-strain {
+  0%, 10%  { transform: translate(0, 0) scale(1) rotate(0deg); }
+  20% { transform: translate(-1.2px, 2px) scale(.94, 1.05) rotate(-4deg); }
+  34% { transform: translate(3.5px, -5px) scale(1.16, .86) rotate(8deg); }
+  42% { transform: translate(4.2px, -6px) scale(1.2, .82) rotate(9deg); }
+  50% { transform: translate(2.4px, -3.4px) scale(1.06, .94) rotate(5deg); }
+  64% { transform: translate(-.6px, 1.2px) scale(.97, 1.03) rotate(-2deg); }
+  78%, 100% { transform: translate(0, 0) scale(1) rotate(0deg); }
+}
+
+@keyframes hsk-seam-strain {
+  0%, 22% { transform: translate(-50%, -50%) rotate(38deg) scaleY(0); opacity: 0; }
+  34% { transform: translate(-50%, -50%) rotate(38deg) scaleY(.6); opacity: .34; }
+  42% { transform: translate(-50%, -50%) rotate(38deg) scaleY(.95); opacity: .5; }
+  52% { transform: translate(-50%, -50%) rotate(38deg) scaleY(.55); opacity: .3; }
+  66%, 100% { transform: translate(-50%, -50%) rotate(38deg) scaleY(0); opacity: 0; }
+}
+
+@keyframes hsk-wing-beat-far {
+  0%, 100% { transform: scaleX(1) skewY(0deg); }
+  50% { transform: scaleX(.86) skewY(-4deg); }
+}
+
+@keyframes hsk-wing-beat-near {
+  0%, 100% { transform: scaleX(1) skewY(0deg); }
+  50% { transform: scaleX(1.1) skewY(3deg); }
+}
+
+/* --- Stop Button --- */
+
+.hsk-stop-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+  stroke-dasharray: 22 38;
+  opacity: .85;
+  animation: hsk-stop-orbit 1.4s linear infinite;
+}
+
+/* the core breathes so the button reads as live work, and squares off on */
+.hsk-stop-core {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: hsk-stop-pulse 1.4s ease-in-out infinite;
+  transition: rx .2s ease, transform .2s cubic-bezier(.34,1.56,.64,1);
+}
+
+.hsk-cb-send--stop:hover .hsk-stop-core { transform: scale(1.16); animation-play-state: paused; }
+.hsk-cb-send--stop:hover .hsk-stop-ring { animation-duration: .7s; }
+
+@keyframes hsk-stop-orbit {
+  to { transform: rotate(1turn); }
+}
+
+@keyframes hsk-stop-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(.86); opacity: .75; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-cb-send.is-launching .hsk-cb-send-kite,
+  .hsk-cb-send.is-launching .hsk-cb-send-seam,
+  .hsk-cb-send:hover:not(:disabled) .hsk-cb-send-kite { animation: none; transform: none; }
+}
+
+/* --- Send Button Sheath --- */
+
+.hsk-cb-send.is-launching {
+  overflow: visible !important;
+}
+
+.hsk-cb-send-sheath {
+  position: absolute;
+  inset: -1px;
+  background:
+    radial-gradient(120% 90% at 32% 22%, rgba(255,255,255,.44) 0%, rgba(255,255,255,0) 58%),
+    linear-gradient(150deg,
+      color-mix(in srgb, var(--hsk-primary, #1273e6) 72%, #ffffff) 0%,
+      var(--hsk-primary, #1273e6) 46%,
+      color-mix(in srgb, var(--hsk-primary, #1273e6) 74%, #000000) 100%);
+  border-radius: 46% 54% 52% 48% / 50% 47% 53% 50%;
+  box-shadow:
+    inset 0 2px 3px rgba(255, 255, 255, .5),
+    inset 0 -3px 5px color-mix(in srgb, var(--hsk-primary, #1273e6) 30%, rgba(0, 0, 0, .55)),
+    0 2px 5px rgba(0, 0, 0, .20),
+    0 7px 16px color-mix(in srgb, var(--hsk-primary, #1273e6) 16%, transparent);
+  transform-origin: 58% 62%;
+  pointer-events: none;
+  z-index: 1;
+  will-change: transform, border-radius;
+  transition: border-radius .5s cubic-bezier(.34, 1.6, .5, 1), box-shadow .3s ease;
+}
+
+/* the kite rides above the skin it is pressing into */
+.hsk-cb-send-stage { z-index: 2; position: relative; }
+
+/* Waiting: the kite shoves, the cushion takes the shape of the shove and */
+.hsk-cb-send:not(:disabled):not(.is-launching) .hsk-cb-send-sheath {
+  animation: hsk-sheath-press 2.4s cubic-bezier(.35, .8, .3, 1) infinite;
+}
+
+@keyframes hsk-sheath-press {
+  0%, 12% {
+    transform: scale(1);
+    border-radius: 46% 54% 52% 48% / 50% 47% 53% 50%;
+  }
+  22% {
+    transform: scale(.94, 1.08) translate(-1.4px, 2.2px);
+    border-radius: 52% 48% 44% 56% / 58% 40% 60% 42%;
+  }
+  36% {
+    transform: scale(1.14, .87) translate(2.6px, -3.4px) rotate(2deg);
+    border-radius: 38% 66% 54% 46% / 40% 62% 38% 60%;
+  }
+  46% {
+    transform: scale(1.19, .83) translate(3.6px, -4.6px) rotate(2.8deg);
+    border-radius: 34% 72% 56% 44% / 36% 68% 32% 64%;
+  }
+  58% {
+    transform: scale(.93, 1.09) translate(-1.2px, 1.8px) rotate(-1.4deg);
+    border-radius: 56% 44% 42% 58% / 60% 38% 62% 40%;
+  }
+  70% {
+    transform: scale(1.05, .96) translate(.8px, -1px) rotate(.6deg);
+    border-radius: 44% 56% 50% 50% / 46% 54% 46% 54%;
+  }
+  80% {
+    transform: scale(.98, 1.03);
+    border-radius: 50% 50% 48% 52% / 52% 48% 52% 48%;
+  }
+  88%, 100% {
+    transform: scale(1);
+    border-radius: 46% 54% 52% 48% / 50% 47% 53% 50%;
+  }
+}
+
+.hsk-cb-send.is-launching .hsk-cb-send-sheath {
+  animation: hsk-sheath-yield .55s cubic-bezier(.3, .7, .25, 1) both;
+}
+
+@keyframes hsk-sheath-yield {
+  0% {
+    transform: scale(1);
+    border-radius: 46% 54% 52% 48% / 50% 47% 53% 50%;
+  }
+  20% {
+    transform: scale(.88, 1.14) translate(-2px, 3.4px);
+    border-radius: 56% 44% 40% 60% / 64% 34% 66% 36%;
+  }
+  45% {
+    transform: scale(1.34, .68) translate(6px, -10px) rotate(4.6deg);
+    border-radius: 24% 86% 62% 38% / 26% 80% 20% 74%;
+  }
+  65% {
+    transform: scale(.86, 1.16) translate(-2.2px, 3.6px) rotate(-2.2deg);
+    border-radius: 60% 40% 38% 62% / 68% 30% 70% 32%;
+  }
+  82% {
+    transform: scale(1.06, .95) translate(1px, -1px) rotate(0.8deg);
+    border-radius: 44% 56% 52% 48% / 46% 54% 46% 54%;
+  }
+  100% {
+    transform: scale(1);
+    border-radius: 46% 54% 52% 48% / 50% 47% 53% 50%;
+  }
+}
+
+.hsk-cb-send:disabled .hsk-cb-send-sheath { opacity: 0; }
+.hsk-cb-send--stop .hsk-cb-send-sheath { display: none; }
+
+.hsk-cb-send:active:not(:disabled) .hsk-cb-send-sheath {
+  box-shadow:
+    inset 0 1px 2px rgba(255, 255, 255, .3),
+    inset 0 -1px 3px color-mix(in srgb, var(--hsk-primary, #1273e6) 24%, rgba(0, 0, 0, .6)),
+    0 1px 3px rgba(0, 0, 0, .24);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-cb-send:not(:disabled):not(.is-launching) .hsk-cb-send-sheath,
+  .hsk-cb-send.is-launching .hsk-cb-send-sheath { animation: none; }
+}
+
+.hsk-cb-send:not(.hsk-cb-send--stop):not(:disabled) {
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+.hsk-cb-send:not(.hsk-cb-send--stop):not(:disabled):hover {
+  box-shadow: none !important;
+}
+
+.hsk-cb-send:not(:disabled):hover .hsk-cb-send-sheath {
+  box-shadow:
+    inset 0 2px 4px rgba(255, 255, 255, .58),
+    inset 0 -3px 6px color-mix(in srgb, var(--hsk-primary, #1273e6) 28%, rgba(0, 0, 0, .5)),
+    0 3px 7px rgba(0, 0, 0, .22),
+    0 10px 22px color-mix(in srgb, var(--hsk-primary, #1273e6) 20%, transparent);
+}
+
+/* Onboarding Step 4: Airy, Shadowless, Transparent Layout (Doodles Visible) */
+.hsk-cb-terms-sanctuary {
+  display: flex;
+  flex-direction: column;
+  margin: 18px 0 22px;
+  width: 100%;
+  max-width: 520px;
+  text-align: start;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+  opacity: 0;
+  animation: hsk-terms-delicate-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.05s forwards;
+}
+
+@keyframes hsk-terms-delicate-in {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hsk-cb-terms-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  opacity: 0;
+  animation: hsk-terms-item-in 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: calc(var(--hsk-row-idx, 0) * 60ms + 80ms);
+}
+
+@keyframes hsk-terms-item-in {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hsk-cb-terms-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.hsk-cb-terms-numeral {
+  font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  font-style: italic;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--hsk-primary, #ff6a33);
+  opacity: 0.85;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.hsk-cb-terms-title {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--hsk-chat-text, #ffffff);
+}
+
+.hsk-cb-terms-desc {
+  margin: 0;
+  padding-inline-start: 22px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--hsk-chat-muted, #9ca3af);
+  font-weight: 400;
+}
+
+.hsk-cb-terms-divider {
+  height: 1px;
+  margin: 14px 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--hsk-chat-text, #000000) 8%, transparent) 20%,
+    color-mix(in srgb, var(--hsk-chat-text, #000000) 8%, transparent) 80%,
+    transparent 100%
+  );
+}
+
+.hsk-cb-terms-action-wrap {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin-top: 14px;
+}
+
+.hsk-cb-terms-agree-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 34px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 9999px;
+  border: 1px solid var(--hsk-chat-divide, rgba(255, 255, 255, 0.08));
+  background: var(--hsk-chat-divide, rgba(255, 255, 255, 0.06));
+  color: var(--hsk-chat-muted, rgba(255, 255, 255, 0.4));
+  cursor: not-allowed;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  letter-spacing: -0.01em;
+}
+
+.hsk-cb-terms-agree-btn.is-active {
+  background: #ff6a33;
+  color: #ffffff;
+  border-color: #ff6a33;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(255, 106, 51, 0.3);
+}
+
+.hsk-cb-terms-agree-btn.is-active:hover {
+  background: #e55620;
+  border-color: #e55620;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(255, 106, 51, 0.38);
+}
+
+.hsk-cb-terms-agree-btn.is-active:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(255, 106, 51, 0.2);
+}
+

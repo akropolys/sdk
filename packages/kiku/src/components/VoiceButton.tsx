@@ -22,11 +22,7 @@ const MicIcon = ({ active }: { active: boolean }) => (
 );
 
 /**
- * VoiceButton — speech to text, ended by an actual pause in speech rather than
- * by the browser's own guess at where a sentence stops.
- *
- * @example
- * <VoiceButton onTranscript={(text) => setQuery(text)} />
+ * VoiceButton — speech to text input with pause-based utterance detection.
  */
 export function VoiceButton({
   onTranscript,
@@ -39,7 +35,6 @@ export function VoiceButton({
   const onTranscriptRef = useRef(onTranscript);
   useEffect(() => { onTranscriptRef.current = onTranscript; }, [onTranscript]);
 
-  // One utterance per press: this is a search field, not a conversation.
   const stopRef = useRef<() => void>(() => {});
   const handleUtterance = useCallback((text: string) => {
     stopRef.current();

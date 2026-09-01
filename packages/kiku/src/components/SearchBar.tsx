@@ -5,8 +5,7 @@ import { cn } from '../utils/cn';
 export interface SearchBarProps {
   placeholder?: string;
   limit?: number;
-  /** Debounce in ms — default 150 for instant type-ahead */
-  debounceMs?: number;
+    debounceMs?: number;
   onSelect?: (result: SearchResult) => void;
   className?: string;
   inputClassName?: string;
@@ -21,7 +20,6 @@ export interface SearchBarProps {
   };
 }
 
-/* SVG search glass — pure inline so no icon dependency */
 const SearchIcon = () => (
   <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
     <circle cx="8.5" cy="8.5" r="5.5"/>
@@ -48,8 +46,7 @@ export function SearchBar({
   const wrap = useRef<HTMLDivElement>(null);
   const ignoreNextQueryChange = useRef(false);
 
-  /* useSearch debounces internally — fire on every keystroke, keep stale results visible */
-  useEffect(() => {
+    useEffect(() => {
     if (ignoreNextQueryChange.current) {
       ignoreNextQueryChange.current = false;
       return;
@@ -64,8 +61,7 @@ export function SearchBar({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
 
-  /* Click-outside to close */
-  useEffect(() => {
+    useEffect(() => {
     const h = (e: MouseEvent) => {
       if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false);
     };
@@ -75,8 +71,6 @@ export function SearchBar({
 
   const handleSelect = (r: SearchResult) => {
     if (query.trim()) {
-      // keepalive: onSelect commonly navigates the page right after this call —
-      // without it the browser aborts the in-flight log request mid-navigation.
       client.api.searchVector(query, 1, undefined, true).catch(() => {});
     }
     ignoreNextQueryChange.current = true;

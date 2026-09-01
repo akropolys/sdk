@@ -12,11 +12,6 @@ function formatFor(url: string): string {
   return '';
 }
 
-// A url() value is injected into a stylesheet, so a stray quote or paren would
-// let a malicious theme close the declaration and append rules of its own.
-// Everything else is allowed: absolute, protocol-relative, document-relative and
-// data: URIs are all legitimate ways to point at a font, and an allow-list of
-// schemes only ends up rejecting valid ones.
 function safeUrl(url: string): string | null {
   const u = url.trim();
   if (!u) return null;
@@ -25,21 +20,19 @@ function safeUrl(url: string): string | null {
   return u;
 }
 
-// The range is injected into a stylesheet, same as a url() is. It comes from
-// our own manifest rather than from a theme, but it still gets a shape check
-// so nothing that could close the declaration reaches the DOM.
-const safeRange = (r: string): string => (/^[Uu]\+[0-9A-Fa-f,\-+ ]*$/.test(r) ? r : '');
+const RANGE_SEGMENT = /^[Uu]\+[0-9A-Fa-f?]{1,6}(-[0-9A-Fa-f]{1,6})?$/;
 
-// Same reasoning as safeRange. "400" or a "100 900" axis range, nothing else.
+const safeRange = (r: string): string => {
+  const parts = r.split(',').map(s => s.trim()).filter(Boolean);
+  if (parts.length === 0 || !parts.every(p => RANGE_SEGMENT.test(p))) return '';
+  return parts.join(', ');
+};
+
 const safeWeight = (w: string): string => (/^\d{3}( \d{3})?$/.test(w) ? w : '400');
 
-// Shared by both hooks: mount a stylesheet once per distinct key, remove it
-// when the last widget using it unmounts.
 function useMountedFaces(key: string, css: string): void {
   useEffect(() => {
     if (!key || !css || typeof document === 'undefined') return;
-    // Not btoa: it throws on anything outside Latin-1, and a non-ASCII family
-    // name is exactly the case this feature exists to serve.
     let h = 5381;
     for (let i = 0; i < key.length; i++) h = ((h << 5) + h + key.charCodeAt(i)) >>> 0;
     const id = `hsk-font-${h.toString(36)}`;
@@ -61,24 +54,11 @@ function useMountedFaces(key: string, css: string): void {
   }, [key, css]);
 }
 
-/**
- * Loads the script font the backend resolved for the shopper's language, from
- * our own origin. The panel used to @import Space Grotesk straight from
- * fonts.googleapis.com, which strict merchant CSPs block outright and which
- * hands every shopper's IP to Google from inside someone else's page.
- *
- * font-display: swap on purpose — the shopper reads the panel in a system face
- * immediately and it upgrades when the file lands, rather than staring at
- * invisible text on a slow connection.
- */
 function scriptFontCSS(font: ScriptFont): string {
   return font.faces
     .map(f => {
       const url = safeUrl(f.url);
       if (!url) return '';
-      // The face's real weight, never a blanket 100 900: claiming a static
-      // regular covers the axis is what made the browser synthesise bold, and
-      // faux bold on Devanagari, Thai or Nastaliq wrecks the letterforms.
       return `@font-face{font-family:"${font.family}";font-style:normal;` +
         `font-weight:${safeWeight(f.weight)};font-display:swap;src:url(${url}) format("woff2");` +
         (safeRange(f.unicodeRange) ? `unicode-range:${safeRange(f.unicodeRange)};` : '') + '}';
@@ -92,27 +72,11 @@ export function useScriptFontFace(font: ScriptFont | null | undefined): void {
   useMountedFaces(css ? `script|${font!.family}|${faces.map(f => f.url).join('|')}` : '', css);
 }
 
-/**
- * Mounts the @font-face rule for `font` (idempotent — safe to call alongside
- * useScriptFontFace, which the same font will also be passed to) and resolves
- * once the browser has actually rasterized it, or after `timeoutMs`, whichever
- * comes first.
- *
- * Used to hold chrome text off-screen until the real glyphs are ready, instead
- * of painting the system font and swapping a moment later once the file lands
- * — font-display: swap is right for a paragraph the shopper is already reading
- * mid-conversation, but wrong for the first paint of a screen that has nothing
- * on it yet to lose by waiting the small amount this actually takes.
- */
 export async function preloadScriptFont(font: ScriptFont, timeoutMs = 1200): Promise<void> {
   if (typeof document === 'undefined' || !('fonts' in document)) return;
   const css = scriptFontCSS(font);
   if (!css) return;
 
-  // Not btoa: it throws on anything outside Latin-1, and a non-ASCII family
-  // name is exactly the case this feature exists to serve. Matches the id
-  // useMountedFaces would derive for the same key, so this and the hook never
-  // double-mount the same rule.
   const key = `script|${font.family}|${font.faces.map(f => f.url).join('|')}`;
   let h = 5381;
   for (let i = 0; i < key.length; i++) h = ((h << 5) + h + key.charCodeAt(i)) >>> 0;
@@ -126,8 +90,6 @@ export async function preloadScriptFont(font: ScriptFont, timeoutMs = 1200): Pro
 
   const fonts = (document as any).fonts;
   const loads = font.faces.map(() =>
-    // A specific size doesn't matter for load() — only the family/weight
-    // combination is looked up — but the API requires one.
     fonts.load(`16px "${font.family}"`).catch(() => {})
   );
   await Promise.race([
@@ -136,11 +98,6 @@ export async function preloadScriptFont(font: ScriptFont, timeoutMs = 1200): Pro
   ]);
 }
 
-/**
- * Loads the developer's font for them, so `theme.fontFamily` resolves even when
- * the host page never declared it. Reference-counted: several widgets sharing a
- * theme mount one stylesheet, and it is removed once the last one unmounts.
- */
 export function useHostFontFace(theme: 'light' | 'dark' | AkropolysTheme | undefined): void {
   const t = typeof theme === 'object' && theme ? theme : undefined;
   const family = t?.fontFamily?.split(',')[0].trim().replace(/^['"]|['"]$/g, '') ?? '';
@@ -152,8 +109,6 @@ export function useHostFontFace(theme: 'light' | 'dark' | AkropolysTheme | undef
   useEffect(() => {
     if (!family || (!normal && !bold && !variable)) return;
 
-    // A variable font declares the whole axis, so the browser instances the real
-    // weight instead of synthesising bold off a single static cut.
     const weights: ReadonlyArray<readonly [string, string]> = variable
       ? [['100 900', variable]]
       : [['400', normal], ['700', bold]];
@@ -173,8 +128,6 @@ export function useHostFontFace(theme: 'light' | 'dark' | AkropolysTheme | undef
 
     const css = faces.join('');
     const key = `${family}|${normal}|${bold}|${variable}`;
-    // Not btoa: it throws on anything outside Latin-1, and a non-ASCII family
-    // name is exactly the case this feature exists to serve.
     let h = 5381;
     for (let i = 0; i < key.length; i++) h = ((h << 5) + h + key.charCodeAt(i)) >>> 0;
     const id = `hsk-host-font-${h.toString(36)}`;

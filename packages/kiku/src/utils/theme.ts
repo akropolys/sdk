@@ -1,16 +1,14 @@
 import type { CSSProperties } from 'react';
 import type { AkropolysTheme } from '@akropolys/sdk';
 
-export type ThemeProp = 'light' | 'dark' | AkropolysTheme | undefined;
+export type ThemeProp = string | AkropolysTheme | undefined;
 
-// A string theme ('light'/'dark') selects a preset via the data-hsk-theme
-// attribute; an object theme maps to CSS custom properties applied inline.
 export function resolveTheme(theme: ThemeProp): {
-  themeAttr: 'light' | 'dark' | undefined;
+  themeAttr: string | undefined;
   vars: CSSProperties | undefined;
 } {
   if (typeof theme === 'string') {
-    return { themeAttr: theme, vars: undefined };
+    return { themeAttr: theme as any, vars: undefined };
   }
   if (!theme) {
     return { themeAttr: undefined, vars: undefined };

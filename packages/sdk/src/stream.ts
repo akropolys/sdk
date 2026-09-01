@@ -6,17 +6,12 @@ export interface KnowledgeImage {
   caption?: string;
 }
 
-// One directed-knowledge entry's images, delivered as a structured
-// knowledge_images SSE event — rendered like a card, never model-pasted.
 export interface KnowledgeImageRef {
   entryId: string;
   title?: string;
   images: KnowledgeImage[];
 }
 
-// An entry the shopper asked about that is no longer on offer. 'removed' is
-// gone for good; 'unavailable' may return. Delivered as a structured
-// stale_notice SSE event so the warning is shown even if the answer buries it.
 export interface StaleNotice {
   title: string;
   state: 'removed' | 'unavailable';
@@ -29,6 +24,8 @@ export interface ChatMessage {
   images?: string[]; // base64 data URLs attached by the user
   knowledgeImages?: KnowledgeImageRef[]; // owner-authored reference images backing this answer
   staleNotices?: StaleNotice[]; // entries referenced here that are no longer available
+
+  liveKeys?: string[];
   actionType?: string;
   sources?: ChatSource[]; // this turn's candidate entities, for rendering referenced products
   referencedIds?: string[]; // ids from `sources` this specific answer actually mentioned
@@ -40,9 +37,9 @@ export interface ChatMessage {
   thinking?: string; // the model's reasoning, delivered separately from the answer
   thoughtForSeconds?: number; // wall-clock time from send until the answer began
   statusMessage?: string; // live status update (e.g. "Searching 2,431 products...")
-  /** Typed while the previous turn is still in flight; waiting to be dispatched. */
+
   queued?: boolean;
-  /** Spoken aloud in voice mode rather than typed — transcribed, not authored. */
+
   spoken?: boolean;
 }
 
@@ -63,18 +60,15 @@ export interface ChatMetadata {
   intent: string;
   sources: ChatSource[];
   action?: ChatAction;
-  /** Present when this turn switched the shopper's preferred reply language. */
+
   language?: string;
-  /** Action tags this site+plan permits, resolved server-side each turn. */
+
   allowedActions?: string[];
 }
 
 export type VizEvent =
   | { status: 'generating' }
   | { status: 'generating_video' }
-  // Video outlives the chat stream: generation runs for minutes, the turn ends
-  // in seconds. The server hands back the job id so the client can follow it
-  // after the stream closes — without this the finished video has no way back.
   | { status: 'pending'; jobId: string }
   | { status: 'done'; url: string; id: string; mediaType?: 'image' | 'video' }
   | { status: 'failed'; reason?: string };
@@ -96,17 +90,11 @@ function parseSSEChunk(raw: string): SSEFrame[] {
       if (line.startsWith('event:')) event = line.slice(6).trim();
       else if (line.startsWith('data:')) {
         let d = line.slice(5);
-        // Per the SSE spec a single space after the colon is a delimiter, not
-        // content — keeping it split ligatures in Tamil, Thai and other scripts
-        // where a token boundary can fall inside a grapheme.
         if (d.startsWith(' ')) d = d.slice(1);
-        // Multiple data: lines in one block concatenate with a newline. Assigning
-        // instead kept only the last, silently truncating any multi-line frame.
         data = seenData ? data + '\n' + d : d;
         seenData = true;
       }
     }
-    // An event with empty data is still a frame — `done` carries no payload.
     if (seenData || event !== '') frames.push({ event, data });
   }
   return frames;
@@ -124,7 +112,7 @@ export class KikuStream {
     this.startReading();
   }
 
-  on(event: 'token' | 'meta' | 'done' | 'error' | 'entity_ref' | 'viz' | 'thinking' | 'knowledge_images' | 'stale_notice', callback: Function): this {
+  on(event: 'token' | 'meta' | 'done' | 'error' | 'entity_ref' | 'live_ref' | 'viz' | 'thinking' | 'knowledge_images' | 'stale_notice', callback: Function): this {
     if (!this.listeners[event]) {
       this.listeners[event] = [];
     }
@@ -132,7 +120,7 @@ export class KikuStream {
     return this;
   }
 
-  off(event: 'token' | 'meta' | 'done' | 'error' | 'entity_ref' | 'viz' | 'thinking' | 'knowledge_images' | 'stale_notice', callback: Function): this {
+  off(event: 'token' | 'meta' | 'done' | 'error' | 'entity_ref' | 'live_ref' | 'viz' | 'thinking' | 'knowledge_images' | 'stale_notice', callback: Function): this {
     if (!this.listeners[event]) return this;
     this.listeners[event] = this.listeners[event].filter(cb => cb !== callback);
     return this;
@@ -156,167 +144,208 @@ export class KikuStream {
   }
 
   private async startReading() {
+    let success = false;
+    let finalMessage = '';
     try {
       const response = await this.responsePromise;
       if (this.aborted) return;
+
+      if (!response.ok) {
+        let msg = `HTTP ${response.status}`;
+        let code: string | undefined;
+        try {
+          const body = await response.text();
+          try {
+            const parsed = JSON.parse(body);
+            msg = parsed.error || parsed.message || body;
+            code = parsed.code;
+          } catch {
+            msg = body.trim() || msg;
+          }
+        } catch {  }
+        const err = new Error(msg);
+        (err as any).status = response.status;
+        if (response.status === 401) {
+          (err as any).code = 'UNAUTHORIZED';
+        } else if (response.status === 402 || response.status === 429) {
+          (err as any).code = 'RATE_LIMIT_EXCEEDED';
+        } else if (response.status === 403) {
+          (err as any).code = 'FORBIDDEN';
+        }
+        if (code) (err as any).code = code;
+        this.emit('error', err);
+        return;
+      }
 
       const reader = response.body?.getReader();
       if (!reader) {
         throw new Error('Response body is not readable');
       }
 
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let accumulatedMessage = '';
+      try {
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let accumulatedMessage = '';
 
-      let isDoneEvent = false;
-      let ended = false;
-      while (!ended) {
-        const { done, value } = await reader.read();
-        if (this.aborted || isDoneEvent) break;
+        let isDoneEvent = false;
+          let ended = false;
+          while (!ended) {
+            const { done, value } = await reader.read();
+            if (this.aborted || isDoneEvent) break;
 
-        if (done) {
-          buffer += decoder.decode();
-          ended = true;
-        } else {
-          buffer += decoder.decode(value, { stream: true });
-        }
-
-        let complete: string;
-        if (ended) {
-          // The stream is closed, so whatever is left is the last frame whether
-          // or not it got its terminator — dropping it lost the final tokens.
-          complete = buffer;
-          buffer = '';
-        } else {
-          const lastBoundary = buffer.lastIndexOf('\n\n');
-          if (lastBoundary === -1) continue;
-          complete = buffer.slice(0, lastBoundary + 2);
-          buffer = buffer.slice(lastBoundary + 2);
-        }
-
-        const frames = parseSSEChunk(complete);
-
-        for (const { event, data } of frames) {
-          if (this.aborted) return;
-
-          if (event === 'meta') {
-            try {
-              const meta: ChatMetadata = JSON.parse(data);
-              this.emit('meta', meta);
-            } catch {
-              // ignore parse errors
+            if (done) {
+              buffer += decoder.decode();
+              ended = true;
+            } else {
+              buffer += decoder.decode(value, { stream: true });
             }
-            continue;
-          }
 
-          if (event === 'entity_ref') {
-            try {
-              const ref = JSON.parse(data);
-              this.emit('entity_ref', ref);
-            } catch {
-              // ignore parse errors
+            let complete: string;
+            if (ended) {
+              complete = buffer;
+              buffer = '';
+            } else {
+              const lastBoundary = buffer.lastIndexOf('\n\n');
+              if (lastBoundary === -1) continue;
+              complete = buffer.slice(0, lastBoundary + 2);
+              buffer = buffer.slice(lastBoundary + 2);
             }
-            continue;
-          }
 
-          if (event === 'knowledge_images') {
-            try {
-              const payload = JSON.parse(data);
-              if (Array.isArray(payload?.refs) && payload.refs.length > 0) {
-                this.emit('knowledge_images', payload.refs as KnowledgeImageRef[]);
+            const frames = parseSSEChunk(complete);
+
+            for (const { event, data } of frames) {
+              if (this.aborted) return;
+
+              if (event === 'meta') {
+                try {
+                  const meta: ChatMetadata = JSON.parse(data);
+                  this.emit('meta', meta);
+                } catch {
+                }
+                continue;
               }
-            } catch {
-              // ignore parse errors
-            }
-            continue;
-          }
 
-          if (event === 'stale_notice') {
-            try {
-              const payload = JSON.parse(data);
-              if (Array.isArray(payload?.items) && payload.items.length > 0) {
-                this.emit('stale_notice', payload.items as StaleNotice[]);
+              if (event === 'entity_ref') {
+                try {
+                  const ref = JSON.parse(data);
+                  this.emit('entity_ref', ref);
+                } catch {
+                }
+                continue;
               }
-            } catch {
-              // ignore parse errors
+
+              if (event === 'live_ref') {
+                try {
+                  const ref = JSON.parse(data);
+                  if (ref && typeof ref.key === 'string' && ref.key) {
+                    this.emit('live_ref', ref);
+                  }
+                } catch {
+                }
+                continue;
+              }
+
+              if (event === 'knowledge_images') {
+                try {
+                  const payload = JSON.parse(data);
+                  if (Array.isArray(payload?.refs) && payload.refs.length > 0) {
+                    this.emit('knowledge_images', payload.refs as KnowledgeImageRef[]);
+                  }
+                } catch {
+                }
+                continue;
+              }
+
+              if (event === 'stale_notice') {
+                try {
+                  const payload = JSON.parse(data);
+                  if (Array.isArray(payload?.items) && payload.items.length > 0) {
+                    this.emit('stale_notice', payload.items as StaleNotice[]);
+                  }
+                } catch {
+                }
+                continue;
+              }
+
+              if (event === 'thinking') {
+                try {
+                  const { text } = JSON.parse(data);
+                  if (text) this.emit('thinking', text);
+                } catch {
+                }
+                continue;
+              }
+
+              if (event === 'status') {
+                try {
+                  const status = JSON.parse(data);
+                  this.emit('status', status);
+                } catch {
+                }
+                continue;
+              }
+
+              if (event === 'viz') {
+                try {
+                  const viz: VizEvent = JSON.parse(data);
+                  this.emit('viz', viz);
+                } catch {
+                }
+                continue;
+              }
+
+              if (event === 'done') {
+                isDoneEvent = true;
+                break;
+              }
+
+              if (event === 'error') {
+                let msg = 'Stream error';
+                let code: string | undefined;
+                try {
+                  const parsed = JSON.parse(data);
+                  msg = parsed.error ?? msg;
+                  code = parsed.code;
+                } catch {
+                  msg = data;
+                }
+                const err = new Error(msg);
+                if (code) (err as Error & { code?: string }).code = code;
+                throw err;
+              }
+
+              if (event) continue; // unknown named event is structured data, never answer text
+
+              const token = data;
+              accumulatedMessage += token;
+              this.emit('token', token);
             }
-            continue;
-          }
 
-          if (event === 'thinking') {
-            try {
-              const { text } = JSON.parse(data);
-              if (text) this.emit('thinking', text);
-            } catch {
-              // ignore parse errors
+            if (isDoneEvent) {
+              break;
             }
-            continue;
           }
 
-          if (event === 'status') {
-            try {
-              const status = JSON.parse(data);
-              this.emit('status', status);
-            } catch {
-              // ignore parse errors
-            }
-            continue;
+          if (!this.aborted) {
+            success = true;
+            finalMessage = accumulatedMessage;
           }
-
-          if (event === 'viz') {
-            try {
-              const viz: VizEvent = JSON.parse(data);
-              this.emit('viz', viz);
-            } catch {
-              // ignore parse errors
-            }
-            continue;
+        } finally {
+          try {
+            reader.cancel().catch(() => {});
+          } catch {
           }
-
-          if (event === 'done') {
-            isDoneEvent = true;
-            break;
-          }
-
-          if (event === 'error') {
-            let msg = 'Stream error';
-            let code: string | undefined;
-            try {
-              const parsed = JSON.parse(data);
-              msg = parsed.error ?? msg;
-              code = parsed.code;
-            } catch {
-              msg = data;
-            }
-            const err = new Error(msg);
-            // Stable machine-readable code, when the server sent one, so the
-            // UI can render this in the shopper's language instead of the
-            // English fallback message.
-            if (code) (err as Error & { code?: string }).code = code;
-            throw err;
-          }
-
-          if (event) continue; // unknown named event is structured data, never answer text
-
-          // Plain token — convert literal \n to actual newline
-          const token = data.replace(/\\n/g, '\n');
-          accumulatedMessage += token;
-          this.emit('token', token);
+          this.abortController.abort();
         }
-
-        if (isDoneEvent) {
-          break;
+      } catch (err: any) {
+        if (!this.aborted) {
+          this.emit('error', err);
         }
       }
 
-      if (!this.aborted) {
-        this.emit('done', accumulatedMessage);
+      if (success && !this.aborted) {
+        this.emit('done', finalMessage);
       }
-    } catch (err: any) {
-      if (!this.aborted) {
-        this.emit('error', err);
-      }
-    }
   }
 }
+

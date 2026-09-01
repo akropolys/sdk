@@ -1,5 +1,3 @@
-// Marks travel as geometry: the image API takes no mask, so the backend names
-// what sits under each region and edits by name.
 
 export interface Point { x: number; y: number }
 
@@ -7,12 +5,10 @@ export type MarkGesture = 'ring' | 'cross' | 'scribble' | 'arrow' | 'text';
 
 export interface MarkRegion {
   gesture: MarkGesture;
-  /** [ymin, xmin, ymax, xmax], normalised 0-1000. */
-  box: [number, number, number, number];
+    box: [number, number, number, number];
   to?: [number, number];
   text?: string;
 }
-
 
 const dist = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -87,7 +83,6 @@ function classifyStroke(pts: Point[], w: number, h: number): Classified | null {
   return { gesture: 'scribble', box, straight: false };
 }
 
-// Two crossed straight strokes are one cross, not two arrows.
 export function buildMarkRegions(
   actions: ReadonlyArray<{ kind: string; points?: Point[]; x?: number; y?: number; value?: string; tool?: string }>,
   width: number,
@@ -104,7 +99,6 @@ export function buildMarkRegions(
       texts.push({ gesture: 'text', box: norm(bbox([p, p]), width, height), text: a.value });
       continue;
     }
-    // Eraser removes ink, not an instruction.
     if (a.kind === 'stroke' && a.tool !== 'eraser' && a.points) {
       const c = classifyStroke(a.points, width, height);
       if (c) strokes.push(c);

@@ -1,222 +1,115 @@
-# @akropolys/sdk
+# Akropolys
 
-AI-powered vector search for any storefront. Your customers browse → products index automatically. Zero scraping, zero manual uploads.
+**The real-time conversational intelligence layer for the living web.**
 
-## Install
+Domain-blind to any catalog entity or live telemetry stream — from retail inventory, cars, and real estate to financial markets, travel fares, and live sports.
 
-```bash
-npm install @akropolys/sdk
-# or
-pnpm add @akropolys/sdk
-```
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178c6.svg)](https://www.typescriptlang.org/)
+[![Documentation](https://img.shields.io/badge/Docs-akropolys.cloud-black)](https://akropolys.cloud)
 
 ---
 
+## What It Represents
 
-## Next.js (App Router)
+Most AI assistants are trapped in static history — scraping pages once a week and hallucinating outdated information.
 
-Next.js App Router uses **Server Components** by default. The SDK is client-only, so follow this pattern:
+Akropolys is **Living AI**:
+* 🌐 **Domain-Blind Entity Grounding**: Treat any asset — products, vehicles, properties, flights, contracts, or events — as an indexed entity.
+* ⚡ **Sub-50ms Live Telemetry**: Ingest high-frequency moving state (`signLiveRecords`) directly into in-memory model context.
+* 🎙️ **Multi-Modal Native**: Spoken duplex Live Voice, Computer Vision reverse search, and interactive comparison tables.
+* 📐 **Zero Hallucination Math**: Live deterministic calculation of prices, discounts, margins, risk, and payoff structures.
+* 🔒 **One Drop-In Embed**: Single line of code for any website, app, or storefront.
 
-### 1. Enable Package Transpilation (CRITICAL)
+---
 
-In your `next.config.ts` (or `next.config.js`), you must add `@akropolys/sdk` to `transpilePackages` to ensure Next.js can transpile the SDK components properly:
+## 30-Second Integration
 
-```typescript
-import type { NextConfig } from "next";
+### 1. React & Next.js
 
-const nextConfig: NextConfig = {
-  transpilePackages: ["@akropolys/sdk"],
-};
-
-export default nextConfig;
+```bash
+npm install @akropolys/sdk @akropolys/kiku
 ```
 
-*Note: Without this, importing SDK UI components like `SearchBar` will fail during compilation.*
-
-### 2. Create a client provider wrapper
-
 ```tsx
-// app/components/AkropolysClientProvider.tsx
-'use client';
-
 import { AkropolysProvider } from '@akropolys/sdk';
-
-export default function AkropolysClientProvider({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return <AkropolysProvider>{children}</AkropolysProvider>;
-}
-```
-
-### 3. Add it to your root layout
-
-```tsx
-// app/layout.tsx  ← this is a Server Component, no 'use client' needed
-import AkropolysClientProvider from './components/AkropolysClientProvider';
+import { KikuButton } from '@akropolys/kiku';
+import '@akropolys/kiku/styles.css';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body>
-        <AkropolysClientProvider>
+        <AkropolysProvider
+          siteId={process.env.NEXT_PUBLIC_AKROPOLYS_SITE_ID!}
+          apiUrl={process.env.NEXT_PUBLIC_AKROPOLYS_API_URL!}
+          apiToken={process.env.NEXT_PUBLIC_AKROPOLYS_API_KEY!}
+        >
           {children}
-        </AkropolysClientProvider>
+          <KikuButton label="Ask me anything" enableVoice enableVision />
+        </AkropolysProvider>
       </body>
     </html>
   );
 }
 ```
 
-### 4. Auto-ingest on product pages
+### 2. Standalone HTML / Storefront Embed
 
-```tsx
-// app/products/[slug]/page.tsx
-import { getProduct } from '@/lib/db'; // your own data fetching
-
-// ProductView is a Client Component — handles ingestion
-'use client';
-import { usePageIngest } from '@akropolys/sdk';
-
-export function ProductView({ product }) {
-  // One line — fires automatically when the customer's browser loads the page
-  usePageIngest({
-    name: product.title,
-    price: product.price,
-    url: window.location.href,
-    images: [product.thumbnail],
-    category: product.category,
-    description: product.description,
-  });
-
-  return <div>{/* your product UI */}</div>;
-}
+```html
+<script>
+  window.AkropolysConfig = {
+    siteId: "YOUR_SITE_ID",
+    apiToken: "YOUR_PUBLIC_KEY",
+    buttonLabel: "Ask me anything",
+    theme: "dark",
+    enableVoice: true,
+    enableVision: true,
+  };
+</script>
+<script src="https://cdn.akropolys.cloud/kiku.iife.js" async></script>
 ```
 
-> **Why a separate client component?**  
-> `usePageIngest` uses `useEffect` which runs only in the browser. Server Components can't call hooks. The wrapper pattern keeps your data-fetching in Server Components (fast, cached) while the SDK fires client-side.
+### 3. Stream Live Telemetry (Server)
 
-### 5. Add the search bar
+```typescript
+import { signLiveRecords } from '@akropolys/sdk/server';
 
-```tsx
-// app/components/Header.tsx
-'use client';
-import { SearchBar } from '@akropolys/sdk';
-import { useRouter } from 'next/navigation';
+const payload = await signLiveRecords([
+  {
+    key: 'Sony WH-1000XM5',
+    fields: { price: '$348.00', stock: '3 left', promo: 'FLASH15' }
+  },
+  {
+    key: '2023 BMW M340i',
+    fields: { price: '$54,900', status: 'Available', location: 'Downtown Lot' }
+  }
+], process.env.AKROPOLYS_PRIVATE_KEY!, { kid: process.env.AKROPOLYS_KID! });
 
-export function Header() {
-  const router = useRouter();
-  return (
-    <SearchBar
-      placeholder="Search products..."
-      onSelect={(result) => router.push(result.product.url)}
-    />
-  );
-}
+await fetch(`${process.env.AKROPOLYS_API_URL}/live`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'X-API-Key': process.env.AKROPOLYS_API_KEY!,
+    'X-Akropolys-Site': process.env.AKROPOLYS_SITE_ID!,
+  },
+  body: JSON.stringify(payload),
+});
 ```
 
 ---
 
-## React (CRA / Vite)
+## Monorepo Packages
 
-With a standard SPA, everything is already a client component. Much simpler:
-
-### 1. Wrap your app
-
-```tsx
-// src/main.tsx or src/App.tsx
-import { AkropolysProvider } from '@akropolys/sdk';
-
-function App() {
-  return (
-    <AkropolysProvider>
-      <Router>
-        <Routes />
-      </Router>
-    </AkropolysProvider>
-  );
-}
-```
-
-### 2. Ingest on product pages
-
-```tsx
-// src/pages/ProductPage.tsx
-import { usePageIngest } from '@akropolys/sdk';
-
-export function ProductPage({ product }) {
-  usePageIngest({
-    name: product.title,
-    price: product.price,
-    url: window.location.href,
-    images: [product.thumbnail],
-    category: product.category,
-  });
-
-  return <div>{/* your product UI */}</div>;
-}
-```
-
-### 3. Add search
-
-```tsx
-import { SearchBar } from '@akropolys/sdk';
-
-<SearchBar onSelect={(result) => navigate(result.product.url)} />
-```
+| Package | Purpose |
+|---|---|
+| [`@akropolys/sdk`](./packages/sdk) | Core client, streaming hooks, and signed server telemetry. |
+| [`@akropolys/kiku`](./packages/kiku) | Multi-modal UI widget with Live Voice, Vision, and comparative tables. |
+| [`@akropolys/cli`](./packages/cli) | CLI diagnostics, environment scaffolding, and payload linting. |
 
 ---
 
-## Batch ingest (listing pages)
+## License
 
-When rendering a catalog or grid of products, use the `useListIngest` hook. It handles React render cycles, deduplication, and component lifecycles internally:
+MIT © [Akropolys](https://akropolys.cloud)
 
-```tsx
-'use client';
-import { useListIngest } from '@akropolys/sdk';
-
-export function ProductGrid({ products }) {
-  useListIngest(
-    products.map((p) => ({
-      name: p.title,
-      price: p.price,
-      url: `/products/${p.slug}`,
-      images: [p.thumbnail],
-      category: p.category,
-      currency: 'KES',
-    }))
-  );
-
-  return <ul>{/* render cards */}</ul>;
-}
-```
-
----
-
-## API Reference
-
-| Export | Type | Description |
-|--------|------|-------------|
-| `AkropolysProvider` | Component | Wraps your app. Accepts config, handles lifecycle. |
-| `usePageIngest(product)` | Hook | Ingest one product automatically on page mount. |
-| `useListIngest(products)` | Hook | Batch ingest products. Handles mounting lifecycle & caching. |
-| `useIngest()` | Hook | Returns `{ ingest, ingestBatch }` with built-in cache deduplication. |
-| `useSearch()` | Hook | Returns `{ search, results, loading }` for headless search. |
-| `SearchBar` | Component | Plug-and-play autocomplete search UI. |
-| `Sparkle` | Component | "Similar products" button powered by vector similarity. |
-| `getAkropolysClient()` | Function | Get the singleton client instance imperatively. |
-| `initAkropolys(config)` | Function | Initialize manually (non-React environments). |
-
-### AkropolysProvider Configuration
-
-You can pass the following properties to `<AkropolysProvider>` (or set their corresponding environment variables):
-
-| Property | Environment Variable | Type | Description |
-|---|---|---|---|
-| `siteId` | `NEXT_PUBLIC_HUSKEL_SITE_ID` | `string` | Unique site identifier. |
-| `apiUrl` | `NEXT_PUBLIC_HUSKEL_API_URL` | `string` | The endpoint of the Akropolys backend. |
-| `apiToken` | `NEXT_PUBLIC_HUSKEL_API_TOKEN` | `string` | API access token. |
-| `shopperId` | - | `string` | Current customer's user ID. Set dynamically to sync search preferences. |
-| `authLoading` | - | `boolean` | Set to `true` while auth resolves (e.g. `!user` or `!isLoaded` in Clerk) to buffer/hold early ingests, avoiding guest session tagging. |
-| `onError` | - | `(error: AkropolysError) => void` | Event handler called when search or ingestion fails, or on initialization errors. |

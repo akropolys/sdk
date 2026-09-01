@@ -1,28 +1,37 @@
 import React from 'react';
 
-// Helper to normalize double spaces, stray spaces before punctuation, and units
+const SPACING_DOUBLE_REGEX = /[ \t]{2,}/g;
+const SPACING_PUNCT_REGEX = / ([.,!?:;])/g;
+const SPACING_OPEN_PAREN_REGEX = /\(([ \t]+)/g;
+const SPACING_CLOSE_PAREN_REGEX = /([ \t]+)\)/g;
+const SPACING_UNIT_REGEX = /(\d+)\s+(MP|mAh|W|GB|MB|KHz|Hz|KSh|KES|USD|EUR)\b/gi;
+
+const TOKEN_SPLIT_REGEX = /(!\[[^\]]*\]\([^)]+\)|\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*|`[^`]+`)/g;
+const IMAGE_PARSE_REGEX = /^!\[([^\]]*)\]\(([^)]+)\)$/;
+const LINK_PARSE_REGEX = /^\[([^\]]+)\]\(([^)]+)\)$/;
+const SAFE_IMG_REGEX = /^(https?|data:image|blob):/i;
+const SAFE_LINK_REGEX = /^(https?|mailto|tel):/i;
+const MEMORY_LINK_FILTER_REGEX = /memory|mimi/i;
+const MEMORY_URL_FILTER_REGEX = /mimi\.akropolys/i;
+
 const normalizeSpacing = (text: string): string => {
   if (!text) return text;
   return text
-    .replace(/[ \t]{2,}/g, ' ')                          // Collapse double/multiple spaces to a single space
-    .replace(/ ([.,!?:;])/g, '$1')                        // Remove space before punctuation ("word ." -> "word.")
-    .replace(/\(([ \t]+)/g, '(')                          // Remove space after open parenthesis
-    .replace(/([ \t]+)\)/g, ')')                          // Remove space before close parenthesis
-    .replace(/(\d+)\s+(MP|mAh|W|GB|MB|KHz|Hz|KSh|KES|USD|EUR)\b/gi, '$1 $2'); // Normalize unit spacing
+    .replace(SPACING_DOUBLE_REGEX, ' ')
+    .replace(SPACING_PUNCT_REGEX, '$1')
+    .replace(SPACING_OPEN_PAREN_REGEX, '(')
+    .replace(SPACING_CLOSE_PAREN_REGEX, ')')
+    .replace(SPACING_UNIT_REGEX, '$1 $2');
 };
 
-// Helper to parse inline styles (bold, images, links, and inline code) safely into React nodes
 const parseInline = (text: string, keyPrefix: string): React.ReactNode => {
   const normalizedText = normalizeSpacing(text);
-  // Regex matches: images ![alt](url), links [text](url), bold **text**, inline code `code`
-  const tokenRegex = /(!\[[^\]]*\]\([^)]+\)|\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*|`[^`]+`)/g;
-  const parts = normalizedText.split(tokenRegex);
+  const parts = normalizedText.split(TOKEN_SPLIT_REGEX);
 
   return parts.map((part, index) => {
     if (!part) return null;
     const key = `${keyPrefix}-inline-${index}`;
 
-    // Handle Inline Code
     if (part.startsWith('`') && part.endsWith('`')) {
       return (
         <code key={key} className="hsk-markdown-code">
@@ -31,17 +40,15 @@ const parseInline = (text: string, keyPrefix: string): React.ReactNode => {
       );
     }
 
-    // Handle Bold
     if (part.startsWith('**') && part.endsWith('**')) {
       return <strong key={key}>{parseInline(part.slice(2, -2), key)}</strong>;
     }
 
-    // Handle Images: ![alt](url)
-    const imageMatch = part.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+    const imageMatch = part.match(IMAGE_PARSE_REGEX);
     if (imageMatch) {
       const alt = imageMatch[1];
       const url = imageMatch[2];
-      const isSafeUrl = /^(https?|data:image):/i.test(url);
+      const isSafeUrl = SAFE_IMG_REGEX.test(url) || url.startsWith('/');
       if (isSafeUrl) {
         return (
           <img
@@ -57,16 +64,14 @@ const parseInline = (text: string, keyPrefix: string): React.ReactNode => {
       return null;
     }
 
-    // Handle Links: [text](url)
-    const linkMatch = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+    const linkMatch = part.match(LINK_PARSE_REGEX);
     if (linkMatch) {
       const linkText = linkMatch[1];
       const url = linkMatch[2];
-      // Suppress inline memory links so only the single primary memory button below is rendered
-      if (/memory|mimi/i.test(linkText) || /mimi\.akropolys/i.test(url)) {
+      if (MEMORY_LINK_FILTER_REGEX.test(linkText) || MEMORY_URL_FILTER_REGEX.test(url)) {
         return null;
       }
-      const isSafeUrl = /^(https?|mailto|tel):/i.test(url) || url.startsWith('/');
+      const isSafeUrl = SAFE_LINK_REGEX.test(url) || url.startsWith('/');
       if (isSafeUrl) {
         return (
           <a key={key} href={url} target="_blank" rel="noopener noreferrer" className="hsk-markdown-link">
@@ -74,22 +79,19 @@ const parseInline = (text: string, keyPrefix: string): React.ReactNode => {
           </a>
         );
       }
-      return <span key={key}>{parseInline(linkText, key)}</span>; // Fallback to plain text if unsafe
+      return <span key={key}>{parseInline(linkText, key)}</span>;
     }
 
-    // Return standard text
     return part;
   });
 };
 
-// A table can only START on a line beginning with "|"; continuations just need a "|".
 function isTableLine(line: string, inTable: boolean): boolean {
   const t = line.trim();
   if (inTable) return t.includes('|');
   return t.startsWith('|');
 }
 
-// Strips at most one leading + one trailing pipe, so a missing closing pipe never drops the last cell.
 function splitTableCells(rowLine: string): string[] {
   let t = rowLine.trim();
   if (t.startsWith('|')) t = t.slice(1);
@@ -97,24 +99,85 @@ function splitTableCells(rowLine: string): string[] {
   return t.split('|').map(c => c.trim());
 }
 
-// Returning the identical element reference lets React skip reconciling the
-// subtree — without this every streamed token re-parses the whole history.
-const cache = new Map<string, React.ReactNode>();
-const CACHE_MAX = 200;
+export function TableWrapper({ children }: { children: React.ReactNode }) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const [scrollState, setScrollState] = React.useState<'left' | 'middle' | 'right' | 'none'>('none');
+  const [isDragging, setIsDragging] = React.useState(false);
+  const dragRef = React.useRef({ startX: 0, scrollLeft: 0, isDown: false, hasMoved: false });
+
+  const checkScroll = React.useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    const canScroll = el.scrollWidth > el.clientWidth + 2;
+    if (!canScroll) {
+      setScrollState('none');
+      return;
+    }
+    const rtl = getComputedStyle(el).direction === 'rtl';
+    const travelled = Math.abs(el.scrollLeft);
+    const atStart = travelled <= 4;
+    const atEnd = travelled + el.clientWidth >= el.scrollWidth - 4;
+    if (atStart) setScrollState(rtl ? 'right' : 'left');
+    else if (atEnd) setScrollState(rtl ? 'left' : 'right');
+    else setScrollState('middle');
+  }, []);
+
+  React.useEffect(() => {
+    checkScroll();
+    const el = ref.current;
+    if (!el) return;
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(checkScroll) : null;
+    ro?.observe(el);
+    return () => ro?.disconnect();
+  }, [checkScroll]);
+
+  const onMouseDown = (e: React.MouseEvent) => {
+    const el = ref.current;
+    if (!el || el.scrollWidth <= el.clientWidth) return;
+    if ((e.target as HTMLElement).closest('a, button, input')) return;
+    dragRef.current = { startX: e.pageX - el.offsetLeft, scrollLeft: el.scrollLeft, isDown: true, hasMoved: false };
+    setIsDragging(true);
+  };
+
+  const onMouseMove = (e: React.MouseEvent) => {
+    if (!dragRef.current.isDown) return;
+    const el = ref.current;
+    if (!el) return;
+    const x = e.pageX - el.offsetLeft;
+    const walk = (x - dragRef.current.startX) * 1.5;
+    if (Math.abs(walk) > 3) {
+      dragRef.current.hasMoved = true;
+      e.preventDefault();
+      el.scrollLeft = dragRef.current.scrollLeft - walk;
+    }
+  };
+
+  const onMouseUp = () => {
+    dragRef.current.isDown = false;
+    setIsDragging(false);
+  };
+
+  return (
+    <div
+      ref={ref}
+      className={`hsk-table-wrapper hsk-table-wrapper--${scrollState}${isDragging ? ' is-dragging' : ''}`}
+      onScroll={checkScroll}
+      onMouseDown={onMouseDown}
+      onMouseMove={onMouseMove}
+      onMouseUp={onMouseUp}
+      onMouseLeave={onMouseUp}
+    >
+      {children}
+    </div>
+  );
+}
 
 export function renderMarkdown(content: string, streaming = false): React.ReactNode {
-  const cacheKey = `${streaming ? 1 : 0}:${content}`;
-  const cached = cache.get(cacheKey);
-  if (cached !== undefined) return cached;
-  const rendered = buildMarkdown(content, streaming);
-  if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value as string);
-  cache.set(cacheKey, rendered);
-  return rendered;
+  return buildMarkdown(content, streaming);
 }
 
 function buildMarkdown(content: string, streaming: boolean): React.ReactNode {
   const lines = content.split('\n');
-  // While streaming, hold back a trailing table row whose closing pipe hasn't arrived yet.
   if (streaming && lines.length > 0) {
     const last = lines[lines.length - 1];
     if (last.trim().startsWith('|') && !last.trim().endsWith('|')) {
@@ -142,22 +205,17 @@ function buildMarkdown(content: string, streaming: boolean): React.ReactNode {
     const line = lines[i];
     const key = `md-line-${i}`;
 
-    // 1. Empty lines. A blank line is a paragraph break, not a new bubble —
-    // flushing on every one shattered a normal answer (lead-in, list, closing
-    // remark) into three or four stacked bubbles. Blocks that genuinely leave
-    // the bubble (tables, images) still flush below.
     if (!line.trim()) {
       i++;
       continue;
     }
 
-    // 2. Standalone image lines: ![alt](url)
     const standaloneImageMatch = line.trim().match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
     if (standaloneImageMatch) {
       flushTextBubble();
       const alt = standaloneImageMatch[1];
       const url = standaloneImageMatch[2];
-      const isSafeUrl = /^(https?|data:image):/i.test(url);
+      const isSafeUrl = /^(https?|data:image|blob):/i.test(url) || url.startsWith('/');
       if (isSafeUrl) {
         blocks.push(
           <div key={key} className="hsk-markdown-img-block">
@@ -175,7 +233,6 @@ function buildMarkdown(content: string, streaming: boolean): React.ReactNode {
       continue;
     }
 
-    // 3. Headers
     const headerMatch = line.match(/^(#{1,3})\s+(.*)/);
     if (headerMatch) {
       const level = headerMatch[1].length;
@@ -185,7 +242,6 @@ function buildMarkdown(content: string, streaming: boolean): React.ReactNode {
       continue;
     }
 
-    // 4. Unordered Lists (supports -, *, +, and • bullets with optional leading spaces)
     if (line.match(/^[\s]*[-*+•]\s+/)) {
       const listItems: React.ReactNode[] = [];
       while (i < lines.length && lines[i].match(/^[\s]*[-*+•]\s+/)) {
@@ -197,7 +253,6 @@ function buildMarkdown(content: string, streaming: boolean): React.ReactNode {
       continue;
     }
 
-    // 5. Ordered Lists (supports 1., 1), 2., 2) with optional leading spaces)
     if (line.match(/^[\s]*\d+[\.\)]\s+/)) {
       const listItems: React.ReactNode[] = [];
       while (i < lines.length && lines[i].match(/^[\s]*\d+[\.\)]\s+/)) {
@@ -209,46 +264,95 @@ function buildMarkdown(content: string, streaming: boolean): React.ReactNode {
       continue;
     }
 
-    // 6. Tables (Render 100% full width OUTSIDE text speech bubbles)
     if (isTableLine(line, false)) {
       flushTextBubble();
 
-      const tableRows: React.ReactNode[] = [];
+      let headerCells: string[] = [];
+      const rawBodyRows: string[][] = [];
+      let alignments: ('start' | 'center' | 'end')[] = [];
       let isHeader = true;
 
       while (i < lines.length && isTableLine(lines[i], true)) {
         const rowLine = lines[i].trim();
-        // Skip markdown table separator (e.g., |---|---| or |---|---)
         if (rowLine.match(/^\|?[-:| ]+\|?$/) && rowLine.includes('-')) {
+          const sepCells = splitTableCells(rowLine);
+          alignments = sepCells.map(cell => {
+            const trimmed = cell.trim();
+            const startColon = trimmed.startsWith(':');
+            const endColon = trimmed.endsWith(':');
+            if (startColon && endColon) return 'center';
+            if (endColon) return 'end';
+            return 'start';
+          });
           i++;
           isHeader = false;
           continue;
         }
 
         const cells = splitTableCells(rowLine);
-        const Tag = isHeader ? 'th' : 'td';
 
-        tableRows.push(
-          <tr key={`tr-${i}`}>
-            {cells.map((cell, cIdx) => (
-              <Tag key={`td-${i}-${cIdx}`} dir="auto">{parseInline(cell, `td-${i}-${cIdx}`)}</Tag>
-            ))}
-          </tr>
-        );
+        if (isHeader && headerCells.length === 0) {
+          headerCells = cells;
+        } else {
+          rawBodyRows.push(cells);
+        }
         i++;
       }
-      
+
+      const colCount = Math.max(headerCells.length, ...rawBodyRows.map(r => r.length));
+      const finalAlignments: ('start' | 'center' | 'end')[] = [];
+      for (let c = 0; c < colCount; c++) {
+        if (alignments[c]) {
+          finalAlignments[c] = alignments[c];
+        } else if (c === 0) {
+          finalAlignments[c] = 'start';
+        } else {
+          const numericCount = rawBodyRows.filter(r => {
+            const val = (r[c] || '').trim();
+            return /^[\$€£¥+-]?\d+([.,]\d+)?%?$/.test(val) || /^[\$€£¥+-]?\d+([.,]\d+)?\s*(bps|M|K|B)?$/i.test(val);
+          }).length;
+          finalAlignments[c] = numericCount >= Math.ceil(rawBodyRows.length / 2) ? 'end' : 'start';
+        }
+      }
+
+      const headerRow = headerCells.length > 0 ? (
+        <tr key={`tr-head-${key}`}>
+          {headerCells.map((cell, cIdx) => (
+            <th
+              key={`th-${key}-${cIdx}`}
+              style={{ textAlign: finalAlignments[cIdx] || 'start' }}
+            >
+              {}
+              <bdi>{parseInline(cell, `th-${key}-${cIdx}`)}</bdi>
+            </th>
+          ))}
+        </tr>
+      ) : null;
+
+      const bodyRows = rawBodyRows.map((cells, rIdx) => (
+        <tr key={`tr-body-${key}-${rIdx}`}>
+          {cells.map((cell, cIdx) => (
+            <td
+              key={`td-${key}-${rIdx}-${cIdx}`}
+              style={{ textAlign: finalAlignments[cIdx] || 'start' }}
+            >
+              <bdi>{parseInline(cell, `td-${key}-${rIdx}-${cIdx}`)}</bdi>
+            </td>
+          ))}
+        </tr>
+      ));
+
       blocks.push(
-        <div key={`table-wrapper-${key}`} className="hsk-table-wrapper">
+        <TableWrapper key={`table-wrapper-${key}`}>
           <table className="hsk-markdown-table">
-            <tbody>{tableRows}</tbody>
+            {headerRow && <thead>{headerRow}</thead>}
+            <tbody>{bodyRows}</tbody>
           </table>
-        </div>
+        </TableWrapper>
       );
       continue;
     }
 
-    // 7. Default Paragraph
     currentTextNodes.push(
       <p key={key} className="hsk-markdown-p">
         {parseInline(line, key)}

@@ -1,30 +1,34 @@
-/* kiku has no brand font of its own — it inherits the host page's, and only
-   loads a webfont (via useScriptFontFace) when the shopper's chosen language
-   needs a script the host's font cannot draw. That font is self-hosted rather
-   than @import-ed from fonts.googleapis.com, which strict merchant CSPs block
-   outright and which hands every shopper's IP to Google from inside someone
-   else's page. */
 
-@layer components {
-/* ==========================================================================
-   kiku SDK Styles
-   ========================================================================== */
 
-:root {
+@property --hsk-chat-bg { syntax: '<color>'; inherits: true; initial-value: #0a0a0a; }
+@property --hsk-chat-text { syntax: '<color>'; inherits: true; initial-value: #f0efed; }
+@property --hsk-chat-muted { syntax: '<color>'; inherits: true; initial-value: #888888; }
+@property --hsk-chat-divide { syntax: '<color>'; inherits: true; initial-value: rgba(255, 255, 255, 0.08); }
+@property --hsk-chat-input-bg { syntax: '<color>'; inherits: true; initial-value: #191919; }
+@property --hsk-chat-source-bg { syntax: '<color>'; inherits: true; initial-value: rgba(255, 255, 255, 0.04); }
+@property --hsk-fade-bg { syntax: '<color>'; inherits: true; initial-value: #0a0a0a; }
+@property --hsk-surface-1 { syntax: '<color>'; inherits: true; initial-value: rgba(255, 255, 255, 0.06); }
+@property --hsk-surface-2 { syntax: '<color>'; inherits: true; initial-value: #1f1f22; }
+@property --hsk-bubble-bg { syntax: '<color>'; inherits: true; initial-value: #1f1f22; }
+@property --hsk-think-text { syntax: '<color>'; inherits: true; initial-value: #a6a6a6; }
+@property --hsk-placeholder { syntax: '<color>'; inherits: true; initial-value: #555555; }
+@property --hsk-grid-bg { syntax: '<color>'; inherits: true; initial-value: #1a1a1c; }
+@property --hsk-active-bg { syntax: '<color>'; inherits: true; initial-value: #f0efed; }
+@property --hsk-on-active { syntax: '<color>'; inherits: true; initial-value: #0a0a0a; }
+@property --hsk-src-title { syntax: '<color>'; inherits: true; initial-value: #f9fafb; }
+@property --hsk-src-desc { syntax: '<color>'; inherits: true; initial-value: #9ca3af; }
+@property --hsk-price-bg { syntax: '<color>'; inherits: true; initial-value: rgba(255, 255, 255, 0.08); }
+@property --hsk-price-text { syntax: '<color>'; inherits: true; initial-value: #ff7a45; }
+@property --hsk-sheet-bg { syntax: '<color>'; inherits: true; initial-value: #1f1f22; }
+@property --hsk-primary { syntax: '<color>'; inherits: true; initial-value: #ff6a33; }
+
+:host, :root {
   --hsk-border-radius: 0px;
   --hsk-brand-green: #2D7A4B;
-  /* No brand font: kiku inherits the host page's own font by default. Single-
-     level var() references below (font-family: var(--hsk-font)) fall through
-     to the inherited value when --hsk-font is unset, per spec — verified live
-     in Chrome before relying on it. theme.fontFamily / --chat-font-family
-     remain the explicit opt-in for a font that differs from the page's. */
-  --hsk-default-font-size: 16px;
+    --hsk-font: "Geist", "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --hsk-default-font-size: 15px;
 }
 
-/* ─── Mobile Touch Fixes ────────────────────────────────────────────────────
-   Eliminates the 300ms tap delay on iOS/Android and removes ghost tap
-   highlight that prevents touch events from firing on mobile browsers.
-   ─────────────────────────────────────────────────────────────────────────── */
 .hsk-cb-btn,
 .hsk-cb-close,
 .hsk-cb-topbar-btn,
@@ -39,9 +43,48 @@
   --hsk-font-size: 16px;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
-  /* Set once at the root so every descendant inherits the integrator's font;
-     rules that only set font-size used to fall through to the host page's. */
-  font-family: var(--hsk-font);
+    font-family: var(--hsk-font);
+}
+
+.hsk-cb-overlay {
+  transition:
+    --hsk-chat-bg 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    --hsk-chat-text 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    --hsk-chat-muted 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    --hsk-chat-divide 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    --hsk-chat-input-bg 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    --hsk-surface-1 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    --hsk-surface-2 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    --hsk-bubble-bg 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    --hsk-primary 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    --hsk-grid-bg 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    --hsk-active-bg 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    --hsk-on-active 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    --hsk-src-title 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    --hsk-src-desc 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    --hsk-price-bg 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    --hsk-price-text 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    --hsk-sheet-bg 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    color 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    fill 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    stroke 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.hsk-kiku-avatar,
+.hsk-kiku-avatar * {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-cb-overlay,
+  .hsk-cb-overlay *,
+  .hsk-cb-overlay *::before,
+  .hsk-cb-overlay *::after {
+    transition: none;
+  }
 }
 
 .hsk-cb-overlay button,
@@ -65,7 +108,30 @@
   font-family: var(--hsk-font);
 }
 
-/* ─── ChatWidget ─── */
+:host, :root,
+.hsk-cb-btn,
+.hsk-cb-overlay,
+.hsk-chat-widget {
+  --hsk-marble-1: color-mix(in srgb, var(--hsk-primary, #ff6a33) 12%, #fffaf4);
+  --hsk-marble-2: color-mix(in srgb, var(--hsk-primary, #ff6a33) 30%, #fdf0e4);
+  --hsk-marble-3: color-mix(in srgb, var(--hsk-primary, #ff6a33) 62%, #e8cbb0);
+  --hsk-marble-4: color-mix(in srgb, var(--hsk-primary, #ff6a33) 85%, #6d3a1c);
+  --hsk-marble-sheen: .5;
+}
+
+@media (prefers-color-scheme: dark) {
+  :host, :root,
+  .hsk-cb-btn,
+  .hsk-cb-overlay,
+  .hsk-chat-widget {
+    --hsk-marble-1: #FFFDF6;
+    --hsk-marble-2: #FBF3E2;
+    --hsk-marble-3: color-mix(in srgb, var(--hsk-primary, #ff6a33) 20%, #EDDFC4);
+    --hsk-marble-4: color-mix(in srgb, var(--hsk-primary, #ff6a33) 42%, #D8C39C);
+    --hsk-marble-sheen: .9;
+  }
+}
+
 .hsk-chat-widget {
   --hsk-bg: var(--chat-bg-color, #ffffff);
   --hsk-text: var(--chat-text-color, #1f1f1f);
@@ -78,8 +144,7 @@
   height: 100%;
   min-height: 320px;
   font-family: var(--hsk-font);
-  /* Host pages set these on body and the widget inherited them. */
-  letter-spacing: normal;
+    letter-spacing: normal;
   word-spacing: normal;
   text-transform: none;
   background: var(--hsk-bg);
@@ -246,7 +311,7 @@
   display: inline-block;
   width: 6px;
   height: 1.1em;
-  margin-left: 3px;
+  margin-inline-start: 3px;
   vertical-align: -2px;
   background-color: var(--hsk-primary);
   animation: hsk-cursor-blink 0.9s infinite;
@@ -308,7 +373,7 @@
 }
 
 .hsk-sources-container {
-  margin-left: 36px;
+  margin-inline-start: 36px;
 }
 
 .hsk-sources {
@@ -617,8 +682,6 @@
   padding: 8px;
 }
 
-
-/* ─── KikuButton & ChatModal ─── */
 .hsk-cb-btn {
   --hsk-primary: var(--chat-primary-color, #ff6a33);
   display: inline-flex;
@@ -656,22 +719,14 @@
 
 .hsk-cb-overlay {
   --hsk-primary: var(--chat-primary-color, #ff6a33);
-  /* Only .hsk-chat-widget declared this, so inside the modal every
-     `font-family: var(--hsk-font)` was invalid at computed-value time and
-     quietly fell through to inheritance — meaning the panel rendered in
-     whatever face the merchant's page happened to use. A UI stack has to be
-     declared here too, or the widget has no typography of its own. */
-  --hsk-font: var(--chat-font-family, ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif);
-  /* Typography inherits, so the merchant's own tracking reshaped our text the
-     same way their font family did. Reset it here and let the widget's own
-     rules opt back in where they mean to. */
-  letter-spacing: normal;
+    --hsk-font: var(--chat-font-family, "Geist", ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif);
+    letter-spacing: normal;
   word-spacing: normal;
   font-kerning: normal;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   --hsk-font-size: var(--hsk-desktop-font-size, 15px);
-  --hsk-mobile-font-size: 13.5px;
+  --hsk-mobile-font-size: 14px;
   position: fixed !important;
   inset: 0 !important;
   width: 100vw !important;
@@ -681,7 +736,7 @@
   display: flex !important;
   flex-direction: column !important;
   overflow: hidden !important;
-  animation: hsk-overlay-in .2s ease-out both;
+  animation: hsk-overlay-in .2s ease-out;
   background: var(--hsk-chat-bg, #ffffff) !important;
   box-sizing: border-box !important;
   margin: 0 !important;
@@ -693,18 +748,134 @@
   to   { opacity: 1; }
 }
 
+.hsk-cb-overlay.hsk-cb-overlay--grows {
+  animation: hsk-overlay-in .18s cubic-bezier(.16, 1, .3, 1) both !important;
+}
+
+.hsk-cb-overlay.hsk-cb-overlay--grows .hsk-cb-panel {
+  transform-origin: var(--hsk-ox, 50%) var(--hsk-oy, 50%);
+  animation: hsk-panel-float-in .22s cubic-bezier(.16, 1, .3, 1) both !important;
+}
+
+@keyframes hsk-panel-float-in {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(.985);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.hsk-cb-overlay.hsk-cb-overlay--grows .hsk-cb-msgs {
+  animation: hsk-content-fade .2s cubic-bezier(.16, 1, .3, 1) both;
+}
+
+@keyframes hsk-content-fade {
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hsk-cb-lang-chip,
+.hsk-cb-chip {
+  animation: hsk-pill-wave .22s cubic-bezier(.16, 1, .3, 1) both;
+  animation-delay: calc(0.04s + var(--hsk-pill-idx, 0) * 0.012s);
+}
+
+.hsk-cb-lang-chips-hint {
+  animation: hsk-content-fade .22s cubic-bezier(.16, 1, .3, 1) both;
+  animation-delay: calc(0.04s + var(--hsk-pill-idx, 0) * 0.012s);
+}
+
+@keyframes hsk-pill-wave {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.hsk-cb-overlay.hsk-cb-overlay--grows .hsk-cb-input-wrap {
+  animation: hsk-input-dock .22s cubic-bezier(.16, 1, .3, 1) both;
+}
+
+@keyframes hsk-input-dock {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hsk-cb-overlay.hsk-cb-overlay--grows .hsk-cb-hello-avatar {
+  animation: hsk-avatar-spring .22s cubic-bezier(.16, 1, .3, 1) both;
+}
+
+@keyframes hsk-avatar-spring {
+  0% {
+    opacity: 0;
+    transform: scale(.92);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.hsk-cb-overlay.hsk-cb-overlay--grows .hsk-cb-hello-wrap {
+  animation: hsk-hello-spring .2s cubic-bezier(.16, 1, .3, 1) both;
+}
+
+@keyframes hsk-hello-spring {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-cb-overlay.hsk-cb-overlay--grows {
+    animation: none !important;
+    -webkit-clip-path: none !important;
+    clip-path: none !important;
+  }
+  .hsk-cb-overlay.hsk-cb-overlay--grows .hsk-cb-panel,
+  .hsk-cb-overlay.hsk-cb-overlay--grows .hsk-cb-msgs,
+  .hsk-cb-overlay.hsk-cb-overlay--grows .hsk-cb-lang-chip,
+  .hsk-cb-overlay.hsk-cb-overlay--grows .hsk-cb-chip,
+  .hsk-cb-overlay.hsk-cb-overlay--grows .hsk-cb-input-wrap,
+  .hsk-cb-overlay.hsk-cb-overlay--grows .hsk-cb-hello-avatar,
+  .hsk-cb-overlay.hsk-cb-overlay--grows .hsk-cb-hello-wrap {
+    animation: none !important;
+  }
+}
+
 .hsk-cb-panel {
   position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
-  /* The widest bubble is 560px, so a 960px panel spent its extra 400px on
-     empty gutter — the conversation drifted to one edge of a mostly blank
-     column. Sized to the content it actually holds. */
-  max-width: 720px;
+    max-width: 720px;
   width: 100%;
   margin: 0 auto;
-  animation: hsk-panel-in .28s cubic-bezier(.34,1.2,.64,1) both;
+  animation: hsk-panel-in .28s cubic-bezier(.34,1.2,.64,1);
 }
 
 .hsk-cb-main {
@@ -722,20 +893,167 @@
 }
 
 .hsk-cb-topbar {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
-  padding: 20px 28px 12px;
+  padding: 14px var(--hsk-gutter, 24px) 10px;
   flex-shrink: 0;
   position: relative;
   z-index: 10;
-  background: linear-gradient(to bottom, var(--hsk-chat-bg, #ffffff) 70%, color-mix(in srgb, var(--hsk-chat-bg, #ffffff) 60%, transparent) 88%, transparent 100%);
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.hsk-cb-topbar::after {
+  display: none !important;
 }
 
 .hsk-cb-topbar-left {
   display: flex;
   align-items: center;
   gap: 10px;
+  justify-self: start;
+  min-width: 0;
+}
+
+.hsk-cb-topbar-mark {
+  justify-self: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 0;
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.hsk-cb-topbar-mark:hover {
+  transform: translateY(-1px);
+}
+
+.hsk-cb-topbar-mark[data-unread="true"] .hsk-cb-topbar-name {
+  background: var(--hsk-primary, #ff6a33);
+  color: #fff;
+    box-shadow: 0 0 0 3px var(--hsk-chat-bg, #ffffff);
+  animation: hsk-unread-pill .9s cubic-bezier(.34, 1.56, .64, 1) infinite;
+}
+
+@keyframes hsk-unread-pill {
+  0%, 100% { transform: scale(1, 1); }
+  38%      { transform: scale(1.08, .92); }
+  62%      { transform: scale(.97, 1.03); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-cb-topbar-mark[data-unread="true"] .hsk-cb-topbar-name {
+    animation: none;
+  }
+}
+
+.hsk-cb-topbar-name {
+  margin-top: -5px;
+  padding: 3px 13px;
+  white-space: nowrap;
+  border-radius: 999px;
+  background: var(--hsk-surface-2);
+  box-shadow: 0 0 0 3px var(--hsk-chat-bg), 0 1px 3px rgba(0, 0, 0, .12);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 18px;
+  letter-spacing: -.01em;
+  color: var(--hsk-name-text, var(--hsk-chat-text));
+  transform-origin: 50% 0%;
+  transition: transform 0.18s cubic-bezier(0.34, 1.8, 0.64, 1);
+}
+
+.hsk-cb-topbar-mark {
+  position: relative;
+  z-index: 100;
+}
+
+.hsk-cb-topbar-ooze-menu {
+  position: absolute;
+  top: calc(100% + 12px) !important;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 216px;
+  padding: 6px;
+  border-radius: 20px;
+  background: var(--hsk-chat-source-bg, rgba(255, 255, 255, 0.08));
+  border: none !important;
+  box-shadow: none !important;
+  z-index: 1000;
+  animation: hsk-topbar-ooze 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.hsk-cb-topbar-ooze-menu .hsk-cb-theme-2x2-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, 1fr) !important;
+  gap: 6px !important;
+  width: 100% !important;
+  box-shadow: none !important;
+}
+
+.hsk-cb-topbar-ooze-menu .hsk-cb-theme-grid-item {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 8px 11px;
+  border-radius: 14px;
+  border: none !important;
+  box-shadow: none !important;
+  font-size: 11.5px;
+  font-weight: 550;
+  box-sizing: border-box;
+  white-space: nowrap;
+}
+
+@keyframes hsk-topbar-ooze {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-6px) scale(0.94);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+.hsk-cb-topbar-mark[data-impacting="true"] .hsk-cb-topbar-name {
+  transform: translateY(1.5px) scale(1.09, 0.91);
+  box-shadow:
+    0 0 0 3px var(--hsk-chat-bg, #ffffff),
+    0 2px 10px var(--hsk-contact-glow, rgba(19, 78, 61, 0.45));
+}
+
+.hsk-cb-back {
+  width: 34px; height: 34px;
+  border-radius: 999px;
+  border: none;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--hsk-surface-1);
+  color: var(--hsk-chat-muted);
+  cursor: pointer;
+  transition: transform .18s cubic-bezier(.34,1.56,.64,1);
+}
+
+.hsk-cb-back:hover { background: var(--hsk-chat-divide, rgba(0,0,0,.09)); }
+.hsk-cb-back:active { transform: scale(.94); }
+
+.hsk-cb-panel[dir="rtl"] .hsk-cb-back-icon {
+  display: inline-flex;
+  transform: scaleX(-1);
+}
+
+.hsk-cb-topbar-actions {
+  justify-self: end;
 }
 
 .hsk-cb-topbar-title {
@@ -751,15 +1069,293 @@
   margin-top: 2px;
 }
 
+.hsk-cb-kiku-id-rail {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  /* Pills on Left Rail */
+  .hsk-cb-kiku-id-rail.hsk-cb-kiku-id-rail--left {
+    display: flex;
+    position: absolute;
+    left: auto !important;
+    right: 100% !important;
+    margin-right: 28px !important;
+    transform: none !important;
+    top: auto !important;
+    bottom: 48px !important;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: flex-start;
+    gap: 8px;
+    max-width: 240px;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    font-family: inherit;
+    z-index: 10;
+  }
+
+  /* Pills on Right Rail */
+  .hsk-cb-kiku-id-rail.hsk-cb-kiku-id-rail--right {
+    display: flex;
+    position: absolute;
+    left: 100% !important;
+    right: auto !important;
+    margin-left: 28px !important;
+    transform: none !important;
+    top: auto !important;
+    bottom: 48px !important;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: flex-start;
+    gap: 8px;
+    max-width: 240px;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    font-family: inherit;
+    z-index: 10;
+  }
+
+  .hsk-cb-panel[data-script="nonlatin"] .hsk-cb-kiku-id-rail {
+    bottom: 50px !important;
+  }
+
+  .hsk-cb-panel[data-nastaliq="true"] .hsk-cb-kiku-id-rail {
+    bottom: 58px !important;
+  }
+
+  .hsk-cb-kiku-id-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+    padding: 5px 12px;
+    border-radius: 999px;
+    border: none !important;
+    background: var(--hsk-chat-source-bg, rgba(255, 255, 255, 0.05));
+    color: var(--hsk-chat-muted, #71717a);
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .hsk-cb-kiku-id-pill:hover {
+    color: var(--hsk-primary, #ff6a33);
+  }
+
+  .hsk-cb-kiku-id-rail-val {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px;
+    letter-spacing: -.01em;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .hsk-cb-kiku-id-pill svg {
+    flex: none;
+    opacity: 0.8;
+  }
+
+  /* Hidden Theme Squircle & 2x2 Expand (Shadowless & Gooey) */
+  .hsk-cb-theme-squircle-wrap {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 0;
+    margin: 0;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent;
+    transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .hsk-cb-theme-squircle-wrap.is-open {
+    padding: 6px;
+    border-radius: 18px;
+    background: var(--hsk-chat-source-bg, rgba(255, 255, 255, 0.06));
+    box-shadow: none !important;
+  }
+
+  .hsk-cb-theme-squircle-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 16px;
+    border: none !important;
+    outline: none !important;
+    background: var(--hsk-surface-1) !important;
+    color: var(--hsk-chat-text) !important;
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: none !important;
+  }
+
+  .hsk-cb-theme-squircle-trigger:hover {
+    background: var(--hsk-primary, #ff6a33);
+    color: #ffffff;
+    box-shadow: none !important;
+  }
+
+  .hsk-cb-theme-trigger-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .hsk-cb-theme-trigger-icon svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  .hsk-cb-theme-trigger-label {
+    letter-spacing: -0.01em;
+  }
+
+  .hsk-cb-theme-2x2-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 5px;
+    box-shadow: none !important;
+    transform-origin: bottom center;
+    animation: hsk-theme-morph-in 0.26s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .hsk-cb-theme-squircle-wrap.is-closing .hsk-cb-theme-2x2-grid {
+    animation: hsk-theme-morph-out 0.2s cubic-bezier(0.4, 0, 0.9, 0.4) both;
+  }
+
+  .hsk-cb-theme-grid-item {
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 6px;
+    padding: 7px 11px;
+    border-radius: 13px;
+    border: none !important;
+    outline: none !important;
+    background: var(--hsk-chat-bg, #1a1a1c);
+    color: var(--hsk-chat-muted, #a1a1aa);
+    font-size: 11px;
+    font-weight: 550;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: none !important;
+  }
+
+  .hsk-cb-theme-grid-item svg {
+    flex-shrink: 0;
+    width: 12px;
+    height: 12px;
+  }
+
+  .hsk-cb-theme-grid-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--hsk-chat-text, #f0efed);
+    box-shadow: none !important;
+  }
+
+  .hsk-cb-theme-grid-item.is-active {
+    background: var(--hsk-primary, #ff6a33) !important;
+    color: #ffffff !important;
+    box-shadow: none !important;
+  }
+}
+
+/* Mobile Gooey Oozing Theme Modal (drops from topbar on long press) */
+.hsk-cb-mobile-theme-ooze {
+  position: absolute;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(88vw, 230px);
+  padding: 10px 12px 12px;
+  border-radius: 22px;
+  border: none !important;
+  background: var(--hsk-chat-bg, #1a1a1c);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  z-index: 9999;
+  animation: hsk-ooze-in 0.38s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (min-width: 900px) {
+  .hsk-cb-mobile-theme-ooze {
+    display: none !important;
+  }
+}
+
+.hsk-cb-mobile-theme-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 2px 4px 6px;
+}
+
+.hsk-cb-mobile-theme-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--hsk-chat-muted, #71717a);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.hsk-cb-mobile-theme-close {
+  border: none !important;
+  outline: none !important;
+  background: none;
+  font-size: 12px;
+  color: var(--hsk-chat-muted, #71717a);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.hsk-cb-mobile-theme-close:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--hsk-chat-text, #f0efed);
+}
+
+@keyframes hsk-ooze-in {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-16px) scale(0.88);
+    filter: blur(6px);
+  }
+  65% {
+    transform: translateX(-50%) translateY(3px) scale(1.02);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
 .hsk-cb-topbar-actions {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-/* Chrome controls keep their own radius: --hsk-border-radius tunes content
-   surfaces, and an integrator choosing square cards did not ask for the close
-   button to become a hard-edged box. */
 .hsk-cb-topbar-btn {
   height: 34px;
   padding: 0 14px;
@@ -806,30 +1402,22 @@
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
-  /* `none`, not `contain`: contain stops scroll chaining to the host page but
-     leaves this element's own elastic bounce, which then stacks with the sheet
-     drag's rubber-band — two elastic effects on one gesture. */
   overscroll-behavior-y: none;
-  /* Scroll anchoring rewrites scrollTop behind our back whenever content above
-     the viewport resizes (a bubble growing, an image loading). With a custom
-     scroller also writing scrollTop each frame, the two take turns correcting
-     each other and the tail of every scroll shimmers. */
   overflow-anchor: none;
-  padding: 8px 28px 0;
+  padding: 16px var(--hsk-gutter, 24px) 16px;
   display: flex;
   flex-direction: column;
   gap: 0;
-  /* A visible track reserves its own width on Windows/Chrome, so the instant
-     a conversation grows tall enough to scroll, every bubble shifts a few
-     pixels left. Hidden outright; .hsk-cb-jump-bottom is the replacement
-     affordance for "there's more below" instead of a track thumb. */
   scrollbar-width: none;
   -ms-overflow-style: none;
+  mask-image: linear-gradient(to bottom, transparent 0px, #000000 8px, #000000 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0px, #000000 8px, #000000 100%);
 }
 
-/* While the list is in motion, cards sliding under a stationary cursor would
-   each fire their hover lift and drop again. Suppress hover on the children
-   only — the scroller itself stays hit-testable so wheel events still land. */
+.hsk-cb-msgs > :first-child {
+  margin-top: auto;
+}
+
 .hsk-cb-msgs.hsk-scrolling > * {
   pointer-events: none;
 }
@@ -847,46 +1435,91 @@
   align-items: flex-start;
   justify-content: center;
   gap: 14px;
-  padding: 40px clamp(24px, 6%, 56px) 48px;
-  text-align: left;
+  padding: 24px 0 32px;
+  width: 100%;
+  text-align: start;
+}
+
+.hsk-cb-onboarding-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  gap: 10px;
+}
+
+.hsk-cb-onboarding-head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.hsk-cb-step-badge {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--hsk-chat-muted, #71717a);
+  background: var(--hsk-chat-source-bg, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--hsk-chat-border, rgba(255, 255, 255, 0.08));
+  padding: 4px 10px;
+  border-radius: 999px;
+  line-height: 1;
 }
 
 .hsk-cb-hello-wrap {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
-  padding: 4px 0;
+  text-align: start;
+  gap: 6px;
+  padding: 0;
   width: 100%;
 }
 
-/* Big, sparse greeting that fills the panel — the first thing a new shopper sees. */
+.hsk-cb-hello-avatar {
+  --hsk-avatar-size: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: auto;
+  margin-inline-start: calc(var(--hsk-avatar-size, 80px) * -0.25);
+  margin-inline-end: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+  animation: hsk-avatar-spring .42s cubic-bezier(.16, 1, .3, 1) both;
+}
+
 .hsk-cb-hello {
   margin: 0;
-  font-size: clamp(22px, 5vw, 32px);
+  font-size: clamp(24px, 4.5vw, 34px);
   font-weight: 500;
-  line-height: 1.15;
+  line-height: 1.2;
   letter-spacing: -0.02em;
-  color: var(--hsk-chat-text, #111);
+    color: color-mix(in srgb, var(--hsk-chat-text, #111) 55%, var(--hsk-chat-muted, #8b8b8f));
+  text-align: start;
 }
 .hsk-cb-hello b {
   font-weight: 700;
-  color: var(--hsk-primary, #007aff);
+  color: var(--hsk-primary, #ff6a33);
 }
 
 .hsk-cb-hello-lead {
   margin: 0;
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 15px;
+    line-height: 22px;
   color: var(--hsk-chat-muted, #5f6368);
-  max-width: 36ch;
+  max-width: 42ch;
+  text-align: start;
 }
 
 .hsk-cb-hello-ask {
-  margin: 4px 0 2px;
-  font-size: 15px;
+  margin: 2px 0 2px;
+  font-size: 16px;
   font-weight: 500;
   color: var(--hsk-chat-text, #111);
+  text-align: start;
 }
 
 .hsk-cb-hello-skip {
@@ -903,7 +1536,7 @@
 .hsk-cb-hello-skip:hover { color: var(--hsk-chat-text, #111); }
 
 .hsk-cb-step {
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -911,16 +1544,12 @@
 }
 
 .hsk-cb-hello-hint {
-  margin: 2px 0 0;
+  margin: 4px 0 0;
   font-size: 12px;
   color: var(--hsk-chat-muted, #888);
+  text-align: start;
 }
 
-/* Two side-by-side previews of a real entity, so the shopper picks by seeing
-   rather than by reading a description. */
-/* Matches the real result cards (.hsk-cb-source): square image, no border, no
-   card chrome. These previews exist to look like an actual result, so they
-   should be built from the same parts rather than a bespoke bordered box. */
 .hsk-cb-entlang-cards {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 188px));
@@ -934,7 +1563,7 @@
   flex-direction: column;
   gap: 6px;
   padding: 0;
-  text-align: left;
+  text-align: start;
   background: transparent;
   border: none;
   cursor: pointer;
@@ -951,7 +1580,7 @@
 }
 
 .hsk-cb-entlang-tag {
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--hsk-primary, #ff6a33);
 }
@@ -962,8 +1591,6 @@
   gap: 4px;
 }
 
-/* Square, like the real result cards — the grid caps the column at 188px, so
-   aspect-ratio 1 gives the same 188x188 tile rather than a wide letterbox. */
 .hsk-cb-entlang-img {
   width: 100%;
   aspect-ratio: 1;
@@ -977,8 +1604,6 @@
   background: var(--hsk-chat-divide, rgba(0, 0, 0, 0.06));
 }
 
-/* Clips the hover zoom, matching .hsk-cb-src-imgwrap. Must wrap ONLY the
-   image — putting overflow on the preview would clip the text under it. */
 .hsk-cb-entlang-imgwrap {
   display: block;
   overflow: hidden;
@@ -987,7 +1612,7 @@
 }
 
 .hsk-cb-entlang-title {
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   line-height: 1.25;
   color: var(--hsk-chat-text, #111);
@@ -1000,19 +1625,17 @@
 }
 
 .hsk-cb-entlang-price {
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--hsk-primary, #ff6a33);
 }
 
 .hsk-cb-entlang-note {
-  font-size: 10.5px;
+  font-size: 11px;
   line-height: 1.35;
   color: var(--hsk-chat-muted, #8a8f98);
 }
 
-/* Shown while the preview round trip is in flight — an empty grey square with
-   no text reads as broken, a pulsing skeleton reads as loading. */
 .hsk-cb-entlang-skeleton {
   background: var(--hsk-chat-divide, rgba(0, 0, 0, 0.06));
   animation: hsk-entlang-pulse 1.4s ease-in-out infinite;
@@ -1041,15 +1664,6 @@
   transform: none;
 }
 
-/* ── RTL ──────────────────────────────────────────────────────────────────
-   dir="rtl" on the panel flips anything expressed logically (flex alignment,
-   text-align), but not physical properties. These are the ones that would
-   otherwise strand a shopper's own bubble on the wrong side in Arabic,
-   Hebrew, Farsi or Urdu. */
-/* Keep the scrollbar on the right even in RTL. A scroll container inherits
-   direction, which moves its scrollbar to the left edge — technically correct
-   for RTL, but jarring inside an otherwise-normal page. The container stays
-   LTR and its children are flipped back. */
 .hsk-cb-panel[dir="rtl"] .hsk-cb-msgs {
   direction: ltr;
 }
@@ -1058,26 +1672,11 @@
   direction: rtl;
 }
 
-.hsk-cb-panel[dir="rtl"] .hsk-cb-user-msg {
-  margin-left: 0;
-  margin-right: auto;
-}
-
-/* No RTL radius override. These used to square the corner the old notch-style
-   tail attached to; against the cutout tail that 4px corner pulls the bubble's
-   edge inward far enough for the cutout to swallow the tail's crescent whole,
-   so RTL rendered a plain rounded rectangle with no tail at all. The corners
-   are symmetric now and the ::before/::after mirroring below does the work. */
-
 .hsk-cb-panel[dir="rtl"] .hsk-cb-user-imgs {
   margin-left: 0;
   margin-right: auto;
 }
 
-/* `overflow-wrap: anywhere` breaks at any glyph, which in Arabic script lands
-   inside a connected cluster and severs the ligature — the same failure the SSE
-   token space caused. Break only when a word genuinely cannot fit, and drop the
-   negative tracking, which crowds joined forms. */
 .hsk-cb-panel[dir="rtl"] .hsk-cb-user-bubble,
 .hsk-cb-panel[dir="rtl"] .hsk-cb-ai-text {
   word-break: normal;
@@ -1085,13 +1684,11 @@
   letter-spacing: normal;
 }
 
-/* 1.15 clipped Persian ascenders and below-dots; the nonlatin rule skips this one. */
 .hsk-cb-panel[dir="rtl"] .hsk-cb-hello {
   line-height: 1.6;
   letter-spacing: normal;
 }
 
-/* Tooltips and the @kiku picker anchor off the left edge in LTR. */
 .hsk-cb-panel[dir="rtl"] .hsk-cb-entlang-cards {
   justify-content: end;
 }
@@ -1099,194 +1696,425 @@
 .hsk-cb-lang-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin: 6px 0 2px;
+  gap: 8px;
+  margin: 10px 0 4px;
 }
 
 .hsk-cb-lang-chip {
-  padding: 5px 12px;
-  font-size: 12.5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 6px 16px;
+  font-size: 14px;
   font-weight: 500;
+  line-height: 1;
   color: var(--hsk-chat-text, #111);
   background: var(--hsk-chat-source-bg, rgba(0, 0, 0, 0.04));
-  border: 1px solid var(--hsk-chat-border, rgba(0, 0, 0, 0.08));
-  border-radius: 18px;
+  border: 1px solid var(--hsk-chat-border, rgba(0, 0, 0, 0.09));
+  border-radius: 999px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Wordless placeholder held while a freshly chosen language is being fetched.
-   Sized to the copy it replaces so the step doesn't resize when text lands. */
+.hsk-cb-lang-chip:hover {
+  background: var(--hsk-primary, #ff6a33);
+  color: #ffffff;
+  border-color: var(--hsk-primary, #ff6a33);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--hsk-primary, #ff6a33) 25%, transparent);
+}
+
+.hsk-cb-lang-chip:active {
+  transform: scale(0.96);
+}
+
+@media (prefers-color-scheme: dark) {
+  .hsk-cb-lang-chip {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #f4f4f5;
+  }
+}
+
+[data-hsk-theme="dark"] .hsk-cb-lang-chip {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #f4f4f5;
+}
+
+.hsk-cb-lang-chips-hint {
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+  color: var(--hsk-chat-muted, #71717a);
+  padding: 0 6px;
+  margin-inline-start: 4px;
+  user-select: none;
+  align-self: center;
+}
+
 .hsk-cb-chrome-loading {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  align-items: flex-start;
+  text-align: start;
+  gap: 12px;
   width: 100%;
-  max-width: 320px;
-  margin: 6px 0 2px;
+  max-width: 480px;
+  margin: 4px 0 2px;
+  animation: hsk-content-fade 0.3s ease-out both;
 }
 
-/* A language with no shipped locale file goes through live translation, which
-   can run 15–40s (uiStringsDeadline scales with dictionary size and retries).
-   A skeleton that only breathes reads identical at 2s and at 25s, and a wait
-   that long with no visible progress starts to look hung. The moving
-   highlight is the actual fix — sweeping motion reads as "still working" in a
-   way a synchronized opacity pulse does not — kept wordless because any text
-   here would have to be in English, the exact thing this flow exists to avoid. */
-.hsk-cb-chrome-loading-bar {
+.hsk-cb-chrome-loading-header {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: start;
+  gap: 6px;
+  width: 100%;
+}
+
+.hsk-cb-chrome-loading-sub {
+  margin: 0;
+  font-size: 15px;
+  color: var(--hsk-chat-muted, #71717a);
+  line-height: 1.45;
+  text-align: start;
+}
+
+.hsk-cb-chrome-loading-sub b {
+  color: var(--hsk-chat-text, #f4f4f5);
+  font-weight: 600;
+}
+
+.hsk-cb-chrome-progress {
+  height: 3px;
+  width: 100%;
+  border-radius: 3px;
+  background: var(--hsk-chat-source-bg, rgba(255, 255, 255, 0.08));
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+/* A rainbow shimmer rather than a filling bar: it reads as "working" without */
+.hsk-cb-chrome-progress-track {
+  height: 100%;
+  width: 100%;
+  border-radius: 3px;
+  background: linear-gradient(
+    90deg,
+    #ff6a33, #f7b733, #43c59e, #3d8bfd, #9b5de5, #ff5d8f, #ff6a33
+  );
+  background-size: 300% 100%;
+  animation: hsk-chrome-rainbow 2.6s linear infinite;
+}
+
+/* the sheen that travels over it, so it shimmers rather than just cycling */
+.hsk-cb-chrome-progress {
   position: relative;
-  height: 13px;
-  border-radius: 7px;
-  background: var(--hsk-chat-source-bg, rgba(0, 0, 0, 0.06));
   overflow: hidden;
 }
 
-.hsk-cb-chrome-loading-bar::after {
+.hsk-cb-chrome-progress::after {
   content: '';
   position: absolute;
   inset: 0;
   background: linear-gradient(
-    90deg,
-    transparent,
-    color-mix(in srgb, var(--hsk-chat-text, #1f1f1f) 10%, transparent),
-    transparent
+    100deg,
+    transparent 20%,
+    rgba(255, 255, 255, 0.55) 50%,
+    transparent 80%
   );
-  animation: hsk-chrome-shimmer 1.6s ease-in-out infinite;
+  transform: translateX(-100%);
+  animation: hsk-chrome-sheen 1.9s cubic-bezier(.55, 0, .45, 1) infinite;
+  pointer-events: none;
 }
 
-/* Staggered so the sweep visibly travels bar to bar rather than all three
-   flashing in lockstep, which reads as a single blinking block instead of
-   one continuous motion. */
-.hsk-cb-chrome-loading-bar:nth-child(2)::after { animation-delay: 0.15s; }
-.hsk-cb-chrome-loading-bar:nth-child(3)::after { animation-delay: 0.3s; }
+@keyframes hsk-chrome-rainbow {
+  0% { background-position: 0% 0; }
+  100% { background-position: -300% 0; }
+}
 
-.hsk-cb-chrome-loading-bar:first-child { height: 22px; width: 62%; }
-.hsk-cb-chrome-loading-bar:last-child { width: 74%; }
-
-@keyframes hsk-chrome-shimmer {
+@keyframes hsk-chrome-sheen {
   0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
+  100% { transform: translateX(200%); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hsk-cb-chrome-loading-bar::after { animation: none; }
+  .hsk-cb-chrome-progress-track { animation: none; opacity: .5; }
+  .hsk-cb-chrome-progress::after { animation: none; opacity: 0; }
 }
 
-/* Recedes while the step it belongs to is still being fetched, so the composer
-   reads as not-yet-ready rather than as ready-and-ignoring-you. Every control
-   inside is separately disabled; this is only the visible half of that. */
+.hsk-cb-chrome-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--hsk-chat-muted, #a1a1aa);
+  background: var(--hsk-chat-source-bg, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--hsk-chat-border, rgba(255, 255, 255, 0.09));
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.hsk-cb-chrome-back-btn:hover {
+  background: var(--hsk-chat-source-bg, rgba(255, 255, 255, 0.12));
+  color: var(--hsk-chat-text, #ffffff);
+  border-color: var(--hsk-chat-border, rgba(255, 255, 255, 0.18));
+}
+
+.hsk-cb-chrome-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 48ch;
+  margin: 24px 0 0;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--hsk-chat-source-bg, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--hsk-chat-border, rgba(255, 255, 255, 0.09));
+  text-align: start;
+  font-family: var(--hsk-font, system-ui, sans-serif);
+  animation: hsk-content-fade 0.4s ease-out both;
+}
+
+.hsk-cb-chrome-notice-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hsk-cb-chrome-notice-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: rgba(255, 106, 51, 0.15);
+  color: var(--hsk-primary, #ff6a33);
+  border: 1px solid rgba(255, 106, 51, 0.28);
+}
+
+.hsk-cb-chrome-notice-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--hsk-chat-text, #ffffff);
+}
+
+.hsk-cb-chrome-notice-body {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--hsk-chat-muted, #a1a1aa);
+}
+
+.hsk-cb-chrome-notice-body b {
+  color: var(--hsk-chat-text, #ffffff);
+}
+
+@media (prefers-color-scheme: light) {
+  .hsk-cb-chrome-loading-sub b {
+    color: var(--hsk-chat-text, #18181b);
+  }
+  .hsk-cb-chrome-progress {
+    background: var(--hsk-chat-source-bg, rgba(0, 0, 0, 0.06));
+  }
+  .hsk-cb-chrome-back-btn {
+    color: #52525b;
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.08);
+  }
+  .hsk-cb-chrome-back-btn:hover {
+    background: rgba(0, 0, 0, 0.08);
+    color: #09090b;
+    border-color: rgba(0, 0, 0, 0.14);
+  }
+}
+
 .hsk-cb-input-box--waiting {
   opacity: 0.45;
   pointer-events: none;
 }
 
-/* The advancing half of the wait. The skeleton says "something goes here";
-   this says "and it is on its way", which is the part a 30s translation
-   actually needs. */
-.hsk-cb-chrome-progress {
-  margin-top: 8px;
-  height: 2px;
-  width: 100%;
-  border-radius: 2px;
-  background: var(--hsk-chat-source-bg, rgba(0, 0, 0, 0.06));
-  overflow: hidden;
-}
-
-.hsk-cb-chrome-progress-fill {
-  height: 100%;
-  border-radius: 2px;
-  background: var(--hsk-primary, #007aff);
-  transition: width 0.24s linear;
-}
-
-.hsk-cb-chrome-progress-label {
-  display: block;
-  margin-top: 8px;
-  font-size: 12px;
-  letter-spacing: 0.01em;
-  color: var(--hsk-chat-muted, #888);
-  font-family: var(--hsk-font);
-}
-
-.hsk-cb-lang-chip:hover {
-  background: var(--hsk-primary, #007aff);
-  color: #ffffff;
-  border-color: var(--hsk-primary, #007aff);
-}
-
-/* Step 3's two answer options. There was a richer card design in this file
-   already (.hsk-cb-entlang-card, with an image/title/price preview) built
-   against entityPreview() — but nothing calls entityPreview() and no JSX
-   renders those classes; the step actually markup is this simpler radio pair,
-   which had no styling of its own at all and rendered as two lines of
-   unstyled, overlapping text. text-align: start rather than left, so this
-   flips correctly under the RTL panels these steps are just as likely to be
-   answering in. */
 .hsk-cb-entlang-opts {
   display: flex;
   flex-direction: column;
   gap: 10px;
   width: 100%;
-  max-width: 420px;
+  max-width: 440px;
+  margin-top: 6px;
 }
 
 .hsk-cb-entlang-opt {
+  position: relative;
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
+  flex-direction: row;
+  align-items: center;
   width: 100%;
-  padding: 12px 14px;
+  padding: 16px 20px;
   text-align: start;
-  background: var(--hsk-chat-source-bg, rgba(0, 0, 0, 0.03));
-  border: 1px solid var(--hsk-chat-border, rgba(0, 0, 0, 0.08));
-  border-radius: 10px;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  border-radius: 16px;
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  user-select: none;
+  overflow: hidden;
+  box-shadow: none !important;
+  animation: hsk-entlang-opt-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(0.04s + var(--hsk-opt-idx, 0) * 0.02s);
+}
+
+@media (prefers-color-scheme: light) {
+  .hsk-cb-entlang-opt {
+    background: transparent !important;
+  }
+}
+
+[data-hsk-theme="light"] .hsk-cb-entlang-opt {
+  background: transparent !important;
+}
+
+@keyframes hsk-entlang-opt-in {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .hsk-cb-entlang-opt:hover {
-  border-color: var(--hsk-primary, #ff6a33);
-  background: color-mix(in srgb, var(--hsk-primary, #ff6a33) 6%, transparent);
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.hsk-cb-entlang-opt:active {
+  opacity: 0.8;
 }
 
 .hsk-cb-entlang-radio {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  min-height: 18px;
+  border-radius: 999px;
+  border: 1.5px solid var(--hsk-chat-divide, rgba(255, 255, 255, 0.22));
   flex-shrink: 0;
-  width: 16px;
-  height: 16px;
-  margin-top: 2px;
-  border: 1.5px solid var(--hsk-chat-border, rgba(0, 0, 0, 0.25));
-  border-radius: 50%;
-  transition: border-color 0.15s ease;
+  margin-inline-end: 14px;
+  box-sizing: border-box;
+  transform: none !important;
+  transition: border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s ease;
 }
 
-.hsk-cb-entlang-opt:hover .hsk-cb-entlang-radio {
+.hsk-cb-entlang-radio-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--hsk-primary, #ff6a33);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+
+.hsk-cb-entlang-opt:hover .hsk-cb-entlang-radio,
+.hsk-cb-entlang-opt.is-selected .hsk-cb-entlang-radio {
   border-color: var(--hsk-primary, #ff6a33);
+}
+
+.hsk-cb-entlang-opt.is-selected .hsk-cb-entlang-radio-dot {
+  opacity: 1;
 }
 
 .hsk-cb-entlang-opt-text {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  min-width: 0;
+  gap: 3px;
+  width: 100%;
 }
 
 .hsk-cb-entlang-opt-title {
-  font-size: 13.5px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--hsk-chat-text, #1f1f1f);
+  letter-spacing: -0.01em;
 }
 
 .hsk-cb-entlang-opt-note {
-  font-size: 11.5px;
+  font-size: 12.5px;
   color: var(--hsk-chat-muted, #71717a);
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
-/* Splendorous self-reveal: each line rises, sharpens from a soft blur, and
-   settles — staggered so the greeting unfurls on its own when the chat opens. */
+.hsk-cb-shimmer-char {
+  display: inline;
+  color: inherit;
+  font-family: inherit;
+}
+
+.hsk-cb-entlang-opt:hover .hsk-cb-entlang-opt-title .hsk-cb-shimmer-char {
+  animation: hsk-entlang-char-shimmer-title 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--hsk-char-idx, 0) * 16ms);
+}
+
+.hsk-cb-entlang-opt:hover .hsk-cb-entlang-opt-note .hsk-cb-shimmer-char {
+  animation: hsk-entlang-char-shimmer-note 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--hsk-char-idx, 0) * 16ms);
+}
+
+@keyframes hsk-entlang-char-shimmer-title {
+  0% {
+    color: var(--hsk-chat-text, #1f1f1f);
+  }
+  45% {
+    color: hsl(var(--hsk-ph-hue, 0) 80% 60%);
+  }
+  100% {
+    color: var(--hsk-primary, #ff6a33);
+  }
+}
+
+@keyframes hsk-entlang-char-shimmer-note {
+  0% {
+    color: var(--hsk-chat-muted, #71717a);
+  }
+  45% {
+    color: hsl(var(--hsk-ph-hue, 0) 75% 55%);
+  }
+  100% {
+    color: var(--hsk-chat-muted, #71717a);
+  }
+}
+
+.hsk-cb-entlang-opt-note {
+  font-size: 12.5px;
+  color: var(--hsk-chat-muted, #71717a);
+  line-height: 1.45;
+}
+
 @keyframes hsk-hello-rise {
-  from { opacity: 0; transform: translateY(16px); filter: blur(10px); }
-  to   { opacity: 1; transform: translateY(0);    filter: blur(0); }
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 .hsk-cb-hello,
 .hsk-cb-hello-lead,
@@ -1300,11 +2128,32 @@
 .hsk-cb-hello-ask  { animation-delay: 0.44s; }
 .hsk-cb-hello-skip { animation-delay: 0.60s; }
 
+.hsk-cb-hello.hsk-cascade,
+.hsk-cb-hello-lead.hsk-cascade,
+.hsk-cb-hello-ask.hsk-cascade {
+  opacity: 1;
+  animation: none;
+  filter: none;
+}
+
+.hsk-cascade__w {
+  display: inline-block;
+  white-space: nowrap;
+  opacity: 0;
+  animation: hsk-cascade-rise 0.44s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes hsk-cascade-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hsk-cb-hello,
   .hsk-cb-hello-lead,
   .hsk-cb-hello-ask,
-  .hsk-cb-hello-skip { animation: none; opacity: 1; transform: none; filter: none; }
+  .hsk-cb-hello-skip,
+  .hsk-cascade__w { animation: none; opacity: 1; transform: none; filter: none; }
 }
 
 .hsk-cb-chips {
@@ -1339,11 +2188,6 @@
   animation: hsk-msg-in .22s ease-out both;
 }
 
-/* Spoken, not typed — transcription can be wrong, and the shopper should know
-   which words are theirs verbatim and which were merely heard.
-   Taken out of flow and hung outside the leading edge: inline it pushed the
-   line box taller and every spoken bubble grew. Leading edge, so it never
-   collides with the tail on the trailing one, and it mirrors in RTL. */
 .hsk-cb-spoken-mark {
   position: absolute;
   top: 50%;
@@ -1353,10 +2197,6 @@
   pointer-events: none;
 }
 
-/* Consecutive bubbles from the same sender are one utterance broken in two,
-   not two turns: iMessage sets them a couple of pixels apart. The default
-   16px group padding either side plus the 20px bubble margin put 52px
-   between them, which reads as an answer that never arrived. */
 .hsk-cb-msg-group--run-mid {
   padding-bottom: 0;
 }
@@ -1381,11 +2221,9 @@
   flex-direction: column;
   align-items: flex-end;
   align-self: flex-end;
-  /* iMessage-style cap: percentage alone let bubbles span nearly the whole
-     panel on a laptop. Bubbles hug their text; long ones stop at a column a
-     human can actually scan. */
-  max-width: min(75%, 420px);
-  margin-left: auto;
+    max-width: min(75%, 420px);
+    margin-inline-start: auto;
+  margin-inline-end: 0;
   gap: 6px;
   margin-bottom: 20px;
 }
@@ -1399,6 +2237,10 @@
 .hsk-cb-user-msg.hsk-sent {
   transform-origin: bottom right;
   animation: hsk-send-in .42s cubic-bezier(.2,.9,.3,1.2) both;
+}
+
+.hsk-cb-panel[dir="rtl"] .hsk-cb-user-msg.hsk-sent {
+  transform-origin: bottom left;
 }
 
 @keyframes hsk-send-in {
@@ -1428,16 +2270,13 @@
   letter-spacing: -0.01em;
 }
 
-/* iMessage's own construction, not a drawn spike: the tail is two
-   pseudo-elements — a coloured curl (::before) and a same-size-as-panel
-   cutout (::after) layered on top of it — rather than one traced shape.
-   That is why the corner reads as continuous instead of welded-on. */
 .hsk-cb-user-bubble--tail::before,
 .hsk-cb-user-bubble--tail::after {
   content: '';
   position: absolute;
   bottom: 0;
   height: 25px;
+  pointer-events: none;
 }
 
 .hsk-cb-user-bubble--tail::before {
@@ -1468,11 +2307,8 @@
   border-bottom-right-radius: 10px;
 }
 
-
 .hsk-cb-ai-msg {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
+  display: block;
 }
 
 .hsk-cb-ai-icon {
@@ -1489,17 +2325,11 @@
   margin-top: -2px;
 }
 
-/* The rocket sizes itself from its `size` prop — the canvas backing store has
-   to match, so it is excluded from this blanket override. */
 .hsk-cb-ai-icon > svg {
   width: 30px !important;
   height: 30px !important;
 }
 
-/* The settled mark matches the rocket's box exactly. Without this it inherits
-   the 30px clamp above and the glyph drops from ~31px to ~23px the moment the
-   answer finishes, which reads as the icon shrinking. Higher specificity than
-   the rule above, so it wins despite both being !important. */
 .hsk-cb-ai-icon > .hsk-cb-ai-mark {
   width: 40px !important;
   height: 40px !important;
@@ -1515,35 +2345,35 @@
   width: 100%;
 }
 
+.hsk-cb-think + .hsk-cb-ai-content > .hsk-cb-ai-text:first-child {
+  padding-top: 20px;
+}
+
 .hsk-cb-ai-text {
-  font-size: var(--hsk-font-size, 15.5px);
+  font-size: var(--hsk-font-size, 14.5px);
   font-family: var(--hsk-font);
-  line-height: 1.55;
+  line-height: 1.48;
   color: var(--hsk-chat-text, #111827);
   background: var(--hsk-chat-ai-bg, #eeeef0);
-  padding: 14px 18px;
-  border-radius: 20px;
+  padding: 11px 15px;
+  border-radius: 18px;
   position: relative;
   display: inline-block;
-  /* Assistant prose gets more room than the shopper's short asks, but still a
-     readable column (~65ch at this size), not the whole panel. */
+  width: fit-content;
+  box-sizing: border-box;
   max-width: min(88%, 560px);
   word-break: break-word;
   overflow-wrap: anywhere;
   margin-top: 4px;
 }
 
-/* The same construction as the shopper's bubble, mirrored: a coloured curl
-   plus a panel-coloured cutout. It was still using the traced-spike mask the
-   sent side has since dropped, which is why the two tails did not match.
-   No border and no shadow here either — a border cannot follow a cutout tail,
-   and an iMessage received bubble carries neither. */
 .hsk-cb-ai-text:not(:has(~ .hsk-cb-ai-text))::before,
 .hsk-cb-ai-text:not(:has(~ .hsk-cb-ai-text))::after {
   content: '';
   position: absolute;
   bottom: 0;
   height: 25px;
+  pointer-events: none;
 }
 
 .hsk-cb-ai-text:not(:has(~ .hsk-cb-ai-text))::before {
@@ -1574,10 +2404,8 @@
   border-bottom-left-radius: 10px;
 }
 
-
-/* Delivery status under the shopper's most recent message. */
 .hsk-cb-sent-status {
-  font-size: 10.5px;
+  font-size: 11px;
   line-height: 1;
   color: var(--hsk-chat-muted, #8a8f98);
   padding: 4px 6px 0 0;
@@ -1589,9 +2417,6 @@
   to { opacity: 1; }
 }
 
-/* Waiting behind the turn ahead of it — not sent yet, so it reads as held
-   back rather than delivered. transform/opacity only, no layout properties:
-   the same rule the send-in and voice-canvas animations already follow. */
 .hsk-cb-user-bubble--queued {
   opacity: .55;
 }
@@ -1600,7 +2425,7 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 10.5px;
+  font-size: 11px;
   line-height: 1;
   color: var(--hsk-chat-muted, #8a8f98);
   padding: 4px 0 0;
@@ -1638,14 +2463,6 @@
   .hsk-cb-queued-dot { animation: none; opacity: .8; }
 }
 
-/* A sticky child of the scroller itself, not an absolutely-positioned
-   overlay: it rides the bottom edge of whatever's currently visible without
-   needing to know the composer's height. Zero-height wrapper so it never
-   adds its own scroll distance. */
-/* Anchored to the composer's own top edge, not floating above the thread.
-   The wrap spans exactly the card's width (same inset as the card gets from
-   the shared padding), so a child positioned by inset-inline-start travels
-   across the whole seam rather than jumping between two fixed spots. */
 .hsk-cb-jump-wrap {
   position: absolute;
   top: var(--hsk-composer-pad-top, 16px);
@@ -1655,8 +2472,6 @@
   pointer-events: none;
 }
 
-/* Vertical band the whole group travels within. Sized generously above and
-   below the seam so the blur has room to work without clipping. */
 .hsk-cb-jump-goo {
   position: absolute;
   inset-inline: 0;
@@ -1665,11 +2480,6 @@
   pointer-events: none;
 }
 
-/* Opaque, and matched to the card's *rendered* colour rather than its declared
-   one: the goo filter's contrast ramp assumes opaque input, so feeding it the
-   real card fill (~5% white in dark mode) collapsed to fully transparent and
-   the bump vanished. These are that translucent card composited over the panel
-   behind it, precomputed. */
 .hsk-cb-jump-goo { --hsk-goo-fill: #ffffff; }
 @media (prefers-color-scheme: dark) {
   .hsk-cb-jump-goo { --hsk-goo-fill: #1a1a1c; }
@@ -1677,9 +2487,6 @@
 [data-hsk-theme="light"] .hsk-cb-jump-goo { --hsk-goo-fill: #ffffff; }
 [data-hsk-theme="dark"] .hsk-cb-jump-goo { --hsk-goo-fill: #1a1a1c; }
 
-/* Full card width so the bump melts into the whole top edge, but only deep
-   enough to cover the card's first few pixels — at 22px it painted over the
-   send button sitting in that band. */
 .hsk-cb-jump-seam {
   position: absolute;
   inset-inline: 0;
@@ -1693,18 +2500,13 @@
 .hsk-cb-jump-bump {
   position: absolute;
   top: 5px;
-  /* Docked at the inline-START, opposite the send button. Docking at the
-     inline-end put it directly above send in both directions — that corner is
-     already the busiest part of the composer. */
-  inset-inline-start: 8px;
+    inset-inline-start: 8px;
   width: 34px;
   height: 34px;
   border-radius: 999px;
   background: var(--hsk-goo-fill);
   transition: inset-inline-start .6s cubic-bezier(.34,1.1,.64,1), background .3s ease;
-  /* A dead-still bump reads as pasted on rather than grown from the same
-     surface. Slow enough that it never competes with the ghost's own float. */
-  animation: hsk-jump-idle 4.6s ease-in-out infinite;
+    animation: hsk-jump-idle 4.6s ease-in-out infinite;
   transform-origin: 50% 100%;
 }
 
@@ -1719,15 +2521,11 @@
   50%      { transform: scaleY(1.045); }
 }
 
-/* The interactive, crisp layer: exactly the bump's geometry, but unfiltered —
-   this is what actually holds the ghost glyph, so the icon never blurs with
-   the shape fusion happening underneath it. */
 .hsk-cb-jump-bottom {
   pointer-events: auto;
   position: absolute;
   top: -17px;
-  /* Tracks the fused bump exactly, so the glyph never drifts off the shape. */
-  inset-inline-start: 8px;
+    inset-inline-start: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1747,11 +2545,6 @@
   animation: hsk-jump-travel .6s linear both;
 }
 
-/* Stretched along the direction of travel, squashed on arrival. */
-/* Squash and stretch proper: every pair multiplies to 1 so the ghost keeps its
-   volume, the stretch lands on the travel curve's peak velocity rather than at
-   an arbitrary percentage, and the move is bracketed by anticipation before it
-   leaves and follow-through after it arrives. */
 @keyframes hsk-jump-travel {
   0%   { transform: scale(1, 1); }
   10%  { transform: scale(.88, 1.136); }
@@ -1762,8 +2555,6 @@
   100% { transform: scale(1, 1); }
 }
 
-/* The ghost drifts rather than the button bobbing — the button is a fixed
-   dock, the thing inside it is what should feel weightless. */
 .hsk-cb-jump-arrow {
   display: flex;
   animation: hsk-ghost-float 3.4s ease-in-out infinite;
@@ -1776,8 +2567,6 @@
   70%      { transform: translateY(1.4px) rotate(3deg); }
 }
 
-/* Body takes the button's colour; the eyes are punched back out to whatever
-   sits behind, so one glyph works in both the resting and the alert state. */
 .hsk-ghost-body { fill: currentColor; }
 .hsk-ghost-eyes { fill: var(--hsk-ghost-eye, var(--hsk-chat-bg, #fff)); }
 
@@ -1786,33 +2575,45 @@
   .hsk-cb-jump-bottom--alert { animation: none; }
 }
 
-
-/* ─── Conversation timeline ───────────────────────────────────────────────
-   Questions as dots down the gutter. Content-agnostic on purpose: it reads
-   the conversation, never the catalogue, so it means the same thing on a
-   shop, a property site or a knowledge base. Removed below the breakpoint,
-   where the jump-to-bottom pill covers navigation on its own. */
 .hsk-cb-timeline {
   display: none;
 }
 
-/* Needs 720px of column plus a gutter wide enough to hold the timeline
-   without crowding it: (1180 - 720) / 2 = 230px each side. */
-@media (min-width: 1180px) {
-  .hsk-cb-timeline {
+@media (min-width: 900px) {
+  /* Timeline on Left Rail (RTL mode) */
+  .hsk-cb-timeline.hsk-cb-timeline--left {
     display: block;
-    /* Out of flow, in the gutter. As a flex sibling it stole width from the
-       conversation and pushed it off centre — the column has to stay dead
-       centre in the viewport, with this hanging beside it. Logical inset so
-       RTL puts it on the other side without a second rule. */
     position: absolute;
-    inset-inline-end: calc(100% + 20px);
+    left: auto !important;
+    right: 100% !important;
+    margin-right: 28px !important;
     top: 50%;
-    transform: translateY(-50%);
+    transform: translateY(-50%) !important;
     width: 180px;
     max-height: 60%;
     overflow: hidden;
-    /* Feathered top and bottom: entries do not stop, they dissolve. */
+    z-index: 10;
+    pointer-events: auto;
+    direction: ltr !important;
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 14%, #000 86%, transparent);
+    mask-image: linear-gradient(to bottom, transparent, #000 14%, #000 86%, transparent);
+  }
+
+  /* Timeline on Right Rail (LTR mode) */
+  .hsk-cb-timeline.hsk-cb-timeline--right {
+    display: block;
+    position: absolute;
+    left: 100% !important;
+    right: auto !important;
+    margin-left: 28px !important;
+    top: 50%;
+    transform: translateY(-50%) !important;
+    width: 180px;
+    max-height: 60%;
+    overflow: hidden;
+    z-index: 10;
+    pointer-events: auto;
+    direction: ltr !important;
     -webkit-mask-image: linear-gradient(to bottom, transparent, #000 14%, #000 86%, transparent);
     mask-image: linear-gradient(to bottom, transparent, #000 14%, #000 86%, transparent);
   }
@@ -1827,22 +2628,19 @@
   to   { opacity: 1; transform: translateX(0); }
 }
 
-/* The spine, and the travelled portion of it drawn over the top. scaleY is
-   compositor-only, so the fill follows the scroll without touching layout. */
-/* One number owns the spine's x-position; the dots derive from it, so they
-   cannot drift apart. Kept clear of the left edge because the active dot
-   grows and this container clips. */
 .hsk-cb-timeline-track {
   --hsk-tl-x: 9px;
   position: relative;
-  padding-left: 26px;
+  padding-left: 26px !important;
+  padding-right: 6px !important;
 }
 
 .hsk-cb-timeline-track::before,
 .hsk-cb-timeline-track::after {
   content: '';
   position: absolute;
-  left: calc(var(--hsk-tl-x) - 1px);
+  left: calc(var(--hsk-tl-x) - 1px) !important;
+  right: auto !important;
   top: 8px;
   bottom: 8px;
   width: 2px;
@@ -1861,28 +2659,23 @@
   transition: transform .18s linear;
 }
 
-/* --hsk-tl-d is how many entries away from what the transcript is showing.
-   The item itself never transforms: the dot is its child, and scaling from
-   the left edge walked the dots off the spine, which is what read as sloppy.
-   Only the label moves. */
 .hsk-cb-tl-item {
   --hsk-tl-d: 0;
   position: relative;
   display: block;
   width: 100%;
-  padding: 7px 6px 7px 0;
+  padding: 7px 6px 7px 0 !important;
   border: none;
   background: none;
-  text-align: left;
+  text-align: left !important;
   cursor: pointer;
   font-family: var(--hsk-font);
 }
 
-/* Derived from the spine's own x, so the two can never fall out of step.
-   The item is padded 26px, hence the offset back to --hsk-tl-x. */
 .hsk-cb-tl-dot {
   position: absolute;
-  left: calc(var(--hsk-tl-x, 9px) - 26px - 3.5px);
+  left: calc(var(--hsk-tl-x, 9px) - 3.5px) !important;
+  right: auto !important;
   top: 50%;
   width: 7px;
   height: 7px;
@@ -1895,10 +2688,6 @@
               background .2s ease;
 }
 
-/* Small, muted, and only as loud as it needs to be to be read. The further
-   an entry is from what you are reading, the further right it slides and the
-   fainter it gets — so the column's edge curves toward the focus instead of
-   ruling a hard vertical line. transform and opacity only. */
 .hsk-cb-tl-label {
   display: block;
   font-size: 12px;
@@ -1908,10 +2697,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   transform: translateX(calc(var(--hsk-tl-d) * 7px));
-  /* The far entries were fading almost to nothing, which lost the sense of
-     how much conversation sits either side. Held above a readable floor. */
   opacity: max(.32, calc(.9 - var(--hsk-tl-d) * .15));
-  /* Long and soft, so a new question settles into place rather than snapping. */
   transition: transform .46s cubic-bezier(.22,1,.36,1),
               opacity .46s cubic-bezier(.22,1,.36,1),
               color .2s ease;
@@ -1924,12 +2710,10 @@
 
 .hsk-cb-tl-item:hover .hsk-cb-tl-dot { transform: scale(1.25); }
 
-/* The lit dot is a single element that slides between markers, so moving from
-   one question to the next is a travel rather than a cut. Its Y is written by
-   the component from the anchored item's own offset; the easing is here. */
 .hsk-cb-tl-cursor {
   position: absolute;
-  left: calc(var(--hsk-tl-x, 9px) - 4.5px);
+  left: calc(var(--hsk-tl-x, 9px) - 4.5px) !important;
+  right: auto !important;
   top: 0;
   width: 9px;
   height: 9px;
@@ -1942,8 +2726,6 @@
   pointer-events: none;
 }
 
-/* The marker under the travelling dot stays a plain marker — lighting it too
-   would put two highlights on the spine at once. */
 .hsk-cb-tl-item--on .hsk-cb-tl-dot {
   opacity: .35;
 }
@@ -1963,9 +2745,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  /* Set the TOKEN, not the property: bubble and tail both read
-     --hsk-chat-ai-bg, so a theme can never leave them mismatched. */
-  .hsk-cb-ai-text {
+    .hsk-cb-ai-text {
     --hsk-chat-ai-bg: #26262a;
     background: var(--hsk-chat-ai-bg);
     color: #f9fafb;
@@ -1990,11 +2770,6 @@
 
 .hsk-cb-sources::-webkit-scrollbar { display: none; }
 
-/* Narrower and eased rather than linear. A 48px linear ramp reads as a grey
-   band laid over the rail — most of a linear gradient's travel happens in the
-   middle, so the edge stays near-opaque far longer than it looks like it
-   should. Stopping the solid end early and letting it tail off gives the same
-   "there is more" cue without an obvious panel. */
 .hsk-cb-sources-fade-left,
 .hsk-cb-sources-fade-right {
   position: absolute;
@@ -2004,36 +2779,26 @@
   z-index: 2;
 }
 
-.hsk-cb-sources-fade-left {
-  inset-inline-start: 0;
-  background: linear-gradient(to right,
-    var(--hsk-fade-bg, var(--hsk-chat-bg, #0e0e0f)) 0%,
-    color-mix(in srgb, var(--hsk-fade-bg, var(--hsk-chat-bg, #0e0e0f)) 55%, transparent) 45%,
-    transparent 100%);
-}
-
+/* colour lives in background-color (transitionable); the fade shape is a constant-alpha mask */
+.hsk-cb-sources-fade-left,
 .hsk-cb-sources-fade-right {
-  inset-inline-end: 0;
-  background: linear-gradient(to left,
-    var(--hsk-fade-bg, var(--hsk-chat-bg, #0e0e0f)) 0%,
-    color-mix(in srgb, var(--hsk-fade-bg, var(--hsk-chat-bg, #0e0e0f)) 55%, transparent) 45%,
-    transparent 100%);
+  background-color: var(--hsk-fade-bg, var(--hsk-chat-bg, #0e0e0f));
 }
 
-/* The fades are painted in physical directions, so in RTL the one that sits at
-   the inline-start has to ramp the other way. */
-[dir="rtl"] .hsk-cb-sources-fade-left {
-  background: linear-gradient(to left,
-    var(--hsk-fade-bg, var(--hsk-chat-bg, #0e0e0f)) 0%,
-    color-mix(in srgb, var(--hsk-fade-bg, var(--hsk-chat-bg, #0e0e0f)) 55%, transparent) 45%,
-    transparent 100%);
-}
+.hsk-cb-sources-fade-left,
 [dir="rtl"] .hsk-cb-sources-fade-right {
-  background: linear-gradient(to right,
-    var(--hsk-fade-bg, var(--hsk-chat-bg, #0e0e0f)) 0%,
-    color-mix(in srgb, var(--hsk-fade-bg, var(--hsk-chat-bg, #0e0e0f)) 55%, transparent) 45%,
-    transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, #000 0%, rgba(0, 0, 0, 0.55) 45%, transparent 100%);
+  mask-image: linear-gradient(to right, #000 0%, rgba(0, 0, 0, 0.55) 45%, transparent 100%);
 }
+
+.hsk-cb-sources-fade-right,
+[dir="rtl"] .hsk-cb-sources-fade-left {
+  -webkit-mask-image: linear-gradient(to left, #000 0%, rgba(0, 0, 0, 0.55) 45%, transparent 100%);
+  mask-image: linear-gradient(to left, #000 0%, rgba(0, 0, 0, 0.55) 45%, transparent 100%);
+}
+
+.hsk-cb-sources-fade-left { inset-inline-start: 0; }
+.hsk-cb-sources-fade-right { inset-inline-end: 0; }
 
 .hsk-cb-sources-next,
 .hsk-cb-sources-prev {
@@ -2066,7 +2831,6 @@
 
 .hsk-cb-sources-next { inset-inline-end: 2px; }
 .hsk-cb-sources-prev { inset-inline-start: 2px; }
-/* The chevrons are drawn pointing left/right, so mirror them with the layout. */
 [dir="rtl"] .hsk-cb-sources-next svg,
 [dir="rtl"] .hsk-cb-sources-prev svg { transform: scaleX(-1); }
 
@@ -2143,15 +2907,14 @@
   padding: 8px 2px 0;
 }
 
-/* Compact rail — used under a generated visualization so the hero image stays dominant */
 .hsk-cb-sources-wrap--compact { margin-top: 10px; }
 .hsk-cb-sources-wrap--compact .hsk-cb-sources { gap: 10px; }
 .hsk-cb-sources-wrap--compact .hsk-cb-source { flex: 0 0 96px; }
 .hsk-cb-sources-wrap--compact .hsk-cb-src-imgwrap,
 .hsk-cb-sources-wrap--compact .hsk-cb-src-imgwrap-empty { width: 96px; height: 96px; }
 .hsk-cb-sources-wrap--compact .hsk-cb-src-imgwrap-empty { font-size: 20px; }
-.hsk-cb-sources-wrap--compact .hsk-cb-src-name { font-size: 11.5px; -webkit-line-clamp: 1; }
-.hsk-cb-sources-wrap--compact .hsk-cb-src-price { font-size: 11px; }
+.hsk-cb-sources-wrap--compact .hsk-cb-src-name { font-size: 12px; -webkit-line-clamp: 1; }
+.hsk-cb-sources-wrap--compact .hsk-cb-src-price { font-size: 11px; padding: 1px 6px; }
 .hsk-cb-sources-wrap--compact .hsk-cb-source-ref-badge { display: none; }
 
 .hsk-cb-src-name {
@@ -2166,12 +2929,20 @@
 }
 
 .hsk-cb-src-price {
-  font-size: 13px;
-  color: var(--hsk-primary);
-  font-weight: 700;
-  margin-top: 3px;
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  padding: 2px 9px;
+  border-radius: 9999px;
+  background: var(--hsk-chat-source-bg, rgba(0, 0, 0, 0.05));
+  border: 1px solid var(--hsk-chat-divide, rgba(0, 0, 0, 0.08));
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--hsk-primary, #ff6a33);
+  margin-top: 5px;
+  line-height: 1.2;
 }
-
 
 .hsk-cb-typing-row {
   display: flex;
@@ -2180,16 +2951,6 @@
   padding: 20px 0;
 }
 
-/* ── Thinking state ──────────────────────────────────────────────────────
-   The doorway glyph sits perfectly still, faded, with a bright sheen band
-   sweeping across it (a full-opacity copy revealed through a sliding mask).
-   The door-handle dot spins out into a trailing comet of balls, holds as a
-   ring, collapses back, and the real handle pops into place. ── */
-
-/* ─── kiku rocket (thinking indicator) ────────────────────────────────────
-   The brand mark under thrust while an answer is worked out, touching down
-   as it starts to arrive. Motion is transform/translate/scale only; the
-   exhaust is a canvas the component drives. */
 .hsk-rocket {
   position: relative;
   display: inline-block;
@@ -2206,8 +2967,6 @@
 
 .hsk-rocket-glyph { transform-origin: 50% 60%; }
 
-/* Holding altitude: a slow rise and fall with a fine tremble over it. Two
-   animations so the tremble does not have to restate the hover's offset. */
 .hsk-rocket--flying .hsk-rocket-glyph {
   animation: hsk-rocket-hover 1.6s ease-in-out infinite,
              hsk-rocket-tremble .1s linear infinite;
@@ -2224,7 +2983,6 @@
   100% { transform: translate(.14px, -.14px); }
 }
 
-/* Descend, compress on contact, rebound, settle. */
 .hsk-rocket--landed .hsk-rocket-glyph {
   animation: hsk-rocket-land .8s cubic-bezier(.18,.7,.3,1) both;
 }
@@ -2237,16 +2995,9 @@
   100% { translate: 0 0;      transform: scaleY(1); }
 }
 
-/* The handle never blinks out: under thrust it has dropped from the door and
-   rides in the exhaust, then climbs back and seats itself on touchdown.
-   Percentage translate is relative to the handle's own box, so one set of
-   numbers holds at every size. */
 .hsk-rocket-handle {
   position: absolute;
-  /* Re-derived for the cropped viewBox: the handle sits at (56.8, 69.84) in
-     the source artboard, which is (56.8-10.2)/79.5 and (69.84-17.4)/79.5 of
-     the visible frame. Size scaled by the same 100/79.5 crop factor. */
-  left: 58.6%;
+    left: 58.6%;
   top: 66%;
   width: 12.6%;
   height: 12.6%;
@@ -2267,8 +3018,6 @@
   filter: blur(.3px);
 }
 
-/* Percentages are of the handle's own box, which grew with the crop — so the
-   travel down into the plume is shorter in percentage terms than before. */
 @keyframes hsk-rocket-handle-ride {
   0%, 100% { translate: -44% 190%; scale: .78; opacity: .5; }
   35%      { translate: -27% 224%; scale: 1.02; opacity: .85; }
@@ -2286,7 +3035,7 @@
 }
 
 .hsk-cb-thinking-text {
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 500;
   background-image: linear-gradient(
     90deg,
@@ -2310,32 +3059,17 @@
 }
 
 .hsk-cb-input-wrap {
-  /* Positioned so the @/@kiku picker (absolute, bottom: 100%) anchors to the
-     input area — without this it anchors to the modal and lands above it,
-     leaving only its shadow visible. */
   position: relative;
-  /* Published as variables so the ghost, which is positioned against the input
-     card's edge, tracks the padding instead of hardcoding a copy of it — the
-     hardcoded desktop values put it on top of the send button on mobile, where
-     this padding is much tighter. */
   --hsk-composer-pad-top: 16px;
-  --hsk-composer-pad-x: 28px;
-  padding: var(--hsk-composer-pad-top) var(--hsk-composer-pad-x) 28px;
+  --hsk-composer-pad-x: var(--hsk-gutter, 24px);
+  padding: var(--hsk-composer-pad-top) var(--hsk-composer-pad-x) 24px;
   flex-shrink: 0;
-  background: var(--hsk-chat-bg, #ffffff);
+  background: transparent !important;
   z-index: 10;
 }
 
 .hsk-cb-input-wrap::after {
-  content: '';
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  height: 300px;
-  background: var(--hsk-chat-bg, #ffffff);
-  z-index: -1;
-  pointer-events: none;
+  display: none !important;
 }
 
 .hsk-cb-input-card {
@@ -2347,7 +3081,7 @@
   overflow: hidden;
   position: relative;
   z-index: 1;
-  transition: background-color 0.25s ease, box-shadow 0.25s ease;
+  transition: height 0.22s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 .hsk-cb-input-card:focus-within {
@@ -2407,7 +3141,13 @@
   color: var(--hsk-chat-text, #111111);
 }
 
-/* ─── Docked Options List (INSIDE .hsk-cb-input-card) ────────────────────── */
+.hsk-cb-field {
+  margin-inline: 5px;
+}
+
+.hsk-cb-input-box[data-expanded="true"] > .hsk-cb-field {
+  margin-inline: 0;
+}
 
 .hsk-cb-docked-options {
   display: flex;
@@ -2431,8 +3171,8 @@
   border-radius: 10px;
   color: var(--hsk-chat-text, #1f1f1f);
   font-family: inherit;
-  font-size: 13.5px;
-  text-align: left;
+  font-size: 14px;
+  text-align: start;
   cursor: pointer;
   transition: color 0.15s ease;
 }
@@ -2493,48 +3233,160 @@
 
 .hsk-cb-input-box {
   position: relative;
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: auto auto 1fr auto auto;
+  grid-template-rows: auto 0px;
+  align-items: center;
+  justify-items: start;
+  column-gap: 10px;
+  row-gap: 0px;
+  transition:
+    grid-template-rows 0.2s cubic-bezier(0.32, 0.72, 0, 1),
+    row-gap 0.2s cubic-bezier(0.32, 0.72, 0, 1);
   background: transparent !important;
   border: none !important;
   outline: none !important;
   border-radius: 0 !important;
-  padding: 12px 14px 12px 18px;
+  padding-block: 12px;
+  padding-inline: 18px 14px;
   box-shadow: none !important;
 }
 
+.hsk-cb-tools-toggle { display: none; }
+
+.hsk-cb-toolsheet-wrap {
+  position: absolute;
+  bottom: calc(100% - 6px);
+  inset-inline-start: var(--hsk-composer-pad-x, 14px);
+  inset-inline-end: auto;
+  z-index: 100;
+  transform-origin: bottom left;
+  animation: hsk-toolsheet-in .22s cubic-bezier(.16, 1, .3, 1) both;
+  pointer-events: auto;
+}
+
+[dir="rtl"] .hsk-cb-toolsheet-wrap,
+.hsk-cb-panel[dir="rtl"] .hsk-cb-toolsheet-wrap {
+  transform-origin: bottom right;
+}
+
+.hsk-cb-toolsheet {
+  position: relative;
+  z-index: 1;
+  min-width: 200px;
+  padding: 6px;
+  border-radius: 16px;
+  background: var(--hsk-chat-source-bg, rgba(255, 255, 255, 0.08));
+  border: none !important;
+  box-shadow: none !important;
+}
+
+@keyframes hsk-toolsheet-in {
+  0%   { opacity: 0; transform: translateY(8px) scale(0.92); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.hsk-cb-toolsheet-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: transparent;
+  cursor: default;
+}
+
+.hsk-cb-toolsheet-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--hsk-chat-text, #111827);
+  font-family: var(--hsk-font);
+  font-size: 15px;
+  text-align: start;
+  cursor: pointer;
+  transition: background-color .15s ease;
+}
+
+.hsk-cb-toolsheet-item:hover:not(:disabled) { background: var(--hsk-chat-subtle, rgba(0,0,0,.05)); }
+.hsk-cb-toolsheet-item:disabled { opacity: .45; cursor: default; }
+.hsk-cb-toolsheet-item > svg { flex-shrink: 0; color: var(--hsk-chat-muted, #6b7280); }
+
+[data-hsk-theme] .hsk-cb-toolsheet {
+  background: var(--hsk-sheet-bg, var(--hsk-chat-input-bg, #f3f4f6)) !important;
+  border: none !important;
+}
+
+[data-hsk-theme] .hsk-cb-toolsheet-item {
+  color: var(--hsk-chat-text, #111827) !important;
+}
+
+[data-hsk-theme] .hsk-cb-toolsheet-item:hover:not(:disabled) {
+  background: var(--hsk-sheet-hover, var(--hsk-surface-2, rgba(0, 0, 0, .05))) !important;
+}
+
+[data-hsk-theme] .hsk-cb-toolsheet-item > svg {
+  color: var(--hsk-chat-muted, #6b7280) !important;
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-cb-toolsheet-wrap,
+  .hsk-cb-toolsheet-stem { animation: none; }
+  .hsk-cb-toolsheet-stem { transform: scale(.62); }
+}
+
+.hsk-cb-input-box > .hsk-cb-attach-btn { grid-column: 1; grid-row: 1; }
+.hsk-cb-input-box > .hsk-cb-voice-mode-btn { grid-column: 2; grid-row: 1; }
+.hsk-cb-input-box > .hsk-cb-field { grid-column: 3; grid-row: 1; }
+.hsk-cb-input-box > .hsk-cb-mic-btn { grid-column: 4; grid-row: 1; }
+.hsk-cb-input-box > .hsk-cb-send,
+.hsk-cb-input-box > .hsk-chat-send { grid-column: 5; grid-row: 1; }
+
+.hsk-cb-input-box[data-expanded="true"] {
+  grid-template-rows: auto 36px;
+  row-gap: 6px;
+}
+
+.hsk-cb-input-box[data-expanded="true"] > .hsk-cb-field {
+  grid-column: 1 / -1;
+  grid-row: 1;
+}
+
+.hsk-cb-input-box[data-expanded="true"] > .hsk-cb-attach-btn,
+.hsk-cb-input-box[data-expanded="true"] > .hsk-cb-voice-mode-btn,
+.hsk-cb-input-box[data-expanded="true"] > .hsk-cb-mic-btn,
+.hsk-cb-input-box[data-expanded="true"] > .hsk-cb-send,
+.hsk-cb-input-box[data-expanded="true"] > .hsk-chat-send {
+  grid-row: 2;
+}
+
 .hsk-cb-textarea {
-  flex: 1;
+  width: 100%;
   background: transparent;
   border: none;
   outline: none;
   resize: none;
-  font-size: 16px;
+  font-size: var(--hsk-input-font-size, 16px);
   font-family: var(--hsk-font);
   color: var(--hsk-chat-text, #111);
   min-height: 28px;
   max-height: 140px;
-  line-height: 1.55;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(155, 155, 155, 0.3) transparent;
+  field-sizing: content;
+  line-height: var(--hsk-input-line-height, 1.55);
+  word-break: break-word;
+  overflow-wrap: break-word;
+  padding: 0;
+  transition: height 0.18s cubic-bezier(0.32, 0.72, 0, 1), color 0.42s cubic-bezier(0.16, 1, 0.3, 1);
+  scrollbar-width: none;
 }
 
 .hsk-cb-textarea::-webkit-scrollbar {
-  width: 4px;
-}
-
-.hsk-cb-textarea::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.hsk-cb-textarea::-webkit-scrollbar-thumb {
-  background: rgba(155, 155, 155, 0.3);
-  border-radius: 999px;
-}
-
-.hsk-cb-textarea::-webkit-scrollbar-thumb:hover {
-  background: rgba(155, 155, 155, 0.5);
+  width: 0;
+  height: 0;
 }
 
 .hsk-cb-textarea::placeholder {
@@ -2556,7 +3408,11 @@
   flex-shrink: 0;
   border: none;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition:
+    transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+    background-color 0.42s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.2s ease;
   font-family: inherit;
   margin: 0;
   padding: 0;
@@ -2609,21 +3465,24 @@
 .hsk-cb-hint {
   text-align: center;
   font-size: 9px;
+  line-height: 14px;
   color: var(--hsk-chat-muted, #bbb);
   margin-top: 10px;
 }
 
-/* The textarea's own slot, so the listening wave can sit exactly over it
-   instead of spanning the whole row and colliding with the attach button. */
 .hsk-cb-field {
   position: relative;
-  flex: 1;
+  grid-area: field;
   display: flex;
+  align-items: center;
+  width: 100%;
   min-width: 0;
+    --hsk-input-font-size: 16px;
+  --hsk-input-line-height: 1.55;
+    --hsk-input-control: 36px;
+  --hsk-input-line-box: calc(var(--hsk-input-font-size) * var(--hsk-input-line-height));
 }
 
-/* Listening wave — heights are written per-frame from an AnalyserNode, so
-   there is no keyframe here on purpose: silence must look like silence. */
 .hsk-cb-listening {
   position: absolute;
   inset: 0;
@@ -2644,121 +3503,251 @@
   transition: transform 90ms linear, opacity 90ms linear;
 }
 
-.hsk-cb-voice-error {
-  text-align: center;
-  font-size: 11px;
-  line-height: 1.4;
-  color: #e5484d;
-  margin-top: 8px;
+.hsk-animated-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  pointer-events: none;
+  overflow: hidden;
+  user-select: none;
+  padding: 0;
+  z-index: 1;
 }
 
-/* ── Image attachment strip ──────────────────────────────────────────────── */
-/* Inset to match the input row: the card clips to a 20px radius, so a thumb
-   flush in the corner loses its own corner and its remove button entirely. */
+.hsk-cb-input-box > * {
+    --hsk-cascade-ease: cubic-bezier(0.45, 0, 0.55, 1);
+  --hsk-cascade-dur: 0.44s;
+  --hsk-cascade-step: 55ms;
+}
+
+.hsk-cb-input-box[data-cascade] > *:not([type="file"]):not(.hsk-cb-field) {
+  animation-duration: var(--hsk-cascade-dur);
+  animation-timing-function: var(--hsk-cascade-ease);
+    animation-fill-mode: none;
+}
+
+.hsk-cb-input-box[data-cascade="a"] > *:not([type="file"]):not(.hsk-cb-field) {
+  animation-name: hsk-leaf-settle-a;
+}
+
+.hsk-cb-input-box[data-cascade="b"] > *:not([type="file"]):not(.hsk-cb-field) {
+  animation-name: hsk-leaf-settle-b;
+}
+
+.hsk-cb-input-box[data-cascade] > *:not([type="file"]):not(.hsk-cb-field),
+.hsk-animated-placeholder__char {
+  will-change: transform;
+}
+
+.hsk-cb-input-box:hover > *,
+.hsk-cb-input-box:focus-within > * {
+  will-change: auto;
+}
+
+.hsk-cb-input-box > * {
+  --hsk-cascade-field: 110ms;
+}
+
+.hsk-cb-input-box[data-cascade] > .hsk-cb-attach-btn { animation-delay: 0ms; }
+.hsk-cb-input-box[data-cascade] > .hsk-cb-voice-mode-btn { animation-delay: var(--hsk-cascade-step); }
+
+.hsk-cb-input-box[data-cascade] > .hsk-cb-mic-btn {
+  animation-delay: calc(var(--hsk-cascade-field) + var(--hsk-text-sweep, 0ms));
+}
+
+.hsk-cb-input-box[data-cascade] > .hsk-cb-send,
+.hsk-cb-input-box[data-cascade] > .hsk-chat-send {
+  animation-delay: calc(var(--hsk-cascade-field) + var(--hsk-text-sweep, 0ms) + var(--hsk-cascade-step));
+}
+
+@keyframes hsk-leaf-settle-a {
+  0%   { transform: translateY(0) scale(1); }
+  42%  { transform: translateY(-3px) scale(1.05); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+@keyframes hsk-leaf-settle-b {
+  0%   { transform: translateY(0) scale(1); }
+  42%  { transform: translateY(-3px) scale(1.05); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+.hsk-cb-input-box > .hsk-cb-field .hsk-animated-placeholder__char {
+  animation-name: hsk-placeholder-animate-up;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-cb-input-box[data-cascade="a"] > *,
+  .hsk-cb-input-box[data-cascade="b"] > * {
+    animation: none;
+    transform: none;
+    opacity: 1;
+  }
+
+    .hsk-cb-textarea,
+  .hsk-cb-input-card {
+    transition-property: background-color, box-shadow;
+  }
+}
+
+.hsk-animated-placeholder__char {
+  display: inline-block;
+  font-size: var(--hsk-input-font-size, 16px);
+  line-height: var(--hsk-input-line-height, 1.55);
+  color: var(--hsk-chat-muted, #9ca3af);
+  font-family: var(--hsk-font);
+    white-space: pre;
+  animation: hsk-placeholder-animate-up 0.46s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes hsk-placeholder-animate-up {
+  0% {
+    opacity: 0;
+    transform: translateY(9px);
+    color: hsl(var(--hsk-ph-hue, 0) var(--hsk-ph-sat, 68%) var(--hsk-ph-light, 55%));
+  }
+  55% {
+    opacity: 1;
+    color: hsl(var(--hsk-ph-hue, 0) var(--hsk-ph-sat, 68%) var(--hsk-ph-light, 55%));
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    color: var(--hsk-chat-muted, #9ca3af);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-animated-placeholder__char {
+    animation: none;
+    transform: none;
+    opacity: 1;
+    color: var(--hsk-chat-muted, #9ca3af);
+        animation-delay: 0ms !important;
+  }
+}
+
+.hsk-cb-voice-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  max-width: 90%;
+  margin-inline: auto;
+  text-wrap: balance;
+  color: #ff6b6b;
+  margin-top: 8px;
+  padding: 4px 12px;
+  border-radius: 12px;
+  background: rgba(229, 72, 77, 0.12);
+  border: none;
+  cursor: pointer;
+  animation: hsk-msg-in .2s ease-out both;
+}
+
+.hsk-cb-voice-error-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.12);
+  color: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.hsk-cb-voice-error-dismiss:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: scale(1.1);
+}
+
 .hsk-cb-img-strip {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 12px 14px 4px 18px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px 2px 18px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   animation: hsk-msg-in .2s ease-out both;
 }
 
 .hsk-cb-img-thumb-wrap {
   position: relative;
-  width: 72px;
-  height: 72px;
+  width: 60px;
+  height: 60px;
   flex-shrink: 0;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(255, 255, 255, 0.12);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: visible;
+}
+
+.hsk-cb-img-thumb-wrap:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(255, 255, 255, 0.2);
 }
 
 .hsk-cb-img-thumb {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: var(--hsk-border-radius, 0px);
-  border: 1.5px solid var(--hsk-chat-divide, rgba(0,0,0,.12));
+  border-radius: 12px;
+  border: none;
   display: block;
 }
 
 .hsk-cb-img-thumb-remove {
   position: absolute;
-  top: -6px;
-  right: -6px;
+  top: -5px;
+  inset-inline-end: -5px;
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #ef4444;
-  color: #fff;
-  border: none;
-  font-size: 12px;
-  line-height: 1;
+  background: rgba(20, 20, 24, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   padding: 0;
-  font-family: inherit;
-  transition: transform .1s;
+  transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s ease;
+  z-index: 2;
 }
 
-.hsk-cb-img-thumb-remove:hover { transform: scale(1.15); }
-
-/* ── Attach button ───────────────────────────────────────────────────────── */
-.hsk-cb-attach-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--hsk-chat-muted, #71717a);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  transition: all .2s cubic-bezier(0.34, 1.56, 0.64, 1);
-  font-family: inherit;
+.hsk-cb-img-thumb-remove:hover {
+  background: rgba(239, 68, 68, 0.92);
+  border-color: rgba(255, 255, 255, 0.4);
+  transform: scale(1.15);
 }
 
-.hsk-cb-attach-btn:hover:not(:disabled) {
-  border-color: rgba(255, 106, 51, 0.25);
-  color: var(--hsk-primary, #ff6a33);
-  background: rgba(255, 106, 51, 0.08);
-  transform: translateY(-1px);
-}
-
-.hsk-cb-attach-btn:disabled {
-  opacity: .35;
-  cursor: not-allowed;
-}
-
-/* Inactive controls sit quieter than the text they flank — they are always
-   available but never the thing being read. Full strength returns on hover
-   and focus, where the intent to use them is explicit. */
 .hsk-cb-attach-btn,
 .hsk-cb-mic-btn,
 .hsk-cb-voice-mode-btn {
-  opacity: .62;
-  transition: opacity .18s ease;
-}
-
-.hsk-cb-attach-btn:hover:not(:disabled),
-.hsk-cb-mic-btn:hover:not(:disabled),
-.hsk-cb-voice-mode-btn:hover:not(:disabled),
-.hsk-cb-attach-btn:focus-visible,
-.hsk-cb-mic-btn:focus-visible,
-.hsk-cb-voice-mode-btn:focus-visible,
-.hsk-cb-mic-btn--listening,
-.hsk-cb-voice-mode-btn--active {
-  opacity: 1;
-}
-
-/* ── Mic / voice button ──────────────────────────────────────────────────── */
-.hsk-cb-mic-btn {
   position: relative;
   width: 36px;
   height: 36px;
   border-radius: 12px;
-  border: 1px solid transparent;
+  border: none !important;
+  outline: none !important;
   background: transparent;
   color: var(--hsk-chat-muted, #71717a);
   cursor: pointer;
@@ -2766,39 +3755,143 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: all .2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: none !important;
+  opacity: .75;
+  transition:
+    transform 0.35s cubic-bezier(0.34, 1.8, 0.64, 1),
+    background-color 0.2s ease,
+    color 0.2s ease,
+    opacity 0.2s ease;
   font-family: inherit;
   overflow: visible;
 }
 
-.hsk-cb-mic-btn:hover:not(:disabled) {
-  border-color: rgba(255, 106, 51, 0.25);
-  color: var(--hsk-primary, #ff6a33);
-  background: rgba(255, 106, 51, 0.08);
+/* The control settles, the icon inside carries the gesture — motion that says */
+.hsk-cb-attach-btn:hover:not(:disabled),
+.hsk-cb-mic-btn:hover:not(:disabled),
+.hsk-cb-voice-mode-btn:hover:not(:disabled) {
+  opacity: 1;
+  color: var(--hsk-chat-text, #1f1f1f);
+  background: transparent;
   transform: translateY(-1px);
 }
 
-.hsk-cb-mic-btn:disabled {
-  opacity: .35;
-  cursor: not-allowed;
+.hsk-cb-attach-btn:active:not(:disabled),
+.hsk-cb-mic-btn:active:not(:disabled),
+.hsk-cb-voice-mode-btn:active:not(:disabled) {
+  transform: translateY(0) scale(0.94);
+  transition-duration: 0.1s;
 }
 
-/* Recording state — red tint */
+.hsk-cb-attach-btn svg,
+.hsk-cb-mic-btn svg,
+.hsk-cb-voice-mode-btn svg {
+  overflow: visible;
+}
+
+/* the clip lifts and tips, the way one is picked off a page */
+.hsk-cb-attach-btn svg {
+  transition: transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.hsk-cb-attach-btn:hover:not(:disabled) svg {
+  transform: rotate(-14deg) translateY(-1px);
+}
+
+.hsk-mic-cap {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* the head of the mic lifts out of its cradle */
+.hsk-cb-mic-btn:hover:not(:disabled) .hsk-mic-cap {
+  transform: translateY(-1.5px);
+}
+
+/* Waveform animations */
+.hsk-wave-bar {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform .3s cubic-bezier(.34, 1.56, .64, 1);
+}
+
+.hsk-cb-voice-mode-btn:hover:not(:disabled) .hsk-wave-bar {
+  animation:
+    hsk-wave-wake .52s cubic-bezier(.34, 1.8, .64, 1) both,
+    hsk-wave-live var(--hsk-period, 1.1s) ease-in-out .52s infinite;
+  animation-delay: calc(var(--hsk-bar, 0) * 55ms), calc(.52s + var(--hsk-bar, 0) * 55ms);
+}
+
+.hsk-cb-voice-mode-btn:hover:not(:disabled) .hsk-wave-bar--tip {
+  animation-name: hsk-wave-wake-tip, hsk-wave-live-tip;
+}
+
+/* the wake: squashed to nothing, then overshoot past full height */
+@keyframes hsk-wave-wake {
+  0%   { transform: scaleY(.12); }
+  55%  { transform: scaleY(calc(var(--hsk-amp, 1.6) * 1.12)); }
+  100% { transform: scaleY(1); }
+}
+
+@keyframes hsk-wave-live {
+  0%, 100% { transform: scaleY(1); }
+  30% { transform: scaleY(var(--hsk-amp, 1.6)); }
+  55% { transform: scaleY(calc(1 + (var(--hsk-amp, 1.6) - 1) * .22)); }
+  78% { transform: scaleY(calc(1 + (var(--hsk-amp, 1.6) - 1) * .62)); }
+}
+
+/* the flat end ticks have no height to scale, so they reach outward instead */
+@keyframes hsk-wave-wake-tip {
+  0%   { transform: scaleX(.2); opacity: .4; }
+  55%  { transform: scaleX(calc(var(--hsk-amp, 1.9) * 1.1)); opacity: 1; }
+  100% { transform: scaleX(1); opacity: .8; }
+}
+
+@keyframes hsk-wave-live-tip {
+  0%, 100% { transform: scaleX(1); opacity: .7; }
+  30% { transform: scaleX(var(--hsk-amp, 1.9)); opacity: 1; }
+  70% { transform: scaleX(1.15); opacity: .8; }
+}
+
+.hsk-copy-sheet,
+.hsk-copy-back {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* the top sheet slides off the one beneath it */
+.hsk-cb-kiku-id-pill:hover .hsk-copy-sheet { transform: translate(0.9px, 0.9px); }
+.hsk-cb-kiku-id-pill:hover .hsk-copy-back { transform: translate(-0.9px, -0.9px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-cb-attach-btn:hover:not(:disabled) svg,
+  .hsk-cb-mic-btn:hover:not(:disabled) .hsk-mic-cap,
+  .hsk-cb-kiku-id-pill:hover .hsk-copy-sheet,
+  .hsk-cb-kiku-id-pill:hover .hsk-copy-back { transform: none; }
+  .hsk-cb-voice-mode-btn:hover:not(:disabled) .hsk-wave-bar { animation: none; }
+}
+
+.hsk-cb-attach-btn:disabled,
+.hsk-cb-mic-btn:disabled,
+.hsk-cb-voice-mode-btn:disabled {
+  opacity: .3;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .hsk-cb-mic-btn--listening {
-  border-color: #ef4444;
-  color: #ef4444;
-  background: rgba(239,68,68,.08);
+  color: #ef4444 !important;
+  background: rgba(239, 68, 68, 0.16) !important;
+  transform: scale(1.1) !important;
 }
 
 .hsk-cb-mic-btn--processing {
-  border-color: var(--hsk-primary);
-  color: var(--hsk-primary);
-  opacity: .7;
+  color: var(--hsk-primary, #ff6a33) !important;
+  opacity: .85;
 }
 
-/* ── User message image grid ─────────────────────────────────────────────── */
-/* Telegram-style album: tiles butt together as one block with a single rounded
-   outline, rather than floating as separate rounded thumbnails. */
 .hsk-cb-user-imgs {
   display: grid;
   gap: 2px;
@@ -2813,7 +3906,6 @@
 
 .hsk-cb-user-imgs[data-count="1"] { grid-template-columns: 1fr; }
 .hsk-cb-user-imgs[data-count="2"] { grid-template-columns: 1fr 1fr; }
-/* Three reads best as one tall hero beside two stacked squares. */
 .hsk-cb-user-imgs[data-count="3"] {
   grid-template-columns: 2fr 1fr;
   grid-template-rows: 1fr 1fr;
@@ -2857,7 +3949,6 @@
   cursor: pointer;
 }
 
-/* A lone image keeps a natural, uncropped shape. */
 .hsk-cb-user-imgs[data-count="1"] .hsk-cb-user-img-thumb {
   height: auto;
   max-height: 300px;
@@ -2868,19 +3959,11 @@
   filter: brightness(0.93);
 }
 
-
-/* Shrink-wraps its sentence instead of ruling a full-width band across the
-   panel — a one-line notice stretched edge to edge reads as a page-level
-   failure rather than as a note about the last turn. Still caps its width so
-   a long message wraps into a block rather than a single thin line. */
 .hsk-cb-error {
   display: block;
   width: fit-content;
   max-width: min(560px, 100%);
-  /* Auto inline margins, not `start` — this is a notice about the turn as a
-     whole rather than a message from either side, so it sits on the panel's
-     axis instead of picking a side to hang off. */
-  margin: 10px auto 8px;
+    margin: 10px auto 8px;
   padding: 10px 14px;
   border-radius: 10px;
   background: rgba(239,68,68,.08);
@@ -2902,7 +3985,7 @@
   color: #ffffff;
   padding: 1px 7px;
   border-radius: 6px;
-  margin-right: 6px;
+  margin-inline-end: 6px;
 }
 
 .hsk-cb-memory-pill {
@@ -2912,7 +3995,7 @@
   align-self: flex-start;
   margin: 12px 0 6px 0;
   padding: 12px 22px;
-  font-size: 14.5px;
+  font-size: 15px;
   font-weight: 600;
   text-decoration: none;
   color: #ffffff;
@@ -2931,7 +4014,10 @@
 }
 
 .hsk-cb-think {
-  margin-bottom: 12px;
+  position: relative;
+  z-index: 2;
+  margin-bottom: -11px;
+  margin-inline-start: 12px;
   font-size: 14px;
   font-family: var(--hsk-font);
 }
@@ -2939,13 +4025,17 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 28px;
-  padding: 0;
+  height: 24px;
+  padding: 0 11px;
   border: none;
-  background: none;
+  border-radius: 999px;
+  background: var(--hsk-chat-ai-bg, #eeeef0);
+  box-shadow:
+    0 0 0 3px var(--hsk-chat-bg, #ffffff),
+    0 1px 3px rgba(0, 0, 0, .13);
   font-family: var(--hsk-font);
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--hsk-chat-muted, #6b7280);
   cursor: pointer;
   user-select: none;
@@ -2973,10 +4063,6 @@
   font-size: 14px;
 }
 
-/* Sits directly under the halted reply, so it reads as a footnote to that
-   message rather than as a new block of chrome: the notice is quiet, and the
-   only emphasis is on the one control that resumes. Column, not row — a wrapped
-   flex row put the button on its own line at narrow widths anyway, but ragged. */
 .hsk-cb-stopped {
   display: flex;
   flex-direction: column;
@@ -2984,8 +4070,6 @@
   gap: 8px;
   margin: 10px 0 14px;
 }
-/* Nothing was generated, so there is no answer for this to hang off — it
-   centres and becomes the whole of what that turn produced. */
 .hsk-cb-stopped--empty {
   align-items: center;
   text-align: center;
@@ -2993,7 +4077,6 @@
 }
 .hsk-cb-stopped--empty .hsk-cb-stopped-label { text-align: center; }
 
-/* Three settled dots: the shape a reply would have arrived in, at rest. */
 .hsk-cb-stopped-dots {
   display: flex;
   gap: 5px;
@@ -3008,7 +4091,7 @@
 }
 
 .hsk-cb-stopped-label {
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.5;
   color: var(--hsk-chat-muted, #888);
   font-family: var(--hsk-font);
@@ -3019,7 +4102,7 @@
   align-items: center;
   gap: 7px;
   padding: 7px 14px;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 500;
   font-family: var(--hsk-font);
   color: var(--hsk-chat-text, #111);
@@ -3034,8 +4117,6 @@
   color: var(--hsk-primary);
   background: transparent;
 }
-/* The glyph points the way the reply will continue, which is the way the
-   script runs. */
 .hsk-cb-continue svg { flex: none; }
 [dir="rtl"] .hsk-cb-continue svg { transform: scaleX(-1); }
 @media (prefers-color-scheme: dark) {
@@ -3043,65 +4124,8 @@
   .hsk-cb-continue:hover { background: transparent; }
 }
 
-@media (prefers-color-scheme: dark) {
-  .hsk-cb-overlay {
-    --hsk-chat-bg: #0a0a0a;
-    --hsk-chat-text: #f0efed;
-    --hsk-chat-muted: #888;
-    --hsk-chat-divide: rgba(255,255,255,.07);
-    --hsk-chat-input-bg: rgba(255,255,255,.05);
-    --hsk-chat-source-bg: rgba(255,255,255,.04);
-    --hsk-fade-bg: #0a0a0a;
-    background: var(--hsk-chat-bg, #000000) !important;
-  }
-  .hsk-cb-topbar-title { color: #f0efed; }
-  .hsk-cb-topbar-sub { color: #888; }
-  .hsk-cb-topbar-btn { background: rgba(255,255,255,.06); color: #888; }
-  .hsk-cb-close { background: rgba(255,255,255,.06); color: #888; }
-  .hsk-cb-hello { color: #f0efed; }
-  .hsk-cb-hello-ask { color: #f0efed; }
-  .hsk-cb-hello-lead { color: #888; }
-  .hsk-cb-chip { border-color: rgba(255,255,255,.07); background: rgba(255,255,255,.04); color: #f0efed; }
-  .hsk-cb-chip:hover { background: rgba(255,106,51,.06); }
-  .hsk-cb-msg-group { border-bottom-color: rgba(255,255,255,.05); }
-  .hsk-cb-user-bubble { color: #fff; }
-  .hsk-cb-ai-icon { background: transparent !important; border: none !important; }
-  .hsk-cb-ai-text { color: #f0efed; }
-  .hsk-cb-sources-next { border-color: rgba(255,255,255,.12); background: #0a0a0a; color: #f0efed; }
-  .hsk-cb-src-imgwrap-empty { background: rgba(255,255,255,.06); color: #555; }
-  .hsk-cb-src-name { color: #f0efed; }
-  .hsk-cb-dot { background: #555; }
-  .hsk-cb-input-box { background: rgba(255,255,255,.05); border: none !important; }
-  .hsk-cb-textarea { color: #f0efed; }
-  .hsk-cb-textarea::placeholder { color: #555; }
-  .hsk-cb-send:disabled { background: #555; }
-  .hsk-cb-hint { color: #555; }
-}
-
-@media (prefers-color-scheme: light) {
-  .hsk-cb-overlay {
-    --hsk-chat-bg: #ffffff;
-    --hsk-chat-text: #1f1f1f;
-    --hsk-chat-muted: #5f6368;
-    --hsk-chat-divide: #f1f3f4;
-    --hsk-chat-input-bg: #ffffff;
-    --hsk-chat-source-bg: #f8f9fa;
-    --hsk-fade-bg: #ffffff;
-    background: var(--hsk-chat-bg, #ffffff) !important;
-  }
-  .hsk-cb-input-box {
-    background: #f1f3f4 !important;
-    border: none !important;
-    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.04), 0 10px 25px -6px rgba(255, 106, 51, 0.08) !important;
-  }
-  .hsk-cb-input-box:focus-within {
-    background: #ffffff !important;
-    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.07), 0 14px 35px -6px rgba(255, 106, 51, 0.14) !important;
-  }
-}
 
 
-/* ─── SearchBar ─── */
 .hsk-sb-wrap {
   --hsk-bg: #ffffff;
   --hsk-border: #f1f3f4;
@@ -3149,7 +4173,7 @@
 
 .hsk-sb-icon {
   position: absolute;
-  left: 14px;
+  inset-inline-start: 14px;
   top: 50%;
   transform: translateY(-50%);
   color: var(--hsk-muted);
@@ -3291,8 +4315,6 @@
   50% { opacity: 1; }
 }
 
-
-/* ─── Sparkle split-pane Modal ─── */
 .hsk-sp-btn {
   --hsk-primary: var(--chat-primary-color, #ff6a33);
   display: inline-flex;
@@ -3658,18 +4680,18 @@
   border-radius: var(--hsk-border-radius, 0px);
 }
 
-.hsk-sp-esc { font-size: 11px; color: var(--hsk-modal-muted, #5f6368); margin-left: auto; }
+.hsk-sp-esc { font-size: 11px; color: var(--hsk-modal-muted, #5f6368); margin-inline-start: auto; }
 
 @media (max-width: 768px) {
   .hsk-cb-overlay {
-    --hsk-font-size: var(--hsk-mobile-font-size, 13.5px) !important;
+    --hsk-font-size: var(--hsk-mobile-font-size, 14px) !important;
     position: fixed !important;
-    top: var(--hsk-vvtop, 0px) !important;
+    inset: 0 !important;
+    top: 0 !important;
     left: 0 !important;
     right: 0 !important;
-    bottom: auto !important;
     width: 100vw !important;
-    /* --hsk-vvh tracks the visual viewport, so the keyboard shrinks us. */
+    height: 100% !important;
     height: var(--hsk-vvh, 100dvh) !important;
     min-height: 0 !important;
     z-index: 2147483647 !important;
@@ -3707,26 +4729,129 @@
     box-sizing: border-box !important;
   }
 
+  .hsk-cb-topbar {
+    padding: 14px 14px 8px !important;
+  }
+
   .hsk-cb-msgs {
     flex: 1 1 auto !important;
     min-height: 0 !important;
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch !important;
-    padding: 12px 14px 0 !important;
+    padding: 10px 14px 0 !important;
   }
 
   .hsk-cb-empty {
     flex: 1 1 auto !important;
     min-height: 0 !important;
     justify-content: center !important;
+    padding: 16px 4px !important;
+  }
+
+      .hsk-cb-input-box {
+    grid-template-columns: auto 1fr auto auto;
+  }
+
+  .hsk-cb-input-box > .hsk-cb-attach-btn,
+  .hsk-cb-input-box > .hsk-cb-voice-mode-btn {
+    display: none;
+  }
+
+  .hsk-cb-input-box > .hsk-cb-field { grid-column: 2; }
+  .hsk-cb-input-box > .hsk-cb-mic-btn { grid-column: 3; }
+  .hsk-cb-input-box > .hsk-cb-send,
+  .hsk-cb-input-box > .hsk-chat-send { grid-column: 4; }
+
+    .hsk-cb-tools-toggle {
+    display: flex;
+    grid-column: 1;
+    grid-row: 1;
+    width: 36px; height: 36px;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: 0;
+    border: none;
+    border-radius: 12px;
+    background: var(--hsk-chat-subtle, rgba(0,0,0,.045));
+    color: var(--hsk-chat-muted, #6b7280);
+    cursor: pointer;
+    transition: transform .26s cubic-bezier(.34,1.56,.64,1), background-color .2s ease;
+  }
+
+  .hsk-cb-tools-toggle--open {
+    transform: rotate(45deg);
+    background: var(--hsk-chat-divide, rgba(0,0,0,.09));
+  }
+
+  .hsk-cb-toolsheet-wrap,
+  .hsk-cb-toolsheet-scrim { display: block; }
+  .hsk-cb-toolsheet-item { display: flex; }
+
+  .hsk-cb-input-box[data-expanded="true"] > .hsk-cb-tools-toggle { grid-row: 2; }
+
+  .hsk-cb-ai-msg--inline {
+    display: block !important;
+        padding-inline-end: 34px;
+  }
+
+  .hsk-cb-hello-avatar {
+    display: none !important;
+  }
+
+    .hsk-cb-hello-wrap {
+    align-items: center !important;
+    text-align: center !important;
+    gap: 3px !important;
+    max-width: 30ch;
+    margin-inline: auto;
+  }
+
+  .hsk-cb-hello {
+    font-size: 21px !important;
+    font-weight: 600 !important;
+    letter-spacing: -.015em;
+    color: var(--hsk-chat-muted, #8b8b8f) !important;
+    text-align: center !important;
+  }
+
+  .hsk-cb-hello-lead,
+  .hsk-cb-hello-ask {
+    font-size: 14px !important;
+    font-weight: 400 !important;
+    text-align: center !important;
+    color: color-mix(in srgb, var(--hsk-chat-muted, #8b8b8f) 78%, transparent) !important;
+  }
+
+  .hsk-cb-onboarding-head {
+    justify-content: flex-end !important;
+    margin-bottom: 12px !important;
+  }
+
+  .hsk-cb-hello {
+    font-size: clamp(26px, 6.8vw, 36px) !important;
+    font-weight: 600 !important;
+    line-height: 1.22 !important;
+    letter-spacing: -0.025em !important;
+  }
+
+  .hsk-cb-hello-lead {
+    font-size: 15px !important;
+    line-height: 1.45 !important;
+    color: var(--hsk-chat-muted, #71717a) !important;
+    margin-top: 4px !important;
+  }
+
+  .hsk-cb-doodles {
+    opacity: 0.92 !important;
   }
 
   .hsk-cb-input-wrap {
     margin-top: auto !important;
     flex-shrink: 0 !important;
     --hsk-composer-pad-top: 8px;
-    --hsk-composer-pad-x: 12px;
-    padding: 8px 12px !important;
+    --hsk-composer-pad-x: 14px;
+    padding: 8px 14px !important;
     padding-bottom: max(12px, env(safe-area-inset-bottom)) !important;
     background: var(--hsk-chat-bg, #0a0a0a) !important;
     position: relative !important;
@@ -3752,7 +4877,7 @@
 
   .hsk-sp-backdrop.hsk-sp-mobile-view {
     position: fixed !important;
-    top: var(--hsk-vvtop, 0px) !important;
+    top: 0 !important;
     left: 0 !important;
     right: 0 !important;
     bottom: auto !important;
@@ -3830,21 +4955,68 @@
   }
 }
 
-/* ─── Table Alignment, Sticky First Column & High Contrast ─── */
 .hsk-table-wrapper {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  margin: 14px 0;
+  margin: 12px 0 8px;
   width: 100%;
   max-width: 100%;
-  border-radius: 8px;
-  padding: 0;
+  min-width: 0;
+  border-radius: 0;
+  padding: 0 0 6px;
+  background: transparent;
+  box-shadow: none;
+  box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: var(--hsk-chat-divide, rgba(0, 0, 0, 0.2)) transparent;
+  cursor: grab;
+  user-select: auto;
+  transition: mask-image 0.15s ease, -webkit-mask-image 0.15s ease;
+}
+
+.hsk-table-wrapper.is-dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.hsk-table-wrapper--left {
+  mask-image: linear-gradient(to right, black 0, black calc(100% - 32px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, black 0, black calc(100% - 32px), transparent 100%);
+}
+
+.hsk-table-wrapper--middle {
+  mask-image: linear-gradient(to right, transparent 0, black 32px, black calc(100% - 32px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0, black 32px, black calc(100% - 32px), transparent 100%);
+}
+
+.hsk-table-wrapper--right {
+  mask-image: linear-gradient(to right, transparent 0, black 32px, black 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0, black 32px, black 100%);
+}
+
+.hsk-table-wrapper--none {
+  mask-image: none;
+  -webkit-mask-image: none;
+  cursor: default;
+}
+
+.hsk-table-wrapper::-webkit-scrollbar {
+  height: 5px;
+}
+
+.hsk-table-wrapper::-webkit-scrollbar-track {
   background: transparent;
 }
 
-/* Host resets (Tailwind preflight and friends) strip list markers and paragraph
-   margins, which collapses an answer into one unbroken block. The widget has to
-   carry its own typography or it renders differently on every site. */
+.hsk-table-wrapper::-webkit-scrollbar-thumb {
+  background: var(--hsk-chat-divide, rgba(0, 0, 0, 0.25));
+  border-radius: 4px;
+}
+
+.hsk-table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: var(--hsk-chat-muted, rgba(0, 0, 0, 0.5));
+}
+
 .hsk-cb-ai-text .hsk-markdown-p {
   margin: 0 0 10px;
 }
@@ -3854,7 +5026,7 @@
 
 .hsk-cb-ai-text .hsk-markdown-list {
   margin: 0 0 10px;
-  padding-left: 1.2em;
+  padding-inline-start: 1.2em;
 }
 .hsk-cb-ai-text .hsk-markdown-list:last-child {
   margin-bottom: 0;
@@ -3891,154 +5063,93 @@
 }
 
 .hsk-markdown-table {
-  width: 100%;
-  border-collapse: collapse;
-  border-spacing: 0;
-  text-align: left;
-  font-size: 13.5px;
-  background: transparent;
-  margin: 0;
-  border: none;
-  border-top: 1px solid rgba(0, 0, 0, 0.12);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
-  box-shadow: none;
-}
-
-.hsk-markdown-table th {
-  padding: 10px 12px;
-  vertical-align: middle;
-  line-height: 1.4;
-  font-weight: 700;
-  color: #111827 !important;
-  border-bottom: 2px solid rgba(0, 0, 0, 0.15);
-  background: transparent !important;
-}
-
-.hsk-markdown-table td {
-  padding: 10px 12px;
-  vertical-align: middle;
-  line-height: 1.5;
-  white-space: normal;
-  word-break: normal;
-  color: #1f2937 !important;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-  background: transparent !important;
-}
-
-.hsk-markdown-table td * {
-  color: #1f2937 !important;
-}
-
-/* Sticky First Column (Feature Name Column) */
-.hsk-markdown-table th:first-child,
-.hsk-markdown-table td:first-child {
-  position: sticky;
-  left: 0;
-  z-index: 5;
-  background: var(--hsk-chat-bg, #ffffff) !important;
-  box-shadow: 2px 0 6px rgba(0, 0, 0, 0.05);
-  font-weight: 700 !important;
-  color: #111827 !important;
-}
-
-.hsk-markdown-table tr:last-child td {
-  border-bottom: none;
-}
-
-@media (prefers-color-scheme: dark) {
-  .hsk-markdown-table {
-    border-top-color: rgba(255, 255, 255, 0.15);
-    border-bottom-color: rgba(255, 255, 255, 0.15);
-  }
-  .hsk-markdown-table th {
-    color: #f9fafb !important;
-    border-bottom-color: rgba(255, 255, 255, 0.2) !important;
-  }
-  .hsk-markdown-table td,
-  .hsk-markdown-table td * {
-    color: #e5e7eb !important;
-    border-bottom-color: rgba(255, 255, 255, 0.1) !important;
-  }
-  .hsk-markdown-table th:first-child,
-  .hsk-markdown-table td:first-child {
-    background: var(--hsk-chat-bg, #0a0a0a) !important;
-    box-shadow: 2px 0 6px rgba(0, 0, 0, 0.3);
-    color: #ffffff !important;
-  }
-}
-
-@media (max-width: 640px) {
-  .hsk-table-wrapper {
-    margin-left: 0;
-    width: 100%;
-  }
-}
-
-.hsk-markdown-table {
-  width: 100%;
+  width: max-content;
   min-width: 100%;
   border-collapse: collapse;
   border-spacing: 0;
-  text-align: left;
+  text-align: start;
   font-size: 13px;
   background: transparent;
   margin: 0;
   border: none;
-  border-top: 1px solid var(--hsk-table-border, rgba(0, 0, 0, 0.08));
-  border-bottom: 1px solid var(--hsk-table-border, rgba(0, 0, 0, 0.08));
-  box-shadow: none;
+  font-variant-numeric: tabular-nums;
 }
 
-.hsk-markdown-table th,
-.hsk-markdown-table td {
-  padding: 8px 12px;
-  vertical-align: top;
-  line-height: 1.5;
-  white-space: normal;
-  word-break: normal;
-  border: none;
-  border-bottom: 1px solid var(--hsk-table-border, #e5e7eb);
+.hsk-markdown-table th {
+  padding: 8px 16px 6px 16px;
+  vertical-align: bottom;
+  line-height: 1.35;
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  color: var(--hsk-chat-muted, rgba(0, 0, 0, 0.55));
+  border-bottom: 1px solid var(--hsk-chat-divide, rgba(0, 0, 0, 0.1));
   background: transparent !important;
 }
 
-.hsk-markdown-table th,
-.hsk-markdown-table th:first-child,
-.hsk-markdown-table td:first-child {
-  font-weight: 600;
-  color: var(--hsk-table-text-head, #111827);
+.hsk-markdown-table td {
+  padding: 8px 16px 8px 16px;
+  vertical-align: middle;
+  line-height: 1.45;
+  font-size: 13px;
   white-space: nowrap;
+  color: var(--hsk-chat-text, inherit);
+  border-bottom: 0.5px solid var(--hsk-chat-divide, rgba(0, 0, 0, 0.06));
+  background: transparent !important;
 }
 
-/* Claude's link badges inside markdown tables */
+.hsk-markdown-table th:first-child,
+.hsk-markdown-table td:first-child {
+  padding-inline-start: 0;
+  font-weight: 590;
+  white-space: normal;
+  max-width: 280px;
+  min-width: 150px;
+  line-height: 1.35;
+}
+
+.hsk-markdown-table th:last-child,
+.hsk-markdown-table td:last-child {
+  padding-inline-end: 0;
+}
+
+.hsk-markdown-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.hsk-markdown-table td * {
+  color: inherit;
+}
+
 .hsk-markdown-table .hsk-markdown-link {
   display: inline-flex;
   align-items: center;
   padding: 2px 8px;
-  background-color: var(--hsk-link-chip-bg, #f3f4f6);
-  border: 1px solid var(--hsk-link-chip-border, #e5e7eb);
-  color: var(--hsk-link-chip-text, #374151);
-  font-size: 11.5px;
+  background-color: var(--hsk-chat-source-bg, rgba(0, 0, 0, 0.04));
+  border: 1px solid var(--hsk-chat-divide, rgba(0, 0, 0, 0.08));
+  color: var(--hsk-primary, #ff6a33);
+  font-size: 12px;
   font-weight: 500;
-  border-radius: 4px;
+  border-radius: 6px;
   text-decoration: none !important;
   margin: 2px 0;
-  transition: all 0.15s ease;
+  transition: opacity 0.15s ease;
 }
 
 .hsk-markdown-table .hsk-markdown-link:hover {
-  background-color: var(--hsk-link-chip-bg-hover, #e5e7eb);
-  color: var(--hsk-table-text-head, #111827);
+  opacity: 0.8;
 }
 
 @media (prefers-color-scheme: dark) {
-  .hsk-markdown-table {
-    --hsk-table-border: rgba(255, 255, 255, 0.1);
-    --hsk-table-text-head: #f3f3f2;
-    --hsk-table-text-body: #9ca3af;
-    --hsk-link-chip-bg: rgba(255, 255, 255, 0.05);
-    --hsk-link-chip-border: rgba(255, 255, 255, 0.1);
-    --hsk-link-chip-text: #9ca3af;
-    --hsk-link-chip-bg-hover: rgba(255, 255, 255, 0.1);
+  .hsk-markdown-table th {
+    color: var(--hsk-chat-muted, rgba(255, 255, 255, 0.5));
+    border-bottom-color: var(--hsk-chat-divide, rgba(255, 255, 255, 0.1));
+  }
+  .hsk-markdown-table td {
+    color: var(--hsk-chat-text, #f0efed);
+    border-bottom-color: var(--hsk-chat-divide, rgba(255, 255, 255, 0.06));
   }
 }
 
@@ -4049,7 +5160,7 @@
 }
 
 .hsk-markdown-code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace, var(--hsk-font);
   font-size: 0.85em;
   background-color: rgba(128, 128, 128, 0.15);
   padding: 0.2em 0.4em;
@@ -4058,7 +5169,6 @@
   word-break: break-word;
 }
 
-/* ─── Markdown images (LLM-rendered product images) ─── */
 .hsk-markdown-img-block {
   margin: 8px 0;
   line-height: 0;
@@ -4075,7 +5185,6 @@
   background: rgba(128,128,128,0.08);
 }
 
-/* ─── Rich product picked details & specs styles ─── */
 .hsk-sp-item-original-price {
   font-size: 12px;
   text-decoration: line-through;
@@ -4190,7 +5299,6 @@
   }
 }
 
-/* ─── Webkit Custom Scrollbar Override (iOS Ultra-Light Scrollbar) ─── */
 .hsk-chat-widget ::-webkit-scrollbar,
 .hsk-sp-card ::-webkit-scrollbar,
 .hsk-cb-msgs ::-webkit-scrollbar,
@@ -4241,11 +5349,6 @@
   }
 }
 
-/* Firefox scrollbar compatibility. The message list is deliberately absent:
-   it hides its scrollbar outright (see .hsk-cb-msgs above) because a reserved
-   track shifts every bubble the moment the conversation grows tall enough to
-   scroll. Listing it here re-declared `thin` further down the file and won on
-   source order. */
 .hsk-sp-details-pane, .hsk-sp-results, .hsk-chat-messages {
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 0, 0, 0.06) transparent;
@@ -4257,7 +5360,6 @@
   }
 }
 
-/* Horizontal specs style overrides */
 .hsk-sp-specs-horizontal {
   display: flex;
   flex-wrap: wrap;
@@ -4293,10 +5395,6 @@
   }
 }
 
-
-/* ── Chat Phone / Payment Inline Form ── */
-/* No card, no background — inherits the chat widget's look entirely.
-   Developers override via their own CSS or --hsk-* variables. */
 .hsk-cb-phone-form {
   display: flex;
   flex-direction: column;
@@ -4346,7 +5444,6 @@
   color: var(--hsk-primary, #ff6a33);
 }
 
-
 .hsk-cb-main {
   flex: 1;
   min-width: 0;
@@ -4385,10 +5482,6 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ════════════════════════════════════════════════════════════════════════════
-   ACTION PILLS
-   ════════════════════════════════════════════════════════════════════════════ */
-
 .hsk-action-pills {
   display: flex;
   flex-wrap: wrap;
@@ -4426,10 +5519,6 @@
 .hsk-action-pill:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .hsk-pill-emoji { font-size: 13px; line-height: 1; }
-
-/* ════════════════════════════════════════════════════════════════════════════
-   IMPROVED PAYMENT STATES
-   ════════════════════════════════════════════════════════════════════════════ */
 
 .hsk-cb-payment-prompt {
   display: flex;
@@ -4540,17 +5629,12 @@
 
 .hsk-cb-dot--amber { background: #f59e0b !important; }
 
-/* ════════════════════════════════════════════════════════════════════════════
-   DARK MODE OVERRIDES FOR NEW COMPONENTS
-   ════════════════════════════════════════════════════════════════════════════ */
-
 @media (prefers-color-scheme: dark) {
   .hsk-action-pill { --hsk-pill-bg: rgba(40,40,42,0.85); border-color: rgba(255,255,255,.1); color: var(--hsk-chat-text, #e8eaed); }
 }
 
 [data-hsk-theme="dark"] .hsk-action-pill { --hsk-pill-bg: rgba(40,40,42,0.85); border-color: rgba(255,255,255,.1); color: var(--hsk-chat-text, #e8eaed); }
 
-/* ─── Mobile Tabbed Interface for Sparkle Modal ─── */
 .hsk-sp-tabs-mobile {
   display: none;
 }
@@ -4594,10 +5678,8 @@
   }
 }
 
-/* ─── Mobile View Optimizations for Sparkle Modal Redesign ─── */
 @media (max-width: 768px) {
-  /* Header Title Row & Specs Pill */
-  .hsk-sp-header-title-row {
+    .hsk-sp-header-title-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -4624,8 +5706,7 @@
     color: var(--hsk-primary);
   }
 
-  /* Inline Attachment Deck */
-  .hsk-sp-mobile-attachment-deck {
+    .hsk-sp-mobile-attachment-deck {
     margin-top: 10px;
     display: flex;
     flex-direction: column;
@@ -4633,8 +5714,7 @@
     width: 100%;
   }
 
-  /* Main Product Inline Card */
-  .hsk-sp-mobile-main-card {
+    .hsk-sp-mobile-main-card {
     display: flex;
     align-items: center;
     gap: 12px;
@@ -4683,7 +5763,7 @@
   }
 
   .hsk-sp-mobile-main-card-name {
-    font-size: 12.5px;
+    font-size: 13px;
     font-weight: 600;
     color: var(--hsk-modal-text, #1f1f1f);
     line-height: 1.3;
@@ -4694,7 +5774,7 @@
   }
 
   .hsk-sp-mobile-main-card-price {
-    font-size: 11.5px;
+    font-size: 12px;
     font-weight: 700;
     color: var(--hsk-primary);
     margin-top: 1px;
@@ -4702,7 +5782,7 @@
 
   .hsk-sp-mobile-main-card-specs-btn {
     padding: 5px 10px;
-    font-size: 10.5px;
+    font-size: 11px;
     font-weight: 600;
     color: var(--hsk-primary);
     background: transparent;
@@ -4718,8 +5798,7 @@
     color: #ffffff;
   }
 
-  /* Inline Similar Products Carousel */
-  .hsk-sp-mobile-similar-carousel-inline {
+    .hsk-sp-mobile-similar-carousel-inline {
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -4811,8 +5890,7 @@
     margin-top: 1px;
   }
   
-  /* Chat Container */
-  .hsk-sp-mobile-chat-container {
+    .hsk-sp-mobile-chat-container {
     flex: 1;
     display: flex;
     flex-direction: column;
@@ -4820,8 +5898,7 @@
     background: var(--hsk-chat-bg, #ffffff);
   }
   
-  /* Drawer Specifications Overlay */
-  .hsk-sp-mobile-specs-overlay {
+    .hsk-sp-mobile-specs-overlay {
     position: fixed;
     inset: 0;
     z-index: 100000;
@@ -4901,7 +5978,7 @@
   
   .hsk-sp-mobile-specs-desc p {
     margin: 0;
-    font-size: 12.5px;
+    font-size: 13px;
     line-height: 1.5;
     color: var(--hsk-modal-text, #333);
   }
@@ -4919,7 +5996,7 @@
     background: var(--hsk-modal-item-bg, #f8f9fa);
     border: 1px solid var(--hsk-modal-divide, #f1f3f4);
     border-radius: var(--hsk-border-radius, 4px);
-    font-size: 11.5px;
+    font-size: 12px;
     gap: 12px;
   }
   
@@ -4956,7 +6033,6 @@
   }
 }
 
-/* ─── Voice Button ─────────────────────────────────────────────── */
 .kiku-voice-btn {
   position: relative;
   display: inline-flex;
@@ -4997,7 +6073,6 @@
   100% { transform: scale(1.6); opacity: 0; }
 }
 
-/* ─── Visual Search Button ──────────────────────────────────────────── */
 .kiku-vs-btn {
   display: inline-flex;
   align-items: center;
@@ -5028,7 +6103,6 @@
   animation: kiku-vs-rotate 0.8s linear infinite;
 }
 
-/* ─── Visual Search Result Card extra info ─────────────────────────── */
 .kiku-style-tags {
   display: flex;
   flex-wrap: wrap;
@@ -5082,7 +6156,6 @@
   text-overflow: ellipsis;
 }
 
-/* ─── Voice Button ──────────────────────────────────────────────────────── */
 .kiku-voice-btn {
   position: relative;
   display: inline-flex;
@@ -5110,7 +6183,6 @@
   opacity: 0.4;
   cursor: not-allowed;
 }
-/* Pulsing ring animation while recording */
 .kiku-voice-ripple {
   position: absolute;
   inset: -4px;
@@ -5124,7 +6196,6 @@
   100% { transform: scale(1.7); opacity: 0; }
 }
 
-/* ─── Visual Search Button ──────────────────────────────────────────────── */
 .kiku-vs-btn {
   display: inline-flex;
   align-items: center;
@@ -5155,7 +6226,6 @@
   animation: kiku-vs-rotate 0.8s linear infinite;
 }
 
-/* ─── Style Tags (shown on visual search results) ───────────────────────── */
 .kiku-style-tags {
   display: flex;
   flex-wrap: wrap;
@@ -5175,7 +6245,6 @@
   white-space: nowrap;
 }
 
-/* ─── Visual Search Preview Banner ──────────────────────────────────────── */
 .kiku-vs-preview-banner {
   display: flex;
   align-items: center;
@@ -5212,24 +6281,17 @@
   text-overflow: ellipsis;
 }
 
-/* ─── Generic Entity Referencing Highlights ────────────────── */
 .hsk-cb-source--referenced {
-  /* No orange/gold border — the carousel already only shows the referenced
-     products, so no extra card-border treatment is needed. */
-}
+  }
 
 .hsk-source-card--referenced {
-  /* No special border treatment — referenced products are shown on their own
-     under the "Featured in response" heading, so the grouping already conveys
-     it without an orange/gold card border. */
-}
+  }
 
 .hsk-cb-source-ref-badge {
   position: absolute;
   top: 6px;
   right: 6px;
-  background: #fbbf24; /* Gold background */
-  color: #fff;
+  background: #fbbf24;   color: #fff;
   border-radius: 50%;
   width: 20px;
   height: 20px;
@@ -5257,8 +6319,6 @@
   align-items: center;
   gap: 4px;
 }
-
-/* ─── Docked Mode Tag Bar (Antigravity / Cursor / Raycast Style) ────────────── */
 
 .hsk-cb-docked-tag {
   display: inline-flex;
@@ -5320,8 +6380,6 @@
   color: var(--hsk-chat-text, #ffffff);
 }
 
-/* ─── @kiku Picker ───────────────────────────────────────────────────────────── */
-
 .hsk-kiku-picker {
   position: absolute;
   bottom: calc(100% + 8px);
@@ -5350,7 +6408,7 @@
   align-items: center;
   gap: 10px;
   width: 100%;
-  text-align: left;
+  text-align: start;
   background: none;
   border: none;
   border-radius: 10px;
@@ -5388,7 +6446,7 @@
 }
 
 .hsk-kiku-picker-item-name {
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 400;
   white-space: nowrap;
   overflow: hidden;
@@ -5410,9 +6468,6 @@
   }
 }
 
-/* ─── @kiku badge in user bubble ─────────────────────────────────────────────── */
-
-/* Sits on the primary-colored user bubble, so it must stay white-on-translucent in any theme. */
 .hsk-kiku-badge {
   display: inline-flex;
   align-items: center;
@@ -5425,14 +6480,13 @@
   border: 1px solid rgba(255, 255, 255, 0.45);
   padding: 2px 8px;
   border-radius: 8px;
-  margin-right: 8px;
+  margin-inline-end: 8px;
   vertical-align: middle;
   position: relative;
   top: -1px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
-/* ── Image lightbox ──────────────────────────────────────────────────────── */
 .hsk-markdown-img, .hsk-cb-user-img-thumb, .hsk-cb-source .hsk-cb-src-imgwrap img {
   cursor: zoom-in;
 }
@@ -5484,7 +6538,6 @@
 
 .hsk-lightbox-close:hover { background: rgba(255, 255, 255, 0.28); }
 
-/* ── Product-in-scene visualization ──────────────────────────────────────── */
 .hsk-cb-viz {
   margin-top: 10px;
   animation: hsk-msg-in .2s ease-out both;
@@ -5500,9 +6553,26 @@
 .hsk-cb-viz-disclaimer {
   max-width: 420px;
   margin-top: 4px;
-  font-size: 10.5px;
+  font-size: 11px;
   line-height: 1.4;
   color: var(--hsk-chat-muted, #9aa0a6);
+}
+
+.hsk-cb-calc-disclaimer {
+  max-width: 440px;
+  margin-top: 8px;
+  padding: 8px 12px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--hsk-chat-muted, rgba(255, 255, 255, 0.65));
+  background: var(--hsk-chat-callout-bg, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--hsk-border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+}
+[data-hsk-theme="light"] .hsk-cb-calc-disclaimer {
+  color: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.08);
 }
 
 .hsk-cb-stale {
@@ -5515,7 +6585,7 @@
   background: rgba(220, 38, 38, 0.06);
 }
 .hsk-cb-stale-title {
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -5523,7 +6593,7 @@
 }
 .hsk-cb-stale-item {
   margin-top: 3px;
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.45;
   color: var(--hsk-chat-text, #202124);
 }
@@ -5538,7 +6608,7 @@
   align-items: center;
   gap: 6px;
   padding: 8px 14px;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   color: #fff;
   background: rgba(0,0,0,.62);
@@ -5550,7 +6620,6 @@
 }
 .hsk-cb-viz-mark:hover { background: var(--hsk-primary, #ff6a33); border-color: transparent; }
 
-/* ── Image markup editor (Gemini-style "mark where to edit") ─────────────── */
 .hsk-markup-overlay {
   position: fixed;
   inset: 0;
@@ -5575,7 +6644,7 @@
   align-items: center;
   justify-content: space-between;
 }
-.hsk-markup-title { font-size: 13.5px; font-weight: 600; color: #fff; }
+.hsk-markup-title { font-size: 14px; font-weight: 600; color: #fff; }
 .hsk-markup-cancel {
   padding: 6px 12px;
   font-size: 12px;
@@ -5653,7 +6722,7 @@
   flex: 1;
   min-width: 0;
   padding: 10px 12px;
-  font-size: 13.5px;
+  font-size: 14px;
   color: #fff;
   background: rgba(255,255,255,.1);
   border: 1px solid rgba(255,255,255,.25);
@@ -5675,7 +6744,6 @@
 .hsk-markup-go:hover:not(:disabled) { opacity: .9; }
 .hsk-markup-go:disabled { opacity: .45; cursor: default; }
 
-/* ── Directed-knowledge reference images ─────────────────────────────────── */
 .hsk-cb-kimgs {
   margin-top: 10px;
   display: flex;
@@ -5707,7 +6775,7 @@
 
 .hsk-cb-kimg-caption {
   margin-top: 4px;
-  font-size: 10.5px;
+  font-size: 11px;
   line-height: 1.4;
   color: var(--hsk-chat-muted, #9aa0a6);
 }
@@ -5734,44 +6802,16 @@
   to { transform: rotate(360deg); }
 }
 
-}
-
-
-
-/* ─── Non-Latin scripts ─────────────────────────────────────────────────────
-   The brand display font is Latin-only. In Tamil, Arabic, Devanagari, CJK and
-   the rest, the browser falls back per glyph run — but U+0020 EXISTS in the
-   brand font, so the words come from the fallback while the spaces between
-   them keep the brand font's advance width. Mixing two sets of metrics in one
-   line is what shows up as uneven little gaps between words. Handing the whole
-   run to the system stack keeps one font for glyphs and spaces alike. */
-/* Only when the developer's font cannot draw this script (data-host-font="gap").
-   A font that covers it keeps precedence — this used to fire unconditionally and
-   discarded, for instance, a Persian developer's Persian-capable font.
-
-   No per-script font names in the fallback. `system-ui` plus the generic
-   `sans-serif` keyword is what triggers the platform's own script fallback,
-   which already knows every script the OS can render — naming families here
-   would mean one entry per script forever, and would still miss whatever the
-   user has installed. */
 .hsk-cb-panel[data-script="nonlatin"][data-host-font="gap"] {
-  --hsk-font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
+    --hsk-font: "Geist", system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
 }
 
-/* Tracking tuned for Latin distorts scripts that carry their own shaping
-   rules, and in Arabic it severs the cursive joins outright. */
 .hsk-cb-panel[data-script="nonlatin"],
 .hsk-cb-panel[data-script="nonlatin"] * {
   letter-spacing: normal;
   font-family: var(--hsk-font);
 }
 
-/* Mark-stacking scripts (Myanmar, Tibetan, Devanagari, Thai, Khmer, Lao …) put
-   glyph ink well above and below the em box, so Latin-tuned leading collides
-   line-to-line. 1.9 is measured against Myanmar, the tightest-stacking of them;
-   one bucket covers every such script, which is the point — matching on
-   language (:lang(my), :lang(bo), …) would mean a new rule per language
-   forever and would still miss any language the backend adds next. */
 .hsk-cb-panel[data-script="nonlatin"] .hsk-cb-hello,
 .hsk-cb-panel[data-script="nonlatin"] .hsk-cb-hello-lead,
 .hsk-cb-panel[data-script="nonlatin"] .hsk-cb-hello-ask,
@@ -5786,19 +6826,32 @@
 .hsk-cb-panel[data-script="nonlatin"] .hsk-cb-ai-text .hsk-markdown-list li,
 .hsk-cb-panel[data-script="nonlatin"] .hsk-cb-ai-text .hsk-markdown-h1,
 .hsk-cb-panel[data-script="nonlatin"] .hsk-cb-ai-text .hsk-markdown-h2,
-.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-ai-text .hsk-markdown-h3 {
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-ai-text .hsk-markdown-h3,
+.hsk-cb-panel[data-script="nonlatin"] .hsk-markdown-table th,
+.hsk-cb-panel[data-script="nonlatin"] .hsk-markdown-table td {
   line-height: 1.9;
 }
 
-/* Below ~15px the stacked marks stop resolving into distinct shapes at any
-   leading, so these scripts need a higher size floor than Latin does. */
-.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-hello-lead { font-size: 15px; }
-.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-hint { font-size: 12px; }
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-hint { font-size: 11px; line-height: 16px; bottom: 4px; }
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-voice-error { font-size: 12px; line-height: 22px; max-width: 30ch; }
 
-/* Nastaliq (Urdu) writes on a diagonal and its ascenders/descenders run much
-   deeper than the mark-stacking scripts the 1.9 rule above was tuned for —
-   at that leading, adjacent lines' strokes overlap. Same selector list, source
-   order after the general rule so it wins at equal specificity. */
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-hello {
+  font-size: clamp(20px, 3.4vw, 26px);
+  line-height: 1.5;
+  text-wrap: balance;
+  overflow-wrap: break-word;
+}
+
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-hello-ask {
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-hello-wrap {
+  max-width: 100%;
+  min-width: 0;
+}
+
 .hsk-cb-panel[data-nastaliq="true"] .hsk-cb-hello,
 .hsk-cb-panel[data-nastaliq="true"] .hsk-cb-hello-lead,
 .hsk-cb-panel[data-nastaliq="true"] .hsk-cb-hello-ask,
@@ -5813,44 +6866,44 @@
 .hsk-cb-panel[data-nastaliq="true"] .hsk-cb-ai-text .hsk-markdown-list li,
 .hsk-cb-panel[data-nastaliq="true"] .hsk-cb-ai-text .hsk-markdown-h1,
 .hsk-cb-panel[data-nastaliq="true"] .hsk-cb-ai-text .hsk-markdown-h2,
-.hsk-cb-panel[data-nastaliq="true"] .hsk-cb-ai-text .hsk-markdown-h3 {
+.hsk-cb-panel[data-nastaliq="true"] .hsk-cb-ai-text .hsk-markdown-h3,
+.hsk-cb-panel[data-nastaliq="true"] .hsk-markdown-table th,
+.hsk-cb-panel[data-nastaliq="true"] .hsk-markdown-table td {
   line-height: 2.2;
 }
 .hsk-cb-panel[data-script="nonlatin"] .hsk-cb-chip { font-size: 14px; }
 
-/* Boxes sized to a Latin line box give the ink no slack, and a textarea clips.
-   Fixed heights become minimums so a stacked mark can't be cut off. */
 .hsk-cb-panel[data-script="nonlatin"] .hsk-cb-topbar-btn {
   height: auto;
   min-height: 34px;
   padding: 5px 14px;
 }
 
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-field {
+  --hsk-input-line-height: 1.9;
+}
+
 .hsk-cb-panel[data-script="nonlatin"] .hsk-cb-textarea {
   min-height: 34px;
 }
 
-/* `anywhere` permits a break between a base character and its combining marks.
-   Latin gets away with it because words are space-separated; scripts that write
-   without inter-word spaces lean on it constantly, and each bad break splits a
-   grapheme cluster mid-stack. */
+.hsk-cb-panel[data-nastaliq="true"] .hsk-cb-field {
+  --hsk-input-line-height: 2.2;
+}
+
 .hsk-cb-panel[data-script="nonlatin"] .hsk-cb-user-bubble,
 .hsk-cb-panel[data-script="nonlatin"] .hsk-cb-ai-text {
   overflow-wrap: break-word;
   word-break: normal;
 }
 
-/* Shown in place of a preview that failed to load. Silently hiding the image
-   left the caption and the mark button describing something invisible. */
 .hsk-cb-viz-broken {
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--hsk-chat-muted, #71717a);
   padding: 14px 16px;
   border: 1px dashed var(--hsk-chat-divide, rgba(0, 0, 0, 0.12));
   border-radius: 12px;
 }
-
-/* ─── Voice Controls & Overlay ─────────────────────────────────────────────── */
 
 .hsk-msg-audio-btn {
   background: transparent;
@@ -5906,11 +6959,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  /* Elastic, not fixed. The stack is canvas + caption + product cards + mic,
-     and at 26px gaps on a laptop viewport that overflows as soon as the answer
-     references anything — with no scroll, the overflow simply got clipped and
-     everything read as fighting for room. */
-  gap: clamp(12px, 2.2vh, 26px);
+    gap: clamp(12px, 2.2vh, 26px);
   padding: clamp(14px, 2.5vh, 24px);
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -5937,9 +6986,6 @@
   to { opacity: 1; }
 }
 
-/* Mirrors the exit button's placement on the opposite corner. Deliberately
-   quiet: a guest's remaining seconds are information, not a threat, until they
-   are nearly gone. */
 .hsk-voice-allowance {
   position: absolute;
   top: 14px;
@@ -5987,8 +7033,6 @@
   border-color: color-mix(in srgb, var(--hsk-chat-text, #1f1f1f) 32%, transparent);
 }
 
-/* The waveform is the most compressible thing on screen — it reads the same at
-   150px as at 260px — so it yields its height first and the cards keep theirs. */
 .hsk-voice-stage {
   width: min(560px, 100%);
   height: clamp(110px, 24vh, 240px);
@@ -6011,25 +7055,58 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 48px;
-  height: 48px;
+  width: 52px;
+  height: 52px;
   padding: 0;
-  background: transparent;
-  border: 1px solid color-mix(in srgb, var(--hsk-chat-text, #1f1f1f) 16%, transparent);
+  background: var(--hsk-surface-2, rgba(255, 255, 255, 0.95));
+  border: 1px solid color-mix(in srgb, var(--hsk-chat-text, #000000) 10%, transparent);
   border-radius: 999px;
   color: var(--hsk-chat-text, #1f1f1f);
   cursor: pointer;
-  transition: color .18s ease, border-color .18s ease, background .18s ease;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transition: color .2s ease, border-color .2s ease, background .2s ease, transform .2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow .2s ease;
 }
 
 .hsk-voice-control:hover {
-  border-color: color-mix(in srgb, var(--hsk-chat-text, #1f1f1f) 34%, transparent);
+  transform: scale(1.06);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.12);
+}
+
+.hsk-voice-control:active {
+  transform: scale(.92);
+  transition-duration: .08s;
 }
 
 .hsk-voice-control--muted {
-  color: var(--hsk-primary, #ff6a33);
-  border-color: color-mix(in srgb, var(--hsk-primary, #ff6a33) 45%, transparent);
-  background: color-mix(in srgb, var(--hsk-primary, #ff6a33) 10%, transparent);
+  color: var(--hsk-chat-muted, #888888);
+  border-color: color-mix(in srgb, var(--hsk-chat-text, #000000) 12%, transparent);
+  background: color-mix(in srgb, var(--hsk-chat-bg, #ffffff) 85%, transparent);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+
+.hsk-voice-control-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  transition: transform .2s ease;
+}
+
+@keyframes hsk-voice-icon-in {
+  from { opacity: 0; transform: scale(.6) rotate(-12deg); }
+  to { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+
+@keyframes hsk-voice-control-pulse {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 color-mix(in srgb, var(--hsk-primary, #ff6a33) 45%, transparent); }
+  40% { transform: scale(1.08); box-shadow: 0 0 0 8px color-mix(in srgb, var(--hsk-primary, #ff6a33) 0%, transparent); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-voice-control-icon, .hsk-voice-control--muted { animation: none; }
 }
 
 .hsk-voice-caption {
@@ -6063,9 +7140,6 @@
   50% { opacity: 1; }
 }
 
-/* Connecting is not listening. The filament animates in every phase, so on its
-   own it reads as a live microphone — dimmed here so the difference is visible
-   before anyone starts talking into a mic that is not open yet. */
 .hsk-voice-stage--connecting {
   opacity: .4;
   transition: opacity .25s ease;
@@ -6076,7 +7150,7 @@
   align-items: center;
   gap: 7px;
   font-family: var(--hsk-font);
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--hsk-chat-muted, #8a8f98);
   animation: hsk-sent-in .2s ease-out both;
 }
@@ -6098,6 +7172,14 @@
   font-size: 1.05rem;
   line-height: 1.5;
   color: var(--hsk-chat-text, #1f1f1f);
+}
+
+.hsk-voice-hint-sub {
+  font-family: var(--hsk-font);
+  font-size: 14px;
+  color: var(--hsk-chat-muted, #a1a1aa);
+  line-height: 1.4;
+  opacity: 0.85;
 }
 
 .hsk-voice-items {
@@ -6226,8 +7308,9 @@
   transform: translateX(-50%);
   display: flex;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: center;
+  max-width: min(100%, 420px);
   padding: 0 56px;
   z-index: 2;
 }
@@ -6247,11 +7330,34 @@
   color: #5b5b5b;
   cursor: pointer;
   transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
+  opacity: 0;
+  animation: hsk-voice-pill-in 420ms cubic-bezier(.16,1,.3,1) forwards;
 }
 
-/* No lift on hover. These sit in a wrapping row, so a transform on one made
-   the row look like it was twitching as the pointer crossed it, and the active
-   pill lightened on hover into something close to the unselected state. */
+.hsk-voice-pill--on {
+  animation: hsk-voice-pill-in 420ms cubic-bezier(.16,1,.3,1) forwards, hsk-voice-pill-pop 260ms ease;
+}
+
+@keyframes hsk-voice-pill-in {
+  from { opacity: 0; transform: translateY(-6px) scale(.92); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes hsk-voice-pill-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-voice-pill { opacity: 1; animation: none; }
+}
+
+@media (max-width: 520px) {
+  .hsk-voice-picker { gap: 5px; padding: 0 44px; }
+  .hsk-voice-pill { padding: 5px 8px; gap: 4px; }
+}
+
 .hsk-voice-pill:hover { background: rgba(255, 255, 255, 0.95); border-color: rgba(0, 0, 0, 0.16); }
 .hsk-voice-pill--on:hover { background: #1c1c1c; border-color: #1c1c1c; color: #fff; }
 
@@ -6261,15 +7367,6 @@
   color: #fff;
 }
 
-.hsk-voice-pill-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex: none;
-}
-
-.hsk-voice-pill-dot--male { background: #6aa6ff; }
-.hsk-voice-pill-dot--female { background: #ff8ba7; }
 
 @media (prefers-color-scheme: dark) {
   .hsk-voice-pill {
@@ -6282,7 +7379,6 @@
   .hsk-voice-pill--on { background: #f2f2f2; border-color: #f2f2f2; color: #141414; }
 }
 
-/* Narrow viewports: five controls plus a textarea do not fit at 36px each. */
 @media (max-width: 520px) {
   .hsk-cb-input-box {
     gap: 6px;
@@ -6299,44 +7395,36 @@
     border-radius: 10px;
   }
 
-  /* The textarea must win the space, not share it evenly. */
-  .hsk-cb-textarea {
+    .hsk-cb-textarea {
     flex: 1 1 auto;
     min-width: 0;
-    font-size: 16px; /* below 16px iOS zooms the page on focus */
-  }
+    font-size: 16px;   }
 
-  /* Live transcript competes with the controls for the same row. */
-  .hsk-cb-input-box .hsk-cb-listening {
+    .hsk-cb-input-box .hsk-cb-listening {
     display: none;
   }
 }
 
-/* Procedural texture behind the chat thread, painted by KikuDoodles. Composed
-   at runtime because any repeating tile shows its seam. The radial mask keeps
-   the marks off the edges so they never resolve into an obvious field. */
 .hsk-cb-main { position: relative; }
-/* Voice mode covers the panel whole, so it needs the same ink tokens or the
-   canvas draws near-black on a near-black ground and simply is not there. */
 .hsk-cb-main,
 .hsk-voice-overlay { --hsk-doodle-ink: 31, 31, 31; --hsk-doodle-tint: 255, 106, 51; }
+
+@keyframes hsk-doodles-shimmer-in {
+  0%   { opacity: 0; }
+  100% { opacity: 0.9; }
+}
 
 .hsk-cb-doodles {
   position: absolute;
   inset: 0;
-  /* A canvas is a replaced element: with width auto it takes its intrinsic
-     300x150 and ignores the insets. */
   width: 100%;
   height: 100%;
   z-index: 0;
   pointer-events: none;
-  -webkit-mask-image: radial-gradient(122% 90% at 50% 46%, #000 34%, transparent 88%);
-  mask-image: radial-gradient(122% 90% at 50% 46%, #000 34%, transparent 88%);
+  opacity: 0.9;
+  animation: hsk-doodles-shimmer-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-/* No z-index here: this selector outranks .hsk-cb-topbar's own z-index:10 and
-   would silently demote it. The canvas is the first positioned child at 0, so
-   auto-z siblings already paint above it in tree order. */
 .hsk-cb-main > *:not(.hsk-cb-doodles) { position: relative; }
 
 @media (prefers-color-scheme: dark) {
@@ -6344,10 +7432,1263 @@
   .hsk-voice-overlay { --hsk-doodle-ink: 240, 239, 237; --hsk-doodle-tint: 255, 150, 110; }
 }
 
-/* An explicit theme prop must beat the OS in both directions, or a widget set
-   to dark on a light machine draws near-black ink on a near-black panel and
-   the texture simply is not there. Higher specificity, so order cannot matter. */
 [data-hsk-theme="light"] .hsk-cb-main,
 [data-hsk-theme="light"] .hsk-voice-overlay { --hsk-doodle-ink: 31, 31, 31; --hsk-doodle-tint: 255, 106, 51; }
 [data-hsk-theme="dark"] .hsk-cb-main,
 [data-hsk-theme="dark"] .hsk-voice-overlay { --hsk-doodle-ink: 240, 239, 237; --hsk-doodle-tint: 255, 150, 110; }
+
+.hsk-cb-docked-option-price,
+.hsk-cb-entlang-price,
+.hsk-cb-src-price,
+.hsk-kiku-picker-item-price,
+.hsk-source-price,
+.hsk-sp-item-discount,
+.hsk-sp-item-original-price,
+.hsk-sp-item-price,
+.hsk-sp-mobile-main-card-price,
+.hsk-sp-mobile-similar-carousel-price,
+.hsk-voice-item-price,
+.hsk-live-cell {
+  font-variant-numeric: tabular-nums;
+}
+
+.hsk-live-wrap {
+  margin: 8px 0 2px;
+  max-width: min(88%, 560px);
+  box-sizing: border-box;
+}
+
+.hsk-live-carousel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.hsk-live-card {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  background: var(--hsk-chat-source-bg, rgba(0, 0, 0, 0.035));
+  border: 1px solid var(--hsk-chat-divide, rgba(0, 0, 0, 0.08));
+  border-radius: 14px;
+  padding: 10px 12px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: opacity 0.2s ease;
+}
+
+.hsk-live-card.is-stale {
+  opacity: 0.75;
+}
+
+.hsk-live-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hsk-live-card__status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.hsk-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hsk-live-dot:not(.is-stale) {
+    animation: hsk-live-pulse 2s ease-in-out infinite;
+  }
+}
+
+.hsk-live-dot.is-stale {
+  background: var(--hsk-chat-muted, #9ca3af);
+}
+
+.hsk-live-card__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--hsk-chat-text, #111827);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.01em;
+}
+
+.hsk-live-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.hsk-live-card__close {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--hsk-chat-muted, #6b7280);
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+.hsk-live-card__age {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--hsk-chat-muted, #6b7280);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.hsk-live-card__pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.hsk-live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  background: var(--hsk-chat-bg, #ffffff);
+  border: 1px solid var(--hsk-chat-divide, rgba(0, 0, 0, 0.08));
+  border-radius: 8px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+  color: var(--hsk-chat-text, #111827);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.hsk-live-pill__label {
+  font-weight: 500;
+  color: var(--hsk-chat-muted, #6b7280);
+  font-size: 11px;
+  text-transform: capitalize;
+}
+
+.hsk-live-pill__value {
+  font-weight: 650;
+  color: var(--hsk-chat-text, #111827);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hsk-live-pill.is-changed {
+    animation: hsk-live-pill-flash 1.2s ease-out;
+  }
+  @keyframes hsk-live-pill-flash {
+    0% {
+      background: rgba(16, 185, 129, 0.25);
+      border-color: #10b981;
+    }
+    100% {
+      background: var(--hsk-chat-bg, #ffffff);
+      border-color: var(--hsk-chat-divide, rgba(0, 0, 0, 0.08));
+    }
+  }
+}
+
+@media (max-width: 640px) {
+    .hsk-cb-source {
+    flex: 0 0 128px;
+  }
+  .hsk-cb-src-imgwrap,
+  .hsk-cb-src-imgwrap-empty {
+    width: 128px;
+    height: 128px;
+    font-size: 24px;
+  }
+  .hsk-cb-sources {
+    gap: 10px;
+  }
+  .hsk-cb-src-name {
+    font-size: 12px;
+    line-height: 1.35;
+  }
+  .hsk-cb-src-price {
+    font-size: 11px;
+    padding: 1px 7px;
+    margin-top: 4px;
+  }
+
+    .hsk-cb-ai-text,
+  .hsk-live {
+    max-width: 100%;
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .hsk-cb-source {
+    flex: 0 0 114px;
+  }
+  .hsk-cb-src-imgwrap,
+  .hsk-cb-src-imgwrap-empty {
+    width: 114px;
+    height: 114px;
+    font-size: 20px;
+  }
+  .hsk-cb-sources {
+    gap: 8px;
+  }
+  .hsk-live {
+    border-radius: 12px;
+    padding: 2px 0 8px;
+    margin: 8px 0 2px;
+  }
+  .hsk-live-table {
+    font-size: 11px;
+  }
+  .hsk-live-table th,
+  .hsk-live-table td {
+    padding: 5px 8px;
+  }
+  .hsk-live-head__key {
+    max-width: 12ch;
+    font-size: 11px;
+  }
+  .hsk-live-table td {
+    max-width: 18ch;
+  }
+  .hsk-live-card {
+    flex: 1 1 100%;
+  }
+}
+
+/* --- Themes --- */
+
+
+.hsk-cb-overlay[data-hsk-theme],
+[data-hsk-theme] .hsk-cb-overlay {
+  background: var(--hsk-chat-bg) !important;
+  color: var(--hsk-chat-text) !important;
+}
+
+[data-hsk-theme] .hsk-cb-panel {
+  background: transparent !important;
+  color: var(--hsk-chat-text) !important;
+}
+
+[data-hsk-theme] .hsk-cb-topbar-name {
+  background: var(--hsk-surface-2) !important;
+  color: var(--hsk-name-text, var(--hsk-chat-text)) !important;
+  box-shadow: 0 0 0 3px var(--hsk-chat-bg), 0 1px 3px rgba(var(--hsk-primary-rgb), 0.2) !important;
+}
+
+[data-hsk-theme] .hsk-cb-think-head {
+  background: var(--hsk-surface-2) !important;
+  color: var(--hsk-think-text) !important;
+  box-shadow: 0 0 0 3px var(--hsk-chat-bg), 0 1px 3px rgba(var(--hsk-primary-rgb), 0.2) !important;
+}
+
+[data-hsk-theme] .hsk-cb-chip,
+[data-hsk-theme] .hsk-cb-lang-chip,
+[data-hsk-theme] .hsk-action-pill {
+  border: var(--hsk-chip-border, none) !important;
+  background: var(--hsk-surface-1) !important;
+  color: var(--hsk-chat-text) !important;
+}
+
+[data-hsk-theme] .hsk-cb-chip:hover,
+[data-hsk-theme] .hsk-cb-lang-chip:hover,
+[data-hsk-theme] .hsk-action-pill:hover {
+  background: rgba(var(--hsk-primary-rgb), 0.12) !important;
+  color: var(--hsk-primary) !important;
+}
+
+[data-hsk-theme] .hsk-cb-ai-text {
+  background: var(--hsk-bubble-bg) !important;
+  color: var(--hsk-chat-text) !important;
+}
+
+[data-hsk-theme] .hsk-cb-ai-text:not(:has(~ .hsk-cb-ai-text))::before {
+  background: var(--hsk-bubble-bg) !important;
+}
+[data-hsk-theme] .hsk-cb-ai-text:not(:has(~ .hsk-cb-ai-text))::after {
+  background: var(--hsk-chat-bg) !important;
+}
+[data-hsk-theme] .hsk-cb-user-bubble--tail::before {
+  background: #007aff !important;
+}
+[data-hsk-theme] .hsk-cb-user-bubble--tail::after {
+  background: var(--hsk-chat-bg) !important;
+}
+
+[data-hsk-theme] .hsk-cb-topbar-title {
+  color: var(--hsk-chat-text) !important;
+}
+
+[data-hsk-theme] .hsk-cb-topbar-btn,
+[data-hsk-theme] .hsk-cb-back {
+  background: var(--hsk-surface-1) !important;
+  color: var(--hsk-chat-muted) !important;
+}
+
+[data-hsk-theme] .hsk-cb-input-box {
+  background: transparent !important;
+  border: none !important;
+  border-radius: inherit !important;
+}
+
+[data-hsk-theme] .hsk-cb-textarea {
+  color: var(--hsk-chat-text) !important;
+}
+
+[data-hsk-theme] .hsk-cb-textarea::placeholder {
+  color: var(--hsk-placeholder) !important;
+}
+
+[data-hsk-theme] .hsk-markdown-table th {
+  color: var(--hsk-chat-muted) !important;
+  border-bottom: 1px solid var(--hsk-chat-divide) !important;
+}
+
+[data-hsk-theme] .hsk-markdown-table td {
+  color: var(--hsk-chat-text) !important;
+  border-bottom: 1px solid var(--hsk-chat-divide) !important;
+}
+
+[data-hsk-theme] .hsk-cb-kiku-id-pill {
+  background: var(--hsk-surface-1) !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: var(--hsk-chat-muted) !important;
+}
+
+[data-hsk-theme] .hsk-cb-kiku-id-pill:hover {
+  color: var(--hsk-primary) !important;
+}
+
+[data-hsk-theme] .hsk-cb-theme-squircle-wrap.is-open,
+[data-hsk-theme] .hsk-cb-topbar-ooze-menu {
+  background: var(--hsk-surface-2) !important;
+  box-shadow: none !important;
+}
+
+[data-hsk-theme] .hsk-cb-theme-squircle-trigger {
+  background: var(--hsk-surface-1) !important;
+  color: var(--hsk-chat-text) !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+[data-hsk-theme] .hsk-cb-theme-grid-item {
+  background: var(--hsk-grid-bg) !important;
+  color: var(--hsk-chat-muted) !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+[data-hsk-theme] .hsk-cb-theme-grid-item.is-active {
+  background: var(--hsk-active-bg) !important;
+  color: var(--hsk-on-active) !important;
+  box-shadow: none !important;
+}
+
+[data-hsk-theme] .hsk-cb-src-name,
+[data-hsk-theme] .hsk-source-card__title {
+  color: var(--hsk-src-title) !important;
+  font-weight: 650 !important;
+}
+
+[data-hsk-theme] .hsk-cb-src-desc,
+[data-hsk-theme] .hsk-cb-src-detail,
+[data-hsk-theme] .hsk-source-card__desc {
+  color: var(--hsk-src-desc) !important;
+}
+
+[data-hsk-theme] .hsk-cb-src-price {
+  background: var(--hsk-price-bg) !important;
+  color: var(--hsk-price-text) !important;
+  font-weight: 700 !important;
+}
+
+[data-hsk-theme] .hsk-cb-main,
+[data-hsk-theme] .hsk-voice-overlay {
+  --hsk-doodle-ink: var(--hsk-ink) !important;
+  --hsk-doodle-tint: var(--hsk-tint) !important;
+}
+
+[data-hsk-theme] .hsk-voice-pill {
+  background: var(--hsk-chat-input-bg) !important;
+  border-color: var(--hsk-chat-divide) !important;
+  color: var(--hsk-chat-muted) !important;
+}
+
+[data-hsk-theme] .hsk-voice-pill:hover {
+  background: var(--hsk-surface-2) !important;
+  color: var(--hsk-chat-text) !important;
+}
+
+[data-hsk-theme] .hsk-voice-pill--on,
+[data-hsk-theme] .hsk-voice-pill--on:hover {
+  background: var(--hsk-active-bg) !important;
+  border-color: var(--hsk-active-bg) !important;
+  color: var(--hsk-on-active) !important;
+}
+
+/* ========================================================================== */
+
+.hsk-cb-overlay[data-hsk-theme="light"],
+[data-hsk-theme="light"] .hsk-cb-overlay {
+  --hsk-primary: #ff6a33 !important;
+  --hsk-primary-rgb: 255, 106, 51 !important;
+  --hsk-chat-bg: #ffffff !important;
+  --hsk-chat-text: #1f1f1f !important;
+  --hsk-chat-muted: #5f6368 !important;
+  --hsk-chat-divide: #e5e7eb !important;
+  --hsk-chat-input-bg: #f3f4f6 !important;
+  --hsk-chat-source-bg: #f9fafb !important;
+  --hsk-fade-bg: #ffffff !important;
+  --hsk-goo-fill: #ffffff !important;
+  --hsk-surface-1: rgba(0, 0, 0, 0.05) !important;
+  --hsk-surface-2: #f1f3f4 !important;
+  --hsk-bubble-bg: #f3f4f6 !important;
+  --hsk-think-text: #4b5563 !important;
+  --hsk-placeholder: #757575 !important;
+  --hsk-grid-bg: #ffffff !important;
+  --hsk-active-bg: #1f1f1f !important;
+  --hsk-on-active: #ffffff !important;
+  --hsk-src-title: #111827 !important;
+  --hsk-src-desc: #4b5563 !important;
+  --hsk-price-bg: #f3f4f6 !important;
+  --hsk-price-text: #ea580c !important;
+  --hsk-sheet-bg: #f3f4f6 !important;
+  --hsk-chip-border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  --hsk-ink: 55, 65, 81 !important;
+  --hsk-tint: 145, 77, 47 !important;
+}
+
+.hsk-cb-overlay[data-hsk-theme="dark"],
+[data-hsk-theme="dark"] .hsk-cb-overlay {
+  --hsk-primary: #ff6a33 !important;
+  --hsk-primary-rgb: 255, 106, 51 !important;
+  --hsk-chat-bg: #0a0a0a !important;
+  --hsk-chat-text: #f0efed !important;
+  --hsk-chat-muted: #888888 !important;
+  --hsk-chat-divide: rgba(255, 255, 255, 0.08) !important;
+  --hsk-chat-input-bg: #191919 !important;
+  --hsk-chat-source-bg: rgba(255, 255, 255, 0.04) !important;
+  --hsk-fade-bg: #0a0a0a !important;
+  --hsk-goo-fill: #1a1a1c !important;
+  --hsk-surface-1: rgba(255, 255, 255, 0.06) !important;
+  --hsk-surface-2: #1f1f22 !important;
+  --hsk-bubble-bg: #1f1f22 !important;
+  --hsk-think-text: #a6a6a6 !important;
+  --hsk-placeholder: #555555 !important;
+  --hsk-grid-bg: #1a1a1c !important;
+  --hsk-active-bg: #f0efed !important;
+  --hsk-on-active: #0a0a0a !important;
+  --hsk-src-title: #f9fafb !important;
+  --hsk-src-desc: #9ca3af !important;
+  --hsk-price-bg: rgba(255, 255, 255, 0.08) !important;
+  --hsk-price-text: #ff7a45 !important;
+  --hsk-sheet-bg: #1f1f22 !important;
+  --hsk-ink: 240, 239, 237 !important;
+  --hsk-tint: 248, 195, 174 !important;
+}
+
+.hsk-cb-overlay[data-hsk-theme="mahogany"],
+[data-hsk-theme="mahogany"] .hsk-cb-overlay {
+  --hsk-primary: #e07a38 !important;
+  --hsk-primary-rgb: 224, 122, 56 !important;
+  --hsk-chat-bg: #140d09 !important;
+  --hsk-chat-text: #f6eee3 !important;
+  --hsk-chat-muted: #a89485 !important;
+  --hsk-chat-divide: rgba(217, 140, 85, 0.18) !important;
+  --hsk-chat-input-bg: #211610 !important;
+  --hsk-chat-source-bg: #1c130d !important;
+  --hsk-fade-bg: #140d09 !important;
+  --hsk-goo-fill: #211610 !important;
+  --hsk-surface-1: #211610 !important;
+  --hsk-surface-2: #2b1c14 !important;
+  --hsk-bubble-bg: #261912 !important;
+  --hsk-think-text: #c4b1a1 !important;
+  --hsk-placeholder: #7a6557 !important;
+  --hsk-grid-bg: #2b1c14 !important;
+  --hsk-active-bg: #e07a38 !important;
+  --hsk-on-active: #ffffff !important;
+  --hsk-src-title: #fdf8f4 !important;
+  --hsk-src-desc: #c4b1a1 !important;
+  --hsk-price-bg: #2b1c14 !important;
+  --hsk-price-text: #f59e0b !important;
+  --hsk-sheet-bg: #211610 !important;
+  --hsk-ink: 246, 238, 227 !important;
+  --hsk-tint: 235, 180, 142 !important;
+}
+
+.hsk-cb-overlay[data-hsk-theme="blush"],
+[data-hsk-theme="blush"] .hsk-cb-overlay {
+  --hsk-primary: #ec4899 !important;
+  --hsk-primary-rgb: 236, 72, 153 !important;
+  --hsk-chat-bg: #fff5f7 !important;
+  --hsk-chat-text: #3d1424 !important;
+  --hsk-chat-muted: #94536d !important;
+  --hsk-chat-divide: rgba(236, 72, 153, 0.18) !important;
+  --hsk-chat-input-bg: #ffe4ec !important;
+  --hsk-chat-source-bg: #fff0f4 !important;
+  --hsk-fade-bg: #fff5f7 !important;
+  --hsk-goo-fill: #ffe4ec !important;
+  --hsk-surface-1: #ffe4ec !important;
+  --hsk-surface-2: #fbcfe8 !important;
+  --hsk-bubble-bg: #ffebf1 !important;
+  --hsk-think-text: #831843 !important;
+  --hsk-name-text: #831843 !important;
+  --hsk-placeholder: #b57a91 !important;
+  --hsk-grid-bg: #fff0f4 !important;
+  --hsk-active-bg: #ec4899 !important;
+  --hsk-on-active: #ffffff !important;
+  --hsk-src-title: #2b0c19 !important;
+  --hsk-src-desc: #702648 !important;
+  --hsk-price-bg: #fce7f3 !important;
+  --hsk-price-text: #db2777 !important;
+  --hsk-sheet-bg: #ffe4ec !important;
+  --hsk-sheet-hover: #ffd2e0 !important;
+  --hsk-ink: 130, 36, 75 !important;
+  --hsk-tint: 175, 38, 97 !important;
+}
+
+.hsk-cb-overlay[data-hsk-theme="coffee"],
+[data-hsk-theme="coffee"] .hsk-cb-overlay {
+  --hsk-primary: #a9714b !important;
+  --hsk-primary-rgb: 169, 113, 75 !important;
+  --hsk-chat-bg: #f7f1e8 !important;
+  --hsk-chat-text: #3b2a1d !important;
+  --hsk-chat-muted: #8a7561 !important;
+  --hsk-chat-divide: rgba(169, 113, 75, 0.18) !important;
+  --hsk-chat-input-bg: #efe4d6 !important;
+  --hsk-chat-source-bg: #f2eade !important;
+  --hsk-fade-bg: #f7f1e8 !important;
+  --hsk-goo-fill: #efe4d6 !important;
+  --hsk-surface-1: #efe4d6 !important;
+  --hsk-surface-2: #e6d7c4 !important;
+  --hsk-bubble-bg: #f0e7da !important;
+  --hsk-think-text: #6b543f !important;
+  --hsk-placeholder: #a89680 !important;
+  --hsk-grid-bg: #f2eade !important;
+  --hsk-active-bg: #a9714b !important;
+  --hsk-on-active: #ffffff !important;
+  --hsk-src-title: #2a1c11 !important;
+  --hsk-src-desc: #6b543f !important;
+  --hsk-price-bg: #ece0cf !important;
+  --hsk-price-text: #9a5f32 !important;
+  --hsk-sheet-bg: #efe4d6 !important;
+  --hsk-sheet-hover: #e6d7c4 !important;
+  --hsk-ink: 59, 42, 29 !important;
+  --hsk-tint: 120, 88, 62 !important;
+}
+
+.hsk-cb-overlay[data-hsk-theme="midnight"],
+[data-hsk-theme="midnight"] .hsk-cb-overlay {
+  --hsk-primary: #6366f1 !important;
+  --hsk-primary-rgb: 99, 102, 241 !important;
+  --hsk-chat-bg: #0f1420 !important;
+  --hsk-chat-text: #dfe6f5 !important;
+  --hsk-chat-muted: #8792ad !important;
+  --hsk-chat-divide: rgba(99, 102, 241, 0.18) !important;
+  --hsk-chat-input-bg: #1a2133 !important;
+  --hsk-chat-source-bg: #161d2c !important;
+  --hsk-fade-bg: #0f1420 !important;
+  --hsk-goo-fill: #1a2133 !important;
+  --hsk-surface-1: #1a2133 !important;
+  --hsk-surface-2: #222b40 !important;
+  --hsk-bubble-bg: #1e2637 !important;
+  --hsk-think-text: #a8b3cc !important;
+  --hsk-placeholder: #5c6780 !important;
+  --hsk-grid-bg: #222b40 !important;
+  --hsk-active-bg: #6366f1 !important;
+  --hsk-on-active: #ffffff !important;
+  --hsk-src-title: #f2f5fc !important;
+  --hsk-src-desc: #a8b3cc !important;
+  --hsk-price-bg: #222b40 !important;
+  --hsk-price-text: #818cf8 !important;
+  --hsk-sheet-bg: #1a2133 !important;
+  --hsk-sheet-hover: #222b40 !important;
+  --hsk-ink: 223, 230, 245 !important;
+  --hsk-tint: 150, 160, 200 !important;
+}
+
+/* --- Micro-interactions --- */
+
+/* chevron */
+.hsk-cb-back-icon {
+  display: inline-flex;
+  transition: transform .22s cubic-bezier(.22, 1, .36, 1);
+}
+.hsk-cb-back:hover:not(:disabled) .hsk-cb-back-icon { transform: translateX(-2px); }
+.hsk-cb-panel[dir="rtl"] .hsk-cb-back:hover:not(:disabled) .hsk-cb-back-icon {
+  transform: scaleX(-1) translateX(-2px);
+}
+
+/* tools toggle */
+.hsk-cb-tools-toggle {
+  transition: transform .26s cubic-bezier(.34, 1.56, .64, 1), background-color 0.42s cubic-bezier(0.16, 1, 0.3, 1), color 0.42s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.hsk-cb-tools-toggle:hover:not(:disabled) {
+  color: var(--hsk-primary, #ff6a33);
+  transform: rotate(90deg);
+}
+.hsk-cb-tools-toggle--open:hover:not(:disabled) { transform: rotate(135deg); }
+.hsk-cb-tools-toggle:active:not(:disabled) { transform: scale(.9); transition-duration: .1s; }
+
+/* theme trigger */
+.hsk-cb-theme-trigger-icon {
+  display: inline-flex;
+  transition: transform .3s cubic-bezier(.34, 1.56, .64, 1);
+}
+.hsk-cb-theme-squircle-trigger:hover .hsk-cb-theme-trigger-icon {
+  transform: translateY(-1.5px) rotate(-8deg);
+}
+
+.hsk-cb-dot-item:hover:not(.hsk-cb-dot-item--active) {
+  background: var(--hsk-chat-muted, rgba(120, 120, 120, .6));
+  transform: scale(1.35);
+}
+
+.hsk-msg-audio-btn {
+  transition: color .18s ease, transform .22s cubic-bezier(.34, 1.56, .64, 1);
+}
+.hsk-msg-audio-btn:hover:not(:disabled) {
+  color: var(--hsk-primary, #ff6a33);
+  transform: scale(1.12);
+}
+.hsk-msg-audio-btn:active:not(:disabled) { transform: scale(.94); transition-duration: .1s; }
+
+.hsk-markup-color {
+  transition: transform .22s cubic-bezier(.34, 1.56, .64, 1), border-color .18s ease;
+}
+.hsk-markup-color:hover:not(.hsk-markup-color--on) { transform: scale(1.22); }
+.hsk-markup-color--on:hover { transform: scale(1.15); }
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-cb-back:hover:not(:disabled) .hsk-cb-back-icon,
+  .hsk-cb-panel[dir="rtl"] .hsk-cb-back:hover:not(:disabled) .hsk-cb-back-icon,
+  .hsk-cb-theme-squircle-trigger:hover .hsk-cb-theme-trigger-icon,
+  .hsk-cb-dot-item:hover:not(.hsk-cb-dot-item--active),
+  .hsk-msg-audio-btn:hover:not(:disabled),
+  .hsk-markup-color:hover:not(.hsk-markup-color--on) { transform: none; }
+  .hsk-cb-tools-toggle:hover:not(:disabled),
+  .hsk-cb-tools-toggle--open:hover:not(:disabled) { transform: none; }
+}
+
+/* --- Voice Control --- */
+
+.hsk-voice-control {
+  position: relative;
+  isolation: isolate;
+  border-radius: 999px;
+}
+
+/* Apple Siri Chromatic Edge Ring - Razor Sharp */
+.hsk-voice-control:not(.hsk-voice-control--muted)::before {
+  content: '';
+  position: absolute;
+  inset: -1.5px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from 0deg,
+    #ff3b30, #ff9500, #ffd60a, #34c759, #00c7be, #30b0c7, #007aff, #5856d6, #af52de, #ff2d55, #ff3b30
+  );
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
+  animation: hsk-apple-siri-spin 3s linear infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.hsk-voice-control::after {
+  display: none !important;
+}
+
+.hsk-voice-control-icon {
+  will-change: transform;
+}
+
+/* Apple Siri Mic Breathing Pulse when Active */
+.hsk-voice-control:not(.hsk-voice-control--muted) .hsk-voice-control-icon {
+  animation: hsk-apple-siri-mic-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes hsk-apple-siri-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes hsk-apple-siri-breathe {
+  0%, 100% { transform: scale(0.95); opacity: 0.55; }
+  50% { transform: scale(1.15); opacity: 0.95; }
+}
+
+@keyframes hsk-apple-siri-mic-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+.hsk-voice-control--muted::before,
+.hsk-voice-control--muted::after {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-voice-control:not(:hover):not(.hsk-voice-control--muted) .hsk-voice-control-icon,
+  .hsk-voice-control:hover::before,
+  .hsk-voice-control--muted::before,
+  .hsk-voice-control--muted::after { animation: none; }
+  .hsk-voice-control:hover,
+  .hsk-voice-control:hover .hsk-mic-cap { transform: none; }
+}
+
+/* An error earns one short shake — enough to catch the eye, over before it */
+.hsk-cb-voice-error {
+  animation: hsk-error-shake .26s cubic-bezier(.36, .07, .19, .97) both;
+}
+
+@keyframes hsk-error-shake {
+  0%, 100% { transform: translateX(0); }
+  22% { transform: translateX(-3px); }
+  55% { transform: translateX(2px); }
+  80% { transform: translateX(-1px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-cb-voice-error { animation: none; }
+}
+
+/* --- Icon Micro-interactions --- */
+
+.hsk-sun-rays,
+.hsk-sun-core,
+.hsk-moon-body,
+.hsk-wood-layer,
+.hsk-heart-body,
+.hsk-steam,
+.hsk-star-spark,
+.hsk-check-mark,
+.hsk-send-tail,
+.hsk-send-body {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* sun — the rays turn, the core swells */
+.hsk-sun-rays { transform-origin: 12px 12px; transition: transform .5s cubic-bezier(.22,1,.36,1); }
+.hsk-cb-theme-grid-item:hover .hsk-sun-rays,
+.hsk-cb-theme-squircle-trigger:hover .hsk-sun-rays { transform: rotate(45deg); }
+.hsk-sun-core { transition: transform .32s cubic-bezier(.34,1.56,.64,1); }
+.hsk-cb-theme-grid-item:hover .hsk-sun-core,
+.hsk-cb-theme-squircle-trigger:hover .hsk-sun-core { transform: scale(1.14); }
+
+/* moon — tips toward its crescent */
+.hsk-moon-body { transition: transform .34s cubic-bezier(.34,1.56,.64,1); }
+.hsk-cb-theme-grid-item:hover .hsk-moon-body,
+.hsk-cb-theme-squircle-trigger:hover .hsk-moon-body { transform: rotate(-16deg); }
+
+/* wood — the grain settles, top layer last */
+.hsk-wood-layer { transition: transform .34s cubic-bezier(.34,1.56,.64,1); }
+.hsk-wood-layer { transition-delay: calc(var(--hsk-layer, 0) * 45ms); }
+.hsk-cb-theme-grid-item:hover .hsk-wood-layer,
+.hsk-cb-theme-squircle-trigger:hover .hsk-wood-layer { transform: translateY(-1.2px); }
+
+/* heart — a real double beat, not a single pop */
+.hsk-cb-theme-grid-item:hover .hsk-heart-body,
+.hsk-cb-theme-squircle-trigger:hover .hsk-heart-body {
+  animation: hsk-heartbeat 1.1s ease-in-out infinite;
+}
+@keyframes hsk-heartbeat {
+  0%, 100% { transform: scale(1); }
+  14% { transform: scale(1.18); }
+  28% { transform: scale(1); }
+  42% { transform: scale(1.12); }
+  56% { transform: scale(1); }
+}
+
+/* coffee — steam actually rises and fades, each wisp on its own clock */
+.hsk-steam { opacity: .9; }
+.hsk-cb-theme-grid-item:hover .hsk-steam,
+.hsk-cb-theme-squircle-trigger:hover .hsk-steam {
+  animation: hsk-steam-rise 1.6s ease-out infinite;
+  animation-delay: calc(var(--hsk-steam, 0) * 220ms);
+}
+@keyframes hsk-steam-rise {
+  0%   { transform: translateY(2px) scaleY(.5); opacity: 0; }
+  35%  { opacity: .95; }
+  100% { transform: translateY(-3px) scaleY(1.15); opacity: 0; }
+}
+
+/* star — the spark twinkles out of phase with nothing else */
+.hsk-cb-theme-grid-item:hover .hsk-star-spark,
+.hsk-cb-theme-squircle-trigger:hover .hsk-star-spark {
+  animation: hsk-twinkle 1.4s ease-in-out infinite;
+}
+@keyframes hsk-twinkle {
+  0%, 100% { transform: scale(1) rotate(0deg); opacity: .85; }
+  50% { transform: scale(1.45) rotate(20deg); opacity: 1; }
+}
+
+/* check — draws itself rather than appearing */
+.hsk-check-mark {
+  stroke-dasharray: 30;
+  stroke-dashoffset: 30;
+  animation: hsk-check-draw .42s cubic-bezier(.65, 0, .35, 1) forwards;
+}
+@keyframes hsk-check-draw { to { stroke-dashoffset: 0; } }
+
+/* send — the dart leans into its travel, the tail trails a beat behind */
+.hsk-send-body,
+.hsk-send-tail { transition: transform .28s cubic-bezier(.22, 1, .36, 1); }
+.hsk-send-tail { transition-delay: 40ms; }
+.hsk-chat-send:hover:not(:disabled) .hsk-send-body,
+.hsk-cb-send:hover:not(:disabled) .hsk-send-body { transform: translate(1.5px, -1.5px); }
+.hsk-chat-send:hover:not(:disabled) .hsk-send-tail,
+.hsk-cb-send:hover:not(:disabled) .hsk-send-tail { transform: translate(2.5px, -2.5px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-sun-rays, .hsk-sun-core, .hsk-moon-body, .hsk-wood-layer,
+  .hsk-send-body, .hsk-send-tail { transition: none; transform: none !important; }
+  .hsk-cb-theme-grid-item:hover .hsk-heart-body,
+  .hsk-cb-theme-squircle-trigger:hover .hsk-heart-body,
+  .hsk-cb-theme-grid-item:hover .hsk-steam,
+  .hsk-cb-theme-squircle-trigger:hover .hsk-steam,
+  .hsk-cb-theme-grid-item:hover .hsk-star-spark,
+  .hsk-cb-theme-squircle-trigger:hover .hsk-star-spark { animation: none; }
+  .hsk-check-mark { animation: none; stroke-dashoffset: 0; }
+}
+
+/* --- Send Button Gooey Interaction --- */
+
+.hsk-cb-send-stage {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* the seam: a hairline slit, invisible until something passes through it */
+.hsk-cb-send-seam {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2px;
+  height: 15px;
+  border-radius: 2px;
+  background: currentColor;
+  transform: translate(-50%, -50%) rotate(38deg) scaleY(0);
+  transform-origin: center;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.hsk-cb-send-kite {
+  display: inline-flex;
+  transform-origin: center;
+  will-change: transform;
+}
+
+/* rest: the kite leans a touch toward its exit, so it always looks ready */
+.hsk-cb-send:hover:not(:disabled) .hsk-cb-send-kite {
+  transform: translate(1.5px, -1.5px);
+  transition: transform .26s cubic-bezier(.22, 1, .36, 1);
+}
+
+.hsk-cb-send.is-launching .hsk-cb-send-kite {
+  animation: hsk-kite-tear .55s cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.hsk-cb-send.is-launching .hsk-cb-send-seam {
+  animation: hsk-seam-heal .55s cubic-bezier(.4, 0, .3, 1) both;
+}
+
+/* The kite leaves northward, shooting up cleanly into the transcript */
+@keyframes hsk-kite-tear {
+  0%   { transform: translate(0, 0) scale(1) rotate(0deg); opacity: 1; }
+  18%  { transform: translate(-1px, 2.5px) scale(.92, 1.08) rotate(-4deg); opacity: 1; }
+  45%  { transform: translate(3px, -16px) scale(1.2, .8) rotate(6deg); opacity: .95; }
+  75%  { transform: translate(6px, -38px) scale(1.05, .7) rotate(10deg); opacity: .6; }
+  100% { transform: translate(8px, -56px) scale(.6, .4) rotate(12deg); opacity: 0; }
+}
+
+/* the membrane parts where the kite crosses it, then smoothly closes */
+@keyframes hsk-seam-heal {
+  0%   { transform: translate(-50%, -50%) rotate(38deg) scaleY(0); opacity: 0; }
+  22%  { transform: translate(-50%, -50%) rotate(38deg) scaleY(1); opacity: .9; }
+  45%  { transform: translate(-50%, -50%) rotate(38deg) scaleY(1.3); opacity: .8; }
+  72%  { transform: translate(-50%, -50%) rotate(38deg) scaleY(.3); opacity: .35; }
+  100% { transform: translate(-50%, -50%) rotate(38deg) scaleY(0); opacity: 0; }
+}
+
+/* ---- the kite waits, and it is impatient ------------------------------- */
+
+.hsk-kite-wing {
+  transform-box: fill-box;
+  transform-origin: 100% 0;
+}
+
+.hsk-cb-send:not(:disabled):not(.is-launching) .hsk-kite-wing--far {
+  animation: hsk-wing-beat-far .62s ease-in-out infinite;
+}
+
+.hsk-cb-send:not(:disabled):not(.is-launching) .hsk-kite-wing--near {
+  animation: hsk-wing-beat-near .62s ease-in-out .07s infinite;
+}
+
+.hsk-cb-send:not(:disabled):not(.is-launching) .hsk-cb-send-kite {
+  animation: hsk-kite-strain 2.4s cubic-bezier(.45, 0, .35, 1) infinite;
+}
+
+.hsk-cb-send:not(:disabled):not(.is-launching) .hsk-cb-send-seam {
+  animation: hsk-seam-strain 2.4s cubic-bezier(.45, 0, .35, 1) infinite;
+}
+
+@keyframes hsk-kite-strain {
+  0%, 10%  { transform: translate(0, 0) scale(1) rotate(0deg); }
+  20% { transform: translate(-1.2px, 2px) scale(.94, 1.05) rotate(-4deg); }
+  34% { transform: translate(3.5px, -5px) scale(1.16, .86) rotate(8deg); }
+  42% { transform: translate(4.2px, -6px) scale(1.2, .82) rotate(9deg); }
+  50% { transform: translate(2.4px, -3.4px) scale(1.06, .94) rotate(5deg); }
+  64% { transform: translate(-.6px, 1.2px) scale(.97, 1.03) rotate(-2deg); }
+  78%, 100% { transform: translate(0, 0) scale(1) rotate(0deg); }
+}
+
+@keyframes hsk-seam-strain {
+  0%, 22% { transform: translate(-50%, -50%) rotate(38deg) scaleY(0); opacity: 0; }
+  34% { transform: translate(-50%, -50%) rotate(38deg) scaleY(.6); opacity: .34; }
+  42% { transform: translate(-50%, -50%) rotate(38deg) scaleY(.95); opacity: .5; }
+  52% { transform: translate(-50%, -50%) rotate(38deg) scaleY(.55); opacity: .3; }
+  66%, 100% { transform: translate(-50%, -50%) rotate(38deg) scaleY(0); opacity: 0; }
+}
+
+@keyframes hsk-wing-beat-far {
+  0%, 100% { transform: scaleX(1) skewY(0deg); }
+  50% { transform: scaleX(.86) skewY(-4deg); }
+}
+
+@keyframes hsk-wing-beat-near {
+  0%, 100% { transform: scaleX(1) skewY(0deg); }
+  50% { transform: scaleX(1.1) skewY(3deg); }
+}
+
+/* --- Stop Button --- */
+
+.hsk-stop-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+  stroke-dasharray: 22 38;
+  opacity: .85;
+  animation: hsk-stop-orbit 1.4s linear infinite;
+}
+
+/* the core breathes so the button reads as live work, and squares off on */
+.hsk-stop-core {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: hsk-stop-pulse 1.4s ease-in-out infinite;
+  transition: rx .2s ease, transform .2s cubic-bezier(.34,1.56,.64,1);
+}
+
+.hsk-cb-send--stop:hover .hsk-stop-core { transform: scale(1.16); animation-play-state: paused; }
+.hsk-cb-send--stop:hover .hsk-stop-ring { animation-duration: .7s; }
+
+@keyframes hsk-stop-orbit {
+  to { transform: rotate(1turn); }
+}
+
+@keyframes hsk-stop-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(.86); opacity: .75; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-cb-send.is-launching .hsk-cb-send-kite,
+  .hsk-cb-send.is-launching .hsk-cb-send-seam,
+  .hsk-cb-send:hover:not(:disabled) .hsk-cb-send-kite { animation: none; transform: none; }
+}
+
+/* --- Send Button Sheath --- */
+
+.hsk-cb-send.is-launching {
+  overflow: visible !important;
+}
+
+.hsk-cb-send-sheath {
+  position: absolute;
+  inset: -1px;
+  background:
+    radial-gradient(120% 90% at 32% 22%, rgba(255,255,255,.44) 0%, rgba(255,255,255,0) 58%),
+    linear-gradient(150deg,
+      color-mix(in srgb, var(--hsk-primary, #1273e6) 72%, #ffffff) 0%,
+      var(--hsk-primary, #1273e6) 46%,
+      color-mix(in srgb, var(--hsk-primary, #1273e6) 74%, #000000) 100%);
+  border-radius: 46% 54% 52% 48% / 50% 47% 53% 50%;
+  box-shadow:
+    inset 0 2px 3px rgba(255, 255, 255, .5),
+    inset 0 -3px 5px color-mix(in srgb, var(--hsk-primary, #1273e6) 30%, rgba(0, 0, 0, .55)),
+    0 2px 5px rgba(0, 0, 0, .20),
+    0 7px 16px color-mix(in srgb, var(--hsk-primary, #1273e6) 16%, transparent);
+  transform-origin: 58% 62%;
+  pointer-events: none;
+  z-index: 1;
+  will-change: transform, border-radius;
+  transition: border-radius .5s cubic-bezier(.34, 1.6, .5, 1), box-shadow .3s ease;
+}
+
+/* the kite rides above the skin it is pressing into */
+.hsk-cb-send-stage { z-index: 2; position: relative; }
+
+/* Waiting: the kite shoves, the cushion takes the shape of the shove and */
+.hsk-cb-send:not(:disabled):not(.is-launching) .hsk-cb-send-sheath {
+  animation: hsk-sheath-press 2.4s cubic-bezier(.35, .8, .3, 1) infinite;
+}
+
+@keyframes hsk-sheath-press {
+  0%, 12% {
+    transform: scale(1);
+    border-radius: 46% 54% 52% 48% / 50% 47% 53% 50%;
+  }
+  22% {
+    transform: scale(.94, 1.08) translate(-1.4px, 2.2px);
+    border-radius: 52% 48% 44% 56% / 58% 40% 60% 42%;
+  }
+  36% {
+    transform: scale(1.14, .87) translate(2.6px, -3.4px) rotate(2deg);
+    border-radius: 38% 66% 54% 46% / 40% 62% 38% 60%;
+  }
+  46% {
+    transform: scale(1.19, .83) translate(3.6px, -4.6px) rotate(2.8deg);
+    border-radius: 34% 72% 56% 44% / 36% 68% 32% 64%;
+  }
+  58% {
+    transform: scale(.93, 1.09) translate(-1.2px, 1.8px) rotate(-1.4deg);
+    border-radius: 56% 44% 42% 58% / 60% 38% 62% 40%;
+  }
+  70% {
+    transform: scale(1.05, .96) translate(.8px, -1px) rotate(.6deg);
+    border-radius: 44% 56% 50% 50% / 46% 54% 46% 54%;
+  }
+  80% {
+    transform: scale(.98, 1.03);
+    border-radius: 50% 50% 48% 52% / 52% 48% 52% 48%;
+  }
+  88%, 100% {
+    transform: scale(1);
+    border-radius: 46% 54% 52% 48% / 50% 47% 53% 50%;
+  }
+}
+
+.hsk-cb-send.is-launching .hsk-cb-send-sheath {
+  animation: hsk-sheath-yield .55s cubic-bezier(.3, .7, .25, 1) both;
+}
+
+@keyframes hsk-sheath-yield {
+  0% {
+    transform: scale(1);
+    border-radius: 46% 54% 52% 48% / 50% 47% 53% 50%;
+  }
+  20% {
+    transform: scale(.88, 1.14) translate(-2px, 3.4px);
+    border-radius: 56% 44% 40% 60% / 64% 34% 66% 36%;
+  }
+  45% {
+    transform: scale(1.34, .68) translate(6px, -10px) rotate(4.6deg);
+    border-radius: 24% 86% 62% 38% / 26% 80% 20% 74%;
+  }
+  65% {
+    transform: scale(.86, 1.16) translate(-2.2px, 3.6px) rotate(-2.2deg);
+    border-radius: 60% 40% 38% 62% / 68% 30% 70% 32%;
+  }
+  82% {
+    transform: scale(1.06, .95) translate(1px, -1px) rotate(0.8deg);
+    border-radius: 44% 56% 52% 48% / 46% 54% 46% 54%;
+  }
+  100% {
+    transform: scale(1);
+    border-radius: 46% 54% 52% 48% / 50% 47% 53% 50%;
+  }
+}
+
+.hsk-cb-send:disabled .hsk-cb-send-sheath { opacity: 0; }
+.hsk-cb-send--stop .hsk-cb-send-sheath { display: none; }
+
+.hsk-cb-send:active:not(:disabled) .hsk-cb-send-sheath {
+  box-shadow:
+    inset 0 1px 2px rgba(255, 255, 255, .3),
+    inset 0 -1px 3px color-mix(in srgb, var(--hsk-primary, #1273e6) 24%, rgba(0, 0, 0, .6)),
+    0 1px 3px rgba(0, 0, 0, .24);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-cb-send:not(:disabled):not(.is-launching) .hsk-cb-send-sheath,
+  .hsk-cb-send.is-launching .hsk-cb-send-sheath { animation: none; }
+}
+
+.hsk-cb-send:not(.hsk-cb-send--stop):not(:disabled) {
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+.hsk-cb-send:not(.hsk-cb-send--stop):not(:disabled):hover {
+  box-shadow: none !important;
+}
+
+.hsk-cb-send:not(:disabled):hover .hsk-cb-send-sheath {
+  box-shadow:
+    inset 0 2px 4px rgba(255, 255, 255, .58),
+    inset 0 -3px 6px color-mix(in srgb, var(--hsk-primary, #1273e6) 28%, rgba(0, 0, 0, .5)),
+    0 3px 7px rgba(0, 0, 0, .22),
+    0 10px 22px color-mix(in srgb, var(--hsk-primary, #1273e6) 20%, transparent);
+}
+
+/* Onboarding Step 4: Airy, Shadowless, Transparent Layout (Doodles Visible) */
+.hsk-cb-terms-sanctuary {
+  display: flex;
+  flex-direction: column;
+  margin: 18px 0 22px;
+  width: 100%;
+  max-width: 520px;
+  text-align: start;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+  opacity: 0;
+  animation: hsk-terms-delicate-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.05s forwards;
+}
+
+@keyframes hsk-terms-delicate-in {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hsk-cb-terms-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  opacity: 0;
+  animation: hsk-terms-item-in 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: calc(var(--hsk-row-idx, 0) * 60ms + 80ms);
+}
+
+@keyframes hsk-terms-item-in {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hsk-cb-terms-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.hsk-cb-terms-numeral {
+  font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  font-style: italic;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--hsk-primary, #ff6a33);
+  opacity: 0.85;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.hsk-cb-terms-title {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--hsk-chat-text, #ffffff);
+}
+
+.hsk-cb-terms-desc {
+  margin: 0;
+  padding-inline-start: 22px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--hsk-chat-muted, #9ca3af);
+  font-weight: 400;
+}
+
+.hsk-cb-terms-divider {
+  height: 1px;
+  margin: 14px 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--hsk-chat-text, #000000) 8%, transparent) 20%,
+    color-mix(in srgb, var(--hsk-chat-text, #000000) 8%, transparent) 80%,
+    transparent 100%
+  );
+}
+
+.hsk-cb-terms-action-wrap {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin-top: 14px;
+}
+
+.hsk-cb-terms-agree-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 34px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 9999px;
+  border: 1px solid var(--hsk-chat-divide, rgba(255, 255, 255, 0.08));
+  background: var(--hsk-chat-divide, rgba(255, 255, 255, 0.06));
+  color: var(--hsk-chat-muted, rgba(255, 255, 255, 0.4));
+  cursor: not-allowed;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  letter-spacing: -0.01em;
+}
+
+.hsk-cb-terms-agree-btn.is-active {
+  background: #ff6a33;
+  color: #ffffff;
+  border-color: #ff6a33;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(255, 106, 51, 0.3);
+}
+
+.hsk-cb-terms-agree-btn.is-active:hover {
+  background: #e55620;
+  border-color: #e55620;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(255, 106, 51, 0.38);
+}
+
+.hsk-cb-terms-agree-btn.is-active:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(255, 106, 51, 0.2);
+}
+

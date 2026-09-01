@@ -8,16 +8,15 @@ declare const process: any;
 
 function getEnvVar(key: string): string | undefined {
   if (key === 'NEXT_PUBLIC_AKROPOLYS_SITE_ID') {
-    try { return process.env.NEXT_PUBLIC_AKROPOLYS_SITE_ID; } catch { /* ignore */ }
+    try { return process.env.NEXT_PUBLIC_AKROPOLYS_SITE_ID; } catch {  }
   }
   if (key === 'NEXT_PUBLIC_AKROPOLYS_API_URL') {
-    try { return process.env.NEXT_PUBLIC_AKROPOLYS_API_URL; } catch { /* ignore */ }
+    try { return process.env.NEXT_PUBLIC_AKROPOLYS_API_URL; } catch {  }
   }
   if (key === 'NEXT_PUBLIC_AKROPOLYS_API_TOKEN') {
-    try { return process.env.NEXT_PUBLIC_AKROPOLYS_API_TOKEN; } catch { /* ignore */ }
+    try { return process.env.NEXT_PUBLIC_AKROPOLYS_API_TOKEN || process.env.NEXT_PUBLIC_AKROPOLYS_API_KEY; } catch {  }
   }
 
-  // Fallback check for Vite (import.meta.env)
   try {
     const metaEnv = (import.meta as any).env;
     if (metaEnv) {
@@ -25,7 +24,7 @@ function getEnvVar(key: string): string | undefined {
       if (key === 'NEXT_PUBLIC_AKROPOLYS_API_URL') return metaEnv.NEXT_PUBLIC_AKROPOLYS_API_URL || metaEnv.VITE_AKROPOLYS_API_URL;
       if (key === 'NEXT_PUBLIC_AKROPOLYS_API_TOKEN') return metaEnv.NEXT_PUBLIC_AKROPOLYS_API_TOKEN || metaEnv.VITE_AKROPOLYS_API_TOKEN;
     }
-  } catch { /* ignore */ }
+  } catch {  }
 
   if (typeof globalThis !== 'undefined') {
     const g = globalThis as any;
@@ -37,8 +36,6 @@ function getEnvVar(key: string): string | undefined {
   return undefined;
 }
 
-// Matches what fetch() and other abortable web APIs reject with, so callers can
-// use the standard `err.name === 'AbortError'` check.
 function abortError(): Error {
   if (typeof DOMException !== 'undefined') return new DOMException('Aborted', 'AbortError');
   const e = new Error('Aborted');
@@ -70,7 +67,6 @@ export function resolveDisplayFields(fields: Record<string, any>, display?: impo
   const subtitleKey = display?.cardSubtitle || '';
   const priceKey = display?.cardPrice || '';
 
-  // Title resolution with strict priority and URL checks
   const commonTitleKeys = ['title', 'name', 'label', 'headline', 'subject', 'job_title', 'listing_title', 'common_name'];
   let title = fields[titleKey] || '';
   if (!title) {
@@ -82,17 +78,16 @@ export function resolveDisplayFields(fields: Record<string, any>, display?: impo
     }
   }
   if (!title) {
-    const fallbackStr = Object.values(fields).find(v => 
-      typeof v === 'string' && 
-      v.length >= 2 && 
-      v.length <= 80 && 
-      !v.startsWith('http://') && 
+    const fallbackStr = Object.values(fields).find(v =>
+      typeof v === 'string' &&
+      v.length >= 2 &&
+      v.length <= 80 &&
+      !v.startsWith('http://') &&
       !v.startsWith('https://')
     );
     title = fallbackStr || 'Untitled';
   }
 
-  // Image resolution
   const commonImageKeys = ['image', 'images', 'thumbnail', 'photo', 'cover', 'featured_image'];
   let image = fields[imageKey] || undefined;
   if (!image) {
@@ -118,6 +113,7 @@ export function resolveDisplayFields(fields: Record<string, any>, display?: impo
 
 export class AkropolysClient {
   readonly api: AkropolysAPI;
+  get apiUrl(): string { return this.api.apiUrl; }
   readonly vertical: string;
   readonly display?: import('./types').DisplayConfig;
   readonly entities = {
@@ -126,15 +122,10 @@ export class AkropolysClient {
       options?: { signal?: AbortSignal; onToken?: (token: string) => void }
     ): Promise<void> => {
       const signal = options?.signal;
-      // An already-aborted signal must not open a stream at all.
       if (signal?.aborted) throw abortError();
 
       const stream = this.chat(params.q);
       return new Promise<void>((resolve, reject) => {
-        // destroy() suppresses both 'done' and 'error' on purpose, so a
-        // superseded stream cannot clobber the state of the one replacing it.
-        // That left this promise with nothing to settle it: an aborted query
-        // hung forever, holding its closure. Abort has to settle it here.
         const onAbort = () => {
           stream.destroy();
           settle(() => reject(abortError()));
@@ -180,7 +171,6 @@ export class AkropolysClient {
   private contentIndexerCleanup: (() => void) | null = null;
   private lastIngestedItem: Record<string, any> | null = null;
 
-
   private static INGEST_CACHE_KEY = 'akropolys_ingested_v3';
   private static INGEST_CACHE_TTL = 24 * 60 * 60 * 1000; // 24h
 
@@ -195,7 +185,7 @@ export class AkropolysClient {
         return;
       }
       this.ingestedUrls = new Map(urlFingerprints);
-    } catch { /* ignore */ }
+    } catch {  }
   }
 
   private saveIngestedCache() {
@@ -205,15 +195,13 @@ export class AkropolysClient {
         AkropolysClient.INGEST_CACHE_KEY,
         JSON.stringify({ ts: Date.now(), urlFingerprints: Array.from(this.ingestedUrls.entries()) })
       );
-    } catch { /* ignore */ }
+    } catch {  }
   }
 
   static readonly DEFAULT_API_URL = 'https://api.akropolys.cloud/v1';
 
   constructor(config: AkropolysConfig) {
     const siteId = config.siteId || getEnvVar('NEXT_PUBLIC_AKROPOLYS_SITE_ID') || '';
-    // Every site shares the same managed backend — only self-hosted/local dev
-    // needs to override this via apiUrl or NEXT_PUBLIC_AKROPOLYS_API_URL.
     const apiUrl = config.apiUrl || getEnvVar('NEXT_PUBLIC_AKROPOLYS_API_URL') || AkropolysClient.DEFAULT_API_URL;
     const apiToken = config.apiToken || getEnvVar('NEXT_PUBLIC_AKROPOLYS_API_TOKEN') || '';
 
@@ -337,8 +325,6 @@ export class AkropolysClient {
       this.api.chatStream(query, history, abortController.signal, ctx, attachments, forcedIntent, captureTargets)
     );
     const stream = new KikuStream(responsePromise, abortController);
-    // The server echoes a language switch it detected in this turn; persist it so
-    // every later turn is sent with the new preference.
     stream.on('meta', (meta: any) => {
       if (meta && typeof meta.language === 'string' && meta.language) {
         this.setShopperLanguage(meta.language);
@@ -407,17 +393,13 @@ export class AkropolysClient {
         this.sessionId = sid;
         return;
       } catch (e) {
-        // Fallback if sessionStorage is disabled or private mode
       }
     }
     this.sessionId = generateUUID();
   }
 
   /**
-   * Persistent device identity — survives reloads, but is scoped to THIS origin
-   * only (localStorage is partitioned per site by the browser). It gives
-   * anonymous within-site continuity. For capture/memory that follows the
-   * shopper ACROSS sites and devices, use mintKikuKey()/setKikuPub().
+   * Initializes or loads the persistent device identifier for the current origin.
    */
   private initDevice() {
     if (typeof window === 'undefined') {
@@ -441,11 +423,7 @@ export class AkropolysClient {
   }
 
   /**
-   * Mint the shopper's kiku key — a portable, anonymous identity. No phone,
-   * no email, no account. The key is server-minted (128-bit entropy), stored
-   * on this device, and returned so the UI can show it EXACTLY ONCE. Its hash
-   * is the memory namespace: entering the same key on any site or handing it
-   * to an AI agent opens the same memory. If lost, the memory is lost with it.
+   * Mints an anonymous, portable Kiku key pair for cross-device shopper memory.
    */
   async mintKikuKey(): Promise<{ secret: string; publicId: string }> {
     const res = await this.api.mintKikuKey();
@@ -455,11 +433,14 @@ export class AkropolysClient {
 
   private initKikuKey() {
     if (typeof window === 'undefined') return;
-    try { localStorage.removeItem('akropolys_kiku_key'); } catch { /* ignore */ }
     try {
-      const p = sessionStorage.getItem('akropolys_kiku_pub');
-      if (p) this.kikuPub = p;
-    } catch { /* ignore */ }
+      const fromSession = sessionStorage.getItem('akropolys_kiku_pub') || sessionStorage.getItem('kiku_pub');
+      if (fromSession) { this.kikuPub = fromSession; return; }
+      const fromLocal = localStorage.getItem('akropolys_kiku_pub') || localStorage.getItem('kiku_pub') || localStorage.getItem('kiku_id');
+      if (fromLocal) { this.kikuPub = fromLocal; return; }
+      const match = document.cookie.match(/(?:^|;\s*)(?:akropolys_kiku_pub|kiku_pub|kiku_id)=([^;]+)/);
+      if (match) { this.kikuPub = decodeURIComponent(match[1]); return; }
+    } catch {  }
   }
 
   /** The active public id, if any. */
@@ -472,7 +453,7 @@ export class AkropolysClient {
     try {
       const n = localStorage.getItem('akropolys_shopper_name');
       if (n) this.shopperName = n;
-    } catch { /* ignore */ }
+    } catch {  }
   }
 
   /** The shopper's display name, if they gave one during onboarding. */
@@ -486,14 +467,14 @@ export class AkropolysClient {
     if (!n) return;
     this.shopperName = n;
     if (typeof window === 'undefined') return;
-    try { localStorage.setItem('akropolys_shopper_name', n); } catch { /* ignore */ }
+    try { localStorage.setItem('akropolys_shopper_name', n); } catch {  }
   }
 
   /** Forget the shopper's display name. */
   clearShopperName(): void {
     this.shopperName = null;
     if (typeof window === 'undefined') return;
-    try { localStorage.removeItem('akropolys_shopper_name'); } catch { /* ignore */ }
+    try { localStorage.removeItem('akropolys_shopper_name'); } catch {  }
   }
 
   private shopperLanguage: string | null = null;
@@ -503,7 +484,7 @@ export class AkropolysClient {
     try {
       const l = localStorage.getItem('akropolys_shopper_language');
       if (l) this.shopperLanguage = l;
-    } catch { /* ignore */ }
+    } catch {  }
   }
 
   /** The shopper's preferred language, if set during onboarding. */
@@ -517,14 +498,14 @@ export class AkropolysClient {
     if (!l) return;
     this.shopperLanguage = l;
     if (typeof window === 'undefined') return;
-    try { localStorage.setItem('akropolys_shopper_language', l); } catch { /* ignore */ }
+    try { localStorage.setItem('akropolys_shopper_language', l); } catch {  }
   }
 
   /** Forget the shopper's preferred language. */
   clearShopperLanguage(): void {
     this.shopperLanguage = null;
     if (typeof window === 'undefined') return;
-    try { localStorage.removeItem('akropolys_shopper_language'); } catch { /* ignore */ }
+    try { localStorage.removeItem('akropolys_shopper_language'); } catch {  }
   }
 
   private entityLanguageMode: string | null = null;
@@ -534,7 +515,7 @@ export class AkropolysClient {
     try {
       const m = localStorage.getItem('akropolys_entity_language');
       if (m === 'original' || m === 'translated') this.entityLanguageMode = m;
-    } catch { /* ignore */ }
+    } catch {  }
   }
 
   /**
@@ -549,13 +530,13 @@ export class AkropolysClient {
     if (mode !== 'original' && mode !== 'translated') return;
     this.entityLanguageMode = mode;
     if (typeof window === 'undefined') return;
-    try { localStorage.setItem('akropolys_entity_language', mode); } catch { /* ignore */ }
+    try { localStorage.setItem('akropolys_entity_language', mode); } catch {  }
   }
 
   clearEntityLanguageMode(): void {
     this.entityLanguageMode = null;
     if (typeof window === 'undefined') return;
-    try { localStorage.removeItem('akropolys_entity_language'); } catch { /* ignore */ }
+    try { localStorage.removeItem('akropolys_entity_language'); } catch {  }
   }
 
   /**
@@ -567,6 +548,14 @@ export class AkropolysClient {
   }
 
   /**
+   * kiku's own Latin face, served from the API origin. Independent of language:
+   * it is the widget's default face, not a match for the shopper's script.
+   */
+  baseFont() {
+    return this.api.baseFont();
+  }
+
+  /**
    * Spoken audio for an assistant answer, synthesized server-side so no speech
    * key ever reaches the page. Defaults to the shopper's chosen language.
    */
@@ -575,21 +564,15 @@ export class AkropolysClient {
   }
 
   /**
-   * Translated widget chrome for the shopper's language, cached in
-   * localStorage so it's fetched once per language per browser rather than
-   * once per session. Bump CHROME_STRINGS_CACHE_VERSION if the defaults dict
-   * changes shape, so stale cached keys can't linger.
+   * Loads localized UI strings, caching in localStorage by language and schema version.
    */
   private static CHROME_STRINGS_CACHE_VERSION = 4;
 
   async getUIStrings(language: string, defaults: Record<string, string>): Promise<UIStrings> {
-    // The server owns the canonical dictionary; `defaults` stays only as the
-    // caller's English fallback and as a cache-key fingerprint, so a widget
-    // release with new keys refreshes rather than pinning the old cached set.
     const fingerprint = AkropolysClient.hashStrings(defaults);
     const cacheKey = `akropolys_ui_strings_v${AkropolysClient.CHROME_STRINGS_CACHE_VERSION}_${language.toLowerCase().trim()}_${fingerprint}`;
 
-    const english: UIStrings = { strings: {}, complete: false, dir: 'ltr', bcp47: '', font: null };
+    const english: UIStrings = { strings: {}, complete: false, curated: true, dir: 'ltr', bcp47: '', font: null };
 
     if (typeof window !== 'undefined') {
       try {
@@ -600,6 +583,7 @@ export class AkropolysClient {
             return {
               strings: cached.strings,
               complete: true,
+              curated: cached.curated !== false,
               dir: cached.dir === 'rtl' ? 'rtl' : 'ltr',
               bcp47: typeof cached.bcp47 === 'string' ? cached.bcp47 : '',
               font: cached.font?.family && cached.font?.faces?.length ? cached.font : null,
@@ -607,12 +591,9 @@ export class AkropolysClient {
           }
           localStorage.removeItem(cacheKey);
         }
-      } catch { /* ignore */ }
+      } catch {  }
     }
 
-    // One retry: the server returns nothing rather than a half-translated
-    // dictionary, and a single transient provider failure shouldn't sentence
-    // this shopper to English for the whole session.
     let result = await this.api.uiStrings(language);
     if (!result?.complete) result = await this.api.uiStrings(language);
     if (!result?.complete || Object.keys(result.strings).length === 0) return english;
@@ -620,15 +601,13 @@ export class AkropolysClient {
 
     if (typeof window !== 'undefined') {
       try {
-        // Drop superseded entries for this language so old dictionaries don't
-        // accumulate in localStorage across SDK releases.
         const stale = `akropolys_ui_strings_v${AkropolysClient.CHROME_STRINGS_CACHE_VERSION}_${language.toLowerCase().trim()}_`;
         for (let i = localStorage.length - 1; i >= 0; i--) {
           const k = localStorage.key(i);
           if (k && k.startsWith(stale) && k !== cacheKey) localStorage.removeItem(k);
         }
-        localStorage.setItem(cacheKey, JSON.stringify({ strings: translated, dir: result.dir, bcp47: result.bcp47, font: result.font }));
-      } catch { /* ignore */ }
+        localStorage.setItem(cacheKey, JSON.stringify({ strings: translated, dir: result.dir, bcp47: result.bcp47, font: result.font, curated: result.curated }));
+      } catch {  }
     }
     return result;
   }
@@ -646,7 +625,9 @@ export class AkropolysClient {
     if (!p) return;
     this.kikuPub = p;
     if (typeof window === 'undefined') return;
-    try { sessionStorage.setItem('akropolys_kiku_pub', p); } catch { /* ignore */ }
+    try { sessionStorage.setItem('akropolys_kiku_pub', p); } catch {  }
+    try { localStorage.setItem('akropolys_kiku_pub', p); } catch {  }
+    try { document.cookie = `akropolys_kiku_pub=${encodeURIComponent(p)};path=/;max-age=31536000;SameSite=Lax`; } catch {  }
   }
 
   /** Whether a public id is active on this device. */
@@ -658,8 +639,13 @@ export class AkropolysClient {
   clearKikuKey(): void {
     this.kikuPub = null;
     if (typeof window === 'undefined') return;
-    try { sessionStorage.removeItem('akropolys_kiku_pub'); } catch { /* ignore */ }
-    try { localStorage.removeItem('akropolys_kiku_key'); } catch { /* ignore */ }
+    try { sessionStorage.removeItem('akropolys_kiku_pub'); } catch {  }
+    try { sessionStorage.removeItem('kiku_pub'); } catch {  }
+    try { localStorage.removeItem('akropolys_kiku_pub'); } catch {  }
+    try { localStorage.removeItem('kiku_pub'); } catch {  }
+    try { localStorage.removeItem('kiku_id'); } catch {  }
+    try { localStorage.removeItem('akropolys_kiku_key'); } catch {  }
+    try { document.cookie = 'akropolys_kiku_pub=;path=/;max-age=0'; } catch {  }
   }
 
   destroy() {
@@ -693,14 +679,9 @@ export class AkropolysClient {
     return this.ingestMany(rawItems);
   }
 
-  /**
-   * Ingest a single entity.
-   * @see Entity for the contract
-   */
   async ingest<T extends Record<string, any>>(entity: T): Promise<void> {
     this.lastIngestedItem = entity;
     const target = (entity as any).envelope?.entity || entity;
-    // 1. Identity resolution
     const id = target.id ?? target.productId ?? target.slug ?? target.url ?? target.name ?? '';
     const url = target.url || (typeof window !== 'undefined' ? window.location.href : '');
 
@@ -709,7 +690,6 @@ export class AkropolysClient {
       return;
     }
 
-    // 2. URL deduplication
     const fingerprint = stableStringify(entity);
     if (url) {
       if (this.ingestedUrls.get(url) === fingerprint) {
@@ -719,15 +699,10 @@ export class AkropolysClient {
       this.saveIngestedCache();
     }
 
-    // 3. Enqueue raw
     this.ingestQueue.push(entity);
     this.scheduleFlush();
   }
 
-  /**
-   * Ingest multiple entities.
-   * @see Entity for the contract
-   */
   async ingestMany<T extends Record<string, any>>(entities: T[]): Promise<void> {
     if (entities.length > 0) {
       this.lastIngestedItem = entities[entities.length - 1];
@@ -799,7 +774,6 @@ export class AkropolysClient {
 
         try {
           await this.api.ingestBatch(batch);
-          // Only on success (2xx) — dequeue confirmed items
           this.ingestQueue.splice(0, batch.length);
           this.retryCount = 0; // reset retry counter on success
         } catch (e: any) {
@@ -815,12 +789,10 @@ export class AkropolysClient {
           }
 
           if (status >= 400 && status < 500 && status !== 429) {
-            // Permanent failure — discard and log warning
             console.error('[Akropolys] Ingestion discarded due to client error:', message);
             this.ingestQueue.splice(0, batch.length);
             continue; // Continue processing subsequent batches if any
           } else {
-            // Temporary failure (5xx, timeout, 429) — keep items, break loop, retry later
             console.warn('[Akropolys] Ingestion temporarily failed. Retrying later.', message);
             this.scheduleFlushWithBackoff();
             break;
@@ -899,12 +871,10 @@ export class AkropolysClient {
           }
 
           if (status >= 400 && status < 500 && status !== 429) {
-            // Permanent failure — discard and log warning
             console.error('[Akropolys] Content ingestion discarded due to client error:', message);
             this.contentQueue.splice(0, batch.length);
             continue;
           } else {
-            // Temporary failure (5xx, timeout, 429) — keep items, break loop, retry later
             console.warn('[Akropolys] Content ingestion temporarily failed. Retrying later.', message);
             this.scheduleContentFlushWithBackoff();
             break;
@@ -928,11 +898,6 @@ export class AkropolysClient {
   }
 }
 
-// The active client is stored on globalThis (not a module-local variable) so it
-// is shared even when a bundler/package manager ends up with multiple copies of
-// this package — e.g. an app and a UI library each resolving their own
-// @akropolys/sdk. Without this, the widget's copy can't see the client the app's
-// copy created, and every request fires with no apiUrl ("Failed to fetch").
 const GLOBAL_KEY = '__akropolys_client__';
 
 function getInstance(): AkropolysClient | null {
