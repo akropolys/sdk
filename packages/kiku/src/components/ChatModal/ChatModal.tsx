@@ -388,9 +388,25 @@ export function ChatModal({
   });
 
   useEffect(() => {
-    const prev = document.body.style.overflow;
+    if (typeof window === 'undefined') return;
+
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    const prevOverflow = document.body.style.overflow;
+    const prevPadding = document.body.style.paddingRight;
+
+    if (scrollbarWidth > 0) {
+      const computedPadding = parseFloat(window.getComputedStyle(document.body).paddingRight) || 0;
+      document.body.style.paddingRight = `${computedPadding + scrollbarWidth}px`;
+      document.documentElement.style.setProperty('--hsk-scrollbar-width', `${scrollbarWidth}px`);
+    }
+
     document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
+
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.body.style.paddingRight = prevPadding;
+      document.documentElement.style.removeProperty('--hsk-scrollbar-width');
+    };
   }, []);
 
   useEffect(() => {
