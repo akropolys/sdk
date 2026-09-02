@@ -34,7 +34,6 @@ export default function App() {
         label="Ask me anything"
         enableVoice={true}
         enableVision={true}
-        enableAudioResponse={true}
         theme={{
           borderRadius: "24px",
         }}
@@ -43,6 +42,8 @@ export default function App() {
   );
 }
 ```
+
+> **Next.js Note**: If running an experimental Next.js 15/16 canary with Tailwind CSS v4 on Windows, run `next dev --webpack` if Turbopack experiences resolver latency on Windows ([tracked upstream](https://github.com/vercel/next.js/issues)).
 
 ---
 
