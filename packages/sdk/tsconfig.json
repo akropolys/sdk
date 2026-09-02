@@ -6,6 +6,7 @@
     "jsx": "react-jsx",
     "strict": true,
     "declaration": true,
+    "rootDir": "src",
     "outDir": "dist",
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "skipLibCheck": true

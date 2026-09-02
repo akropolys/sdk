@@ -1,8 +1,8 @@
 # Akropolys
 
-**The real-time conversational intelligence layer for the living web.**
+**The real-time conversational layer for the living web.**
 
-Domain-blind to any catalog entity or live telemetry stream — from retail inventory, cars, and real estate to financial markets, travel fares, and live sports.
+Domain-blind to any catalog or live data stream — from retail inventory, cars, and real estate to financial markets, travel fares, and live sports.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178c6.svg)](https://www.typescriptlang.org/)
@@ -10,16 +10,19 @@ Domain-blind to any catalog entity or live telemetry stream — from retail inve
 
 ---
 
-## What It Represents
+## Why Akropolys
 
-Most AI assistants are trapped in static history — scraping pages once a week and hallucinating outdated information.
+Building end-to-end RAG is **exhausting** — vector databases, chunking strategies, stale embeddings, and synchronization jobs that take weeks to build and maintain.
 
-Akropolys is **Living AI**:
-* 🌐 **Domain-Blind Entity Grounding**: Treat any asset — products, vehicles, properties, flights, contracts, or events — as an indexed entity.
-* ⚡ **Sub-50ms Live Telemetry**: Ingest high-frequency moving state (`signLiveRecords`) directly into in-memory model context.
-* 🎙️ **Multi-Modal Native**: Spoken duplex Live Voice, Computer Vision reverse search, and interactive comparison tables.
-* 📐 **Zero Hallucination Math**: Live deterministic calculation of prices, discounts, margins, risk, and payoff structures.
-* 🔒 **One Drop-In Embed**: Single line of code for any website, app, or storefront.
+Akropolys replaces the custom RAG pipeline with a unified, real-time retrieval and conversational layer.
+
+### What you get out of the box
+
+- **Domain-Blind Grounding** — Index any asset (products, properties, contracts, or live odds) without custom schema engineering.
+- **Sub-50ms Live Telemetry** — Stream fast-changing state directly into model context without re-indexing or re-embedding.
+- **Multi-Modal Native** — Duplex voice streaming, photo/visual search, and comparison tables out of the box.
+- **Deterministic Precision** — Zero-hallucination math for real-time prices, inventories, and calculations.
+- **Drop-In Embed** — Headless SDK (`@akropolys/sdk`) and pre-built UI (`@akropolys/kiku`) ready in minutes.
 
 ---
 
@@ -54,23 +57,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 }
 ```
 
-### 2. Standalone HTML / Storefront Embed
-
-```html
-<script>
-  window.AkropolysConfig = {
-    siteId: "YOUR_SITE_ID",
-    apiToken: "YOUR_PUBLIC_KEY",
-    buttonLabel: "Ask me anything",
-    theme: "dark",
-    enableVoice: true,
-    enableVision: true,
-  };
-</script>
-<script src="https://cdn.akropolys.cloud/kiku.iife.js" async></script>
-```
-
-### 3. Stream Live Telemetry (Server)
+### 2. Stream Live Telemetry (Server)
 
 ```typescript
 import { signLiveRecords } from '@akropolys/sdk/server';

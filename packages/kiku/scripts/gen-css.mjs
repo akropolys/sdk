@@ -10,7 +10,13 @@ function minifyCss(css) {
     .replace(/\s+/g, ' ')
     // 3. Remove space around symbols: { } ; : , > + ~
     .replace(/\s*([{};:,>+~])\s*/g, '$1')
-    // 4. Remove unnecessary trailing semicolons
+    // 4. Remove space in !important
+    .replace(/!\s+important/g, '!important')
+    // 5. Zero unit stripping: 0px, 0rem, 0em, 0% -> 0
+    .replace(/(?<=[:\s,(])0(?:px|rem|em|%|pt)/g, '0')
+    // 6. Leading zero stripping: 0.5s -> .5s
+    .replace(/(?<=[:\s,(])0\.(\d+)/g, '.$1')
+    // 7. Remove unnecessary trailing semicolons
     .replace(/;}/g, '}')
     .trim();
 }

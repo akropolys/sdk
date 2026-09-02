@@ -55,23 +55,6 @@ export default function App() {
 | `<VoiceOverlay />` | Duplex live spoken voice assistant with Apple Siri chromatic animation and real-time audio visualization. |
 | `<LiveTable />` | High-precision comparative financial and sports odds table. |
 
----
-
-## Standalone Script Tag / Shopify Embed
-
-```html
-<script>
-  window.AkropolysConfig = {
-    siteId: "YOUR_SITE_ID",
-    apiToken: "YOUR_PUBLIC_KEY",
-    buttonLabel: "Ask Kiku",
-    theme: "dark",
-    enableVoice: true,
-    enableVision: true,
-  };
-</script>
-<script src="https://cdn.akropolys.cloud/kiku.iife.js" async></script>
-```
 
 ---
 

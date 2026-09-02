@@ -410,7 +410,7 @@ function StandaloneKikuApp({ config, isInline }: { config: StandaloneConfig; isI
         isInline={isInline}
       >
         <KikuButton
-          label={config.buttonLabel}
+          label={config.buttonLabel || 'Ask Kiku'}
           title={config.title || 'kiku'}
           placeholder={config.placeholder}
           defaultCurrency={config.defaultCurrency || '$'}

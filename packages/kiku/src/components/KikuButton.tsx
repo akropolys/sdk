@@ -9,12 +9,13 @@ import { cn } from '../utils/cn';
 import { resolveTheme } from '../utils/theme';
 import { warmChrome } from '../utils/chromeWarm';
 import { useHostFontFace } from '../utils/hostFont';
-import { SparkleIcon } from './ChatModal/icons';
 import { DEFAULT_CHIPS, DEFAULT_UI_STRINGS } from './ChatModal/types';
 import { ChatModal } from './ChatModal';
 
 export interface KikuButtonProps {
-  label?: string;
+  label?: React.ReactNode;
+  children?: React.ReactNode;
+  icon?: React.ReactNode;
   title?: string;
   placeholder?: string;
   backdropColor?: string;
@@ -49,7 +50,9 @@ export interface KikuButtonProps {
 }
 
 export function KikuButton({
-  label,
+  label = 'Ask AI',
+  children,
+  icon,
   title,
   placeholder,
   backdropColor,
@@ -165,10 +168,18 @@ export function KikuButton({
         data-hsk-theme={hskThemeAttr}
         aria-label="Open AI chat"
       >
-        <span className="hsk-cb-btn-icon" style={{ display: 'flex', alignItems: 'center' }}>
-          <SparkleIcon />
-        </span>
-        {label !== undefined ? label : null}
+        {children !== undefined ? (
+          children
+        ) : (
+          <>
+            {icon ? (
+              <span className="hsk-cb-btn-icon" style={{ display: 'flex', alignItems: 'center' }}>
+                {icon}
+              </span>
+            ) : null}
+            {label}
+          </>
+        )}
       </button>
       {open && mounted && createPortal(
         <ChatModal

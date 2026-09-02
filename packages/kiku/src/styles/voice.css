@@ -694,20 +694,6 @@
     padding: 2px 0 8px;
     margin: 8px 0 2px;
   }
-  .hsk-live-table {
-    font-size: 11px;
-  }
-  .hsk-live-table th,
-  .hsk-live-table td {
-    padding: 5px 8px;
-  }
-  .hsk-live-head__key {
-    max-width: 12ch;
-    font-size: 11px;
-  }
-  .hsk-live-table td {
-    max-width: 18ch;
-  }
   .hsk-live-card {
     flex: 1 1 100%;
   }
