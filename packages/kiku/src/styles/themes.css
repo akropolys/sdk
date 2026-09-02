@@ -102,7 +102,7 @@
   color: var(--hsk-primary) !important;
 }
 
-[data-hsk-theme] .hsk-cb-theme-squircle-wrap.is-open,
+[data-hsk-theme] .hsk-cb-theme-2x2-grid,
 [data-hsk-theme] .hsk-cb-topbar-ooze-menu {
   background: var(--hsk-surface-2) !important;
   box-shadow: none !important;
