@@ -6,7 +6,6 @@
     "dev": "pnpm --filter \"*\" dev"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.31.0",
     "typescript": "^5.0.0"
   }
 }
