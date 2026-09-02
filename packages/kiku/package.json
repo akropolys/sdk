@@ -1,20 +1,19 @@
 {
   "name": "@akropolys/kiku",
-  "version": "1.7.19",
-  "description": "The chat and search widgets for Akropolys — the interface your users and their AI agents actually talk to.",
+  "version": "1.7.20",
+  "description": "The real-time conversational layer for the living web.",
   "license": "MIT",
   "keywords": [
-    "akropolys",
-    "kiku",
-    "ai",
+    "conversational-ai",
+    "realtime",
+    "voice-ai",
     "chat",
     "search",
+    "rag",
     "react",
-    "ui",
-    "components",
-    "ecommerce",
-    "shopping-assistant",
-    "conversational-ui"
+    "nextjs",
+    "akropolys",
+    "kiku"
   ],
   "repository": {
     "type": "git",
