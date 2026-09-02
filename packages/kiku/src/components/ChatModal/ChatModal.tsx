@@ -108,21 +108,20 @@ export function ChatModal({
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [markupSrc, setMarkupSrc] = useState<string | null>(null);
 
-  const [termsAgreed, setTermsAgreed] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
+  const [termsAgreed, setTermsAgreed] = useState<boolean>(true);
+
+  useEffect(() => {
     try {
-      return localStorage.getItem('akropolys_terms_agreed') === 'true';
-    } catch {
-      return false;
-    }
-  });
+      localStorage.setItem('akropolys_terms_agreed', 'true');
+    } catch { /* noop */ }
+  }, []);
 
   const onboarding = messages.length === 0;
   const awaitingLang = onboarding && !shopperLanguage;
   const awaitingName = onboarding && !!shopperLanguage && !shopperName;
   const awaitingEntityLang = onboarding && !!shopperLanguage && !!shopperName && !entityLangPref;
-  const awaitingConsent = onboarding && !!shopperLanguage && !!shopperName && !!entityLangPref && !termsAgreed;
-  const inOnboarding = awaitingLang || awaitingName || awaitingEntityLang || awaitingConsent;
+  const awaitingConsent = false;
+  const inOnboarding = awaitingLang || awaitingName || awaitingEntityLang;
 
   const hasLiveData = React.useMemo(
     () => messages.some(m => (m as any).liveKeys?.length > 0),
@@ -158,9 +157,7 @@ export function ChatModal({
   const chooseEntityLang = (mode: 'translated' | 'original') => {
     try { client.setEntityLanguageMode?.(mode); } catch {  }
     setEntityLangPrefState(mode);
-    if (termsAgreed) {
-      setJustCompleted(true);
-    }
+    setJustCompleted(true);
   };
 
   const agreeTerms = () => {
