@@ -725,12 +725,6 @@
     background: transparent !important;
   }
 
-  .hsk-cb-theme-squircle-wrap.is-open {
-    padding: 0;
-    background: transparent !important;
-    box-shadow: none !important;
-  }
-
   .hsk-cb-theme-squircle-trigger {
     display: inline-flex;
     align-items: center;
