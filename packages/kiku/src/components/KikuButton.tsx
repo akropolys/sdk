@@ -73,7 +73,6 @@ export function KikuButton({
 }: KikuButtonProps) {
   const client = useAkropolysContext();
   const [open, setOpen] = useState(false);
-  const [opening, setOpening] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [origin, setOrigin] = useState<import('./ChatModal/types').ModalOrigin | null>(null);
 
@@ -87,7 +86,6 @@ export function KikuButton({
   }, [client]);
 
   const openFrom = useCallback((el: HTMLElement) => {
-    setOpening(true);
     warmShadow();
     const b = el.getBoundingClientRect();
     const style = window.getComputedStyle(el);
@@ -110,7 +108,6 @@ export function KikuButton({
       borderRadius: br,
     });
     setOpen(true);
-    setTimeout(() => setOpening(false), 400);
   }, [warmShadow]);
 
   useEffect(() => {
@@ -165,7 +162,7 @@ export function KikuButton({
   return (
     <>
       <button
-        className={cn("hsk-cb-btn", opening && "hsk-cb-btn--opening", classNames.button, className)}
+        className={cn("hsk-cb-btn", classNames.button, className)}
         onClick={e => openFrom(e.currentTarget)}
         onPointerEnter={warmShadow}
         onPointerDown={warmShadow}
@@ -174,10 +171,7 @@ export function KikuButton({
         aria-label="Open AI chat"
       >
         {children !== undefined ? (
-          <>
-            {children}
-            {opening && <span className="hsk-cb-btn-spinner" aria-hidden="true" />}
-          </>
+          children
         ) : (
           <>
             {icon ? (
@@ -186,7 +180,6 @@ export function KikuButton({
               </span>
             ) : null}
             {label}
-            {opening && <span className="hsk-cb-btn-spinner" aria-hidden="true" />}
           </>
         )}
       </button>

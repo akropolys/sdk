@@ -259,25 +259,6 @@
   transform: scale(.98);
 }
 
-.hsk-cb-btn-spinner {
-  width: 13px;
-  height: 13px;
-  border: 2px solid currentColor;
-  border-right-color: transparent;
-  border-radius: 50%;
-  animation: hsk-btn-spin .6s linear infinite;
-  display: inline-block;
-  flex-shrink: 0;
-  margin-left: 6px;
-  vertical-align: middle;
-}
-
-@keyframes hsk-btn-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 .hsk-cb-btn-icon {
   font-size: 15px;
   line-height: 1;
