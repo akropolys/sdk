@@ -99,8 +99,13 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const outAnalyserRef = useRef<AnalyserNode | null>(null);
   const outGainRef = useRef<GainNode | null>(null);
-  const isSpeakingRef = useRef(false);
   const outRateRef = useRef(24000);
+
+  const isSpeaking = useCallback(() => {
+    const ctx = ctxRef.current;
+    if (!ctx) return false;
+    return ctx.currentTime < (playAtRef.current + 0.18);
+  }, []);
 
   const optsRef = useRef(opts);
   useEffect(() => { optsRef.current = opts; }, [opts]);
@@ -161,7 +166,7 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
 
   
   const flushPlayback = useCallback(() => {
-    isSpeakingRef.current = false;
+    playAtRef.current = 0;
     const g = outGainRef.current;
     const ctx = ctxRef.current;
     if (g && ctx && ctx.state !== 'closed') {
@@ -174,7 +179,6 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
           try { src.onended = null; src.stop(); } catch { }
         }
         sourcesRef.current.clear();
-        playAtRef.current = 0;
         if (g && ctxRef.current && ctxRef.current.state !== 'closed') {
           g.gain.setValueAtTime(1, ctxRef.current.currentTime);
         }
@@ -184,7 +188,6 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
         try { src.onended = null; src.stop(); } catch { }
       }
       sourcesRef.current.clear();
-      playAtRef.current = 0;
     }
   }, []);
 
@@ -209,18 +212,22 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
     src.connect(out);
 
     const now = ctx.currentTime;
-    // 80ms jitter buffer cushion when starting from silence to absorb network packet jitter
-    const at = playAtRef.current > now ? playAtRef.current : now + 0.08;
+    let at: number;
+    if (playAtRef.current > now) {
+      at = playAtRef.current;
+    } else if (playAtRef.current === 0) {
+      at = now + 0.06;
+    } else {
+      at = now + 0.005;
+    }
     src.start(at);
     playAtRef.current = at + buf.duration;
-    isSpeakingRef.current = true;
 
     sourcesRef.current.add(src);
     src.onended = () => {
       sourcesRef.current.delete(src);
-      if (sourcesRef.current.size === 0) {
+      if (sourcesRef.current.size === 0 && ctx.currentTime >= (playAtRef.current - 0.02)) {
         playAtRef.current = 0;
-        isSpeakingRef.current = false;
         setState(s => (s === 'speaking' ? 'listening' : s));
       }
     };
@@ -249,7 +256,6 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
     analyserRef.current = null;
     outAnalyserRef.current = null;
     outGainRef.current = null;
-    isSpeakingRef.current = false;
     ctxRef.current?.close().catch(() => {  });
     ctxRef.current = null;
     setState(finalState);
@@ -304,6 +310,13 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
           stopHold();
           setHearing(false);
           flushExchange();
+          const remainingSec = Math.max(0, playAtRef.current - (ctxRef.current?.currentTime ?? 0));
+          setTimeout(() => {
+            if (sourcesRef.current.size === 0) {
+              playAtRef.current = 0;
+              setState(s => (s === 'speaking' ? 'listening' : s));
+            }
+          }, (remainingSec + 0.08) * 1000);
           break;
         case 'sources':
           if (Array.isArray(f.sources) && f.sources.length) setSources(f.sources);
