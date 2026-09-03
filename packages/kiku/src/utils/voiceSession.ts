@@ -301,8 +301,7 @@ export function useVoiceSession({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: false,
-          channelCount: 1,
+          autoGainControl: true,
         },
       });
       streamRef.current = stream;
