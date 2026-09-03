@@ -298,7 +298,12 @@ export function useVoiceSession({
     setActive(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: false,
+          channelCount: 1,
+        },
       });
       streamRef.current = stream;
       const AC = (window as any).AudioContext || (window as any).webkitAudioContext;

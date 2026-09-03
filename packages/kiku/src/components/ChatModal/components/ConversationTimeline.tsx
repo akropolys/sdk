@@ -18,6 +18,8 @@ export function ConversationTimeline({
   side = 'right',
 }: ConversationTimelineProps) {
   const tr = useT();
+  const containerRef = useRef<HTMLElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const cursorRef = useRef<HTMLSpanElement>(null);
 
@@ -29,18 +31,40 @@ export function ConversationTimeline({
   useEffect(() => {
     const node = itemRefs.current[anchor];
     const cursor = cursorRef.current;
-    if (!node || !cursor) return;
-    cursor.style.transform = `translateY(${node.offsetTop + node.offsetHeight / 2}px)`;
+    const track = trackRef.current;
+    const container = containerRef.current;
+    if (!node) return;
+
+    if (cursor) {
+      cursor.style.transform = `translateY(${node.offsetTop + node.offsetHeight / 2}px)`;
+    }
+
+    if (track && container) {
+      const containerHeight = container.clientHeight;
+      const trackHeight = track.scrollHeight;
+      if (trackHeight > containerHeight && containerHeight > 0) {
+        const nodeCenter = node.offsetTop + node.offsetHeight / 2;
+        const targetY = containerHeight / 2 - nodeCenter;
+        track.style.transform = `translateY(${targetY}px)`;
+      } else {
+        track.style.transform = 'none';
+      }
+    }
   }, [anchor, items.length]);
 
   if (items.length < 2) return null;
 
   return (
     <nav
+      ref={containerRef}
       className={cn("hsk-cb-timeline", side === 'left' ? "hsk-cb-timeline--left" : "hsk-cb-timeline--right")}
       aria-label={tr('timelineLabel')}
     >
-      <div className="hsk-cb-timeline-track" style={{ '--hsk-tl-progress': progress } as React.CSSProperties}>
+      <div
+        ref={trackRef}
+        className="hsk-cb-timeline-track"
+        style={{ '--hsk-tl-progress': progress } as React.CSSProperties}
+      >
         <span className="hsk-cb-tl-cursor" ref={cursorRef} aria-hidden="true" />
         {items.map((item, i) => (
           <button

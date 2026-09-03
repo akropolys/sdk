@@ -1877,6 +1877,7 @@
   position: relative;
   padding-left: 26px !important;
   padding-right: 6px !important;
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .hsk-cb-timeline-track::before,

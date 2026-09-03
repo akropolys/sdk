@@ -151,7 +151,8 @@ export function useChatScroll({ messages, loading, messageRefs }: UseChatScrollO
     const el = msgsContainerRef.current;
     const node = messageRefs.current[idx];
     if (!el || !node) return;
-    const to = node.offsetTop - el.offsetTop - 12;
+    const targetCenter = node.offsetTop - el.offsetTop - Math.max(0, (el.clientHeight - node.clientHeight) / 2);
+    const to = Math.max(0, Math.min(el.scrollHeight - el.clientHeight, targetCenter));
     if (glideScrollRef.current) glideScrollRef.current(to);
     else el.scrollTo({ top: to, behavior: 'smooth' });
   }, [messageRefs]);

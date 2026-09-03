@@ -178,16 +178,8 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
     const buf = ctx.createBuffer(1, pcm.length, rate);
     const ch = buf.getChannelData(0);
     const len = pcm.length;
-    const fade = Math.min(32, Math.floor(len / 4));
     for (let i = 0; i < len; i++) {
-      let sample = pcm[i] / 0x8000;
-      // Smooth micro-fade at buffer edges to prevent PCM boundary scratches/clicks
-      if (i < fade) {
-        sample *= (i / fade);
-      } else if (i >= len - fade) {
-        sample *= ((len - 1 - i) / fade);
-      }
-      ch[i] = sample;
+      ch[i] = pcm[i] / 0x8000;
     }
 
     const src = ctx.createBufferSource();
@@ -195,14 +187,17 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
     src.connect(out);
 
     const now = ctx.currentTime;
-    const at = Math.max(now + 0.02, playAtRef.current || now + 0.02);
+    const at = Math.max(now + 0.01, playAtRef.current || now + 0.01);
     src.start(at);
     playAtRef.current = at + buf.duration;
 
     sourcesRef.current.add(src);
     src.onended = () => {
       sourcesRef.current.delete(src);
-      if (sourcesRef.current.size === 0) setState(s => (s === 'speaking' ? 'listening' : s));
+      if (sourcesRef.current.size === 0) {
+        playAtRef.current = 0;
+        setState(s => (s === 'speaking' ? 'listening' : s));
+      }
     };
     setState(s => (s === 'speaking' || s === 'idle' || s === 'ended' ? s : 'speaking'));
   }, []);
@@ -353,7 +348,7 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
     const AC: typeof AudioContext = (window as any).AudioContext || (window as any).webkitAudioContext;
     if (AC) {
       if (!ctxRef.current || ctxRef.current.state === 'closed') {
-        ctxRef.current = new AC();
+        ctxRef.current = new AC({ latencyHint: 'interactive' });
       }
       if (ctxRef.current.state === 'suspended') {
         ctxRef.current.resume().catch(() => {});
@@ -376,7 +371,12 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
     try {
       if (!navigator.mediaDevices?.getUserMedia) throw { name: 'NotAllowedError' };
       stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: false,
+          channelCount: 1,
+        },
       });
     } catch (e: any) {
       abandoned = true;
@@ -395,7 +395,7 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
       track.enabled = !optsRef.current.muted;
     }
 
-    const ctx = ctxRef.current && ctxRef.current.state !== 'closed' ? ctxRef.current : (AC ? new AC() : null);
+    const ctx = ctxRef.current && ctxRef.current.state !== 'closed' ? ctxRef.current : (AC ? new AC({ latencyHint: 'interactive' }) : null);
     if (!ctx) return;
     ctxRef.current = ctx;
     if (ctx.state === 'suspended') {
