@@ -369,11 +369,19 @@ export function ChatComposer({
             </div>
             {enableVoice && (
               <button
-                className={cn("hsk-cb-mic-btn", voiceMode === 'dictate' && "hsk-cb-mic-btn--active", voiceBlocked && "hsk-cb-mic-btn--blocked")}
-                onClick={() => voiceMode === 'off' ? startVoice('dictate') : stopVoice()}
+                className={cn("hsk-cb-mic-btn", (voiceMode === 'converse' || voiceMode === 'dictate') && "hsk-cb-mic-btn--active", voiceBlocked && "hsk-cb-mic-btn--blocked")}
+                onClick={() => {
+                  if (voiceMode !== 'off') {
+                    stopVoice();
+                  } else if (canConverse) {
+                    startVoice('converse');
+                  } else {
+                    startVoice('dictate');
+                  }
+                }}
                 disabled={loading || chromeLoading}
-                aria-label={voiceMode === 'off' ? 'Start voice input' : 'Stop recording'}
-                title={voiceMode === 'off' ? 'Voice input' : 'Stop'}
+                aria-label={voiceMode === 'off' ? 'Start voice mode' : 'Stop voice'}
+                title={voiceMode === 'off' ? (canConverse ? 'Voice conversation' : 'Voice input') : 'Stop'}
               >
                 {voiceMode === 'off' ? <MicIcon /> : <MicOffIcon />}
               </button>

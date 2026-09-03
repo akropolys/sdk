@@ -73,6 +73,7 @@ export function KikuButton({
 }: KikuButtonProps) {
   const client = useAkropolysContext();
   const [open, setOpen] = useState(false);
+  const [opening, setOpening] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [origin, setOrigin] = useState<import('./ChatModal/types').ModalOrigin | null>(null);
 
@@ -86,6 +87,8 @@ export function KikuButton({
   }, [client]);
 
   const openFrom = useCallback((el: HTMLElement) => {
+    setOpening(true);
+    warmShadow();
     const b = el.getBoundingClientRect();
     const style = window.getComputedStyle(el);
     const br = parseFloat(style.borderRadius) || 12;
@@ -107,14 +110,16 @@ export function KikuButton({
       borderRadius: br,
     });
     setOpen(true);
-  }, []);
+    setTimeout(() => setOpening(false), 400);
+  }, [warmShadow]);
 
   useEffect(() => {
     setMounted(true);
+    warmShadow(); // Eager warm immediately on mount so first click has 0ms CSS lag
 
     // backstop for the first click when it arrives without a prior hover (touch, programmatic)
     const ric = (window as any).requestIdleCallback;
-    const warmId = ric ? ric(warmShadow, { timeout: 2000 }) : setTimeout(warmShadow, 600);
+    const warmId = ric ? ric(warmShadow, { timeout: 2000 }) : setTimeout(warmShadow, 300);
 
     if (typeof window !== 'undefined' && !(window as any).__akropolys_nav_patched) {
       (window as any).__akropolys_nav_patched = true;
@@ -160,7 +165,7 @@ export function KikuButton({
   return (
     <>
       <button
-        className={cn("hsk-cb-btn", classNames.button, className)}
+        className={cn("hsk-cb-btn", opening && "hsk-cb-btn--opening", classNames.button, className)}
         onClick={e => openFrom(e.currentTarget)}
         onPointerEnter={warmShadow}
         onPointerDown={warmShadow}
@@ -169,7 +174,10 @@ export function KikuButton({
         aria-label="Open AI chat"
       >
         {children !== undefined ? (
-          children
+          <>
+            {children}
+            {opening && <span className="hsk-cb-btn-spinner" aria-hidden="true" />}
+          </>
         ) : (
           <>
             {icon ? (
@@ -178,6 +186,7 @@ export function KikuButton({
               </span>
             ) : null}
             {label}
+            {opening && <span className="hsk-cb-btn-spinner" aria-hidden="true" />}
           </>
         )}
       </button>

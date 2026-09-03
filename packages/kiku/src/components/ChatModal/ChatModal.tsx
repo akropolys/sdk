@@ -108,20 +108,21 @@ export function ChatModal({
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [markupSrc, setMarkupSrc] = useState<string | null>(null);
 
-  const [termsAgreed, setTermsAgreed] = useState<boolean>(true);
-
-  useEffect(() => {
+  const [termsAgreed, setTermsAgreed] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
     try {
-      localStorage.setItem('akropolys_terms_agreed', 'true');
-    } catch { /* noop */ }
-  }, []);
+      return localStorage.getItem('akropolys_terms_agreed') === 'true';
+    } catch {
+      return false;
+    }
+  });
 
   const onboarding = messages.length === 0;
   const awaitingLang = onboarding && !shopperLanguage;
   const awaitingName = onboarding && !!shopperLanguage && !shopperName;
   const awaitingEntityLang = onboarding && !!shopperLanguage && !!shopperName && !entityLangPref;
-  const awaitingConsent = false;
-  const inOnboarding = awaitingLang || awaitingName || awaitingEntityLang;
+  const awaitingConsent = onboarding && !!shopperLanguage && !!shopperName && !!entityLangPref && !termsAgreed;
+  const inOnboarding = awaitingLang || awaitingName || awaitingEntityLang || awaitingConsent;
 
   const hasLiveData = React.useMemo(
     () => messages.some(m => (m as any).liveKeys?.length > 0),
@@ -157,7 +158,9 @@ export function ChatModal({
   const chooseEntityLang = (mode: 'translated' | 'original') => {
     try { client.setEntityLanguageMode?.(mode); } catch {  }
     setEntityLangPrefState(mode);
-    setJustCompleted(true);
+    if (termsAgreed) {
+      setJustCompleted(true);
+    }
   };
 
   const agreeTerms = () => {
@@ -212,9 +215,11 @@ export function ChatModal({
 
   const handleSend = async (text?: string, extraAttachments?: ChatAttachment[], forcedIntent?: string, captureTargets?: CaptureTarget[]) => {
     const raw = (text ?? input).trim();
-    if (!raw || !chromeReady || queuedMessage) return;
+    const toSend = extraAttachments ?? attachments;
+    if ((!raw && toSend.length === 0) || !chromeReady || queuedMessage) return;
 
     if (awaitingName) {
+      if (!raw) return;
       const name = extractName(raw) || raw.slice(0, 40);
       try { client.setShopperName?.(name); } catch {  }
       setShopperNameState(name);
@@ -222,6 +227,7 @@ export function ChatModal({
       return;
     }
     if (awaitingLang) {
+      if (!raw) return;
       chooseLanguage(raw);
       setInput('');
       return;
@@ -234,9 +240,9 @@ export function ChatModal({
     setShowKikuPicker(false);
     setShowAtPicker(false);
     setInput('');
-    const toSend = extraAttachments ?? attachments;
     setAttachments([]);
-    await send(raw, raw, toSend.length > 0 ? toSend : undefined, forcedIntent, captureTargets);
+    const queryToSend = raw || (toSend.some(a => a.type === 'image') ? 'Analyze this image' : 'What is this?');
+    await send(queryToSend, raw, toSend.length > 0 ? toSend : undefined, forcedIntent, captureTargets);
   };
 
   const retryLastMessage = useCallback(async () => {

@@ -104,7 +104,10 @@ export function useVoiceController({
     },
   });
 
-  const canConverse = typeof window !== 'undefined' && !!(window as any).WebSocket;
+  const canConverse = typeof window !== 'undefined' &&
+    !!(window as any).WebSocket &&
+    !!(window.AudioContext || (window as any).webkitAudioContext) &&
+    !!navigator.mediaDevices?.getUserMedia;
 
   const startVoice = useCallback(async (mode: 'dictate' | 'converse') => {
     if (!isSecureOrigin()) { setVoiceError('micInsecure'); return; }

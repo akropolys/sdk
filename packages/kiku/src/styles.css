@@ -695,9 +695,8 @@
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: background .15s, border-color .15s, transform .12s, box-shadow .15s;
-  font-family: inherit;
-  white-space: nowrap;
+  transition: background .15s, border-color .15s, transform .16s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow .15s;
+  will-change: transform;
 }
 
 .hsk-cb-btn:hover {
@@ -707,7 +706,26 @@
 }
 
 .hsk-cb-btn:active {
-  transform: scale(.95);
+  transform: scale(.98);
+}
+
+.hsk-cb-btn-spinner {
+  width: 13px;
+  height: 13px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: hsk-btn-spin .6s linear infinite;
+  display: inline-block;
+  flex-shrink: 0;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+@keyframes hsk-btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .hsk-cb-btn-icon {
@@ -7901,23 +7919,22 @@
 }
 
 .hsk-cb-terms-agree-btn.is-active {
-  background: #ff6a33;
+  background: var(--hsk-primary, #ff6a33);
   color: #ffffff;
-  border-color: #ff6a33;
+  border-color: var(--hsk-primary, #ff6a33);
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(255, 106, 51, 0.3);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--hsk-primary, #ff6a33) 35%, transparent);
 }
 
 .hsk-cb-terms-agree-btn.is-active:hover {
-  background: #e55620;
-  border-color: #e55620;
+  filter: brightness(0.92);
   transform: translateY(-1px);
-  box-shadow: 0 6px 18px rgba(255, 106, 51, 0.38);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--hsk-primary, #ff6a33) 45%, transparent);
 }
 
 .hsk-cb-terms-agree-btn.is-active:active {
   transform: translateY(0);
-  box-shadow: 0 2px 6px rgba(255, 106, 51, 0.2);
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--hsk-primary, #ff6a33) 25%, transparent);
 }
 
 @keyframes hsk-theme-morph-in {

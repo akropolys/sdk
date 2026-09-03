@@ -124,6 +124,9 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
 
   const beginCapture = useCallback(() => {
     if (!readyRef.current) return;
+    if (ctxRef.current && ctxRef.current.state === 'suspended') {
+      ctxRef.current.resume().catch(() => {});
+    }
     const arm = armCaptureRef.current;
     if (!arm) return;
     armCaptureRef.current = null;
@@ -167,6 +170,9 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
     const ctx = ctxRef.current;
     const out = outAnalyserRef.current;
     if (!ctx || !out || pcm.length === 0) return;
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
 
     const rate = outRateRef.current;
     const buf = ctx.createBuffer(1, pcm.length, rate);
@@ -235,22 +241,8 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
     teardown('idle');
   }, [teardown]);
 
-  const start = useCallback(async () => {
-    if (wsRef.current) return;
-    setState('connecting');
-    const o = optsRef.current;
-
-    const base = o.apiUrl.replace(/\/+$/, '');
-    const url = new URL(base + '/voice/live', window.location.href);
-    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-    url.searchParams.set('siteId', o.siteId);
-    if (o.kikuId) url.searchParams.set('kikuId', o.kikuId);
-    if (o.language) url.searchParams.set('language', o.language);
-    if (o.voice) url.searchParams.set('voice', o.voice);
-
-    const ws = new WebSocket(url.toString(), ['akropolys.token.' + o.token]);
-    wsRef.current = ws;
-
+  const attachWsHandlers = useCallback((ws: WebSocket) => {
+    let abandoned = false;
     ws.onmessage = ev => {
       let f: any;
       try { f = JSON.parse(ev.data); } catch { return; }
@@ -316,8 +308,69 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
       }
       teardown('ended');
     };
-    let abandoned = false;
-    ws.onerror = () => { if (!abandoned) optsRef.current.onError?.('connection'); };
+    ws.onerror = () => { if (!abandoned && wsRef.current === ws) optsRef.current.onError?.('connection'); };
+  }, [beginCapture, enqueue, flushExchange, flushPlayback, startHold, stopHold, stop, teardown]);
+
+  const hotReconnect = useCallback((newVoice?: string) => {
+    const oldWs = wsRef.current;
+    readyRef.current = false;
+    setState('connecting');
+    flushPlayback();
+    stopHold();
+    if (oldWs) {
+      try { oldWs.send(JSON.stringify({ type: 'close' })); } catch { }
+      try { oldWs.close(); } catch { }
+    }
+    const o = optsRef.current;
+    const base = o.apiUrl.replace(/\/+$/, '');
+    const url = new URL(base + '/voice/live', window.location.href);
+    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+    url.searchParams.set('siteId', o.siteId);
+    if (o.kikuId) url.searchParams.set('kikuId', o.kikuId);
+    if (o.language) url.searchParams.set('language', o.language);
+    if (newVoice || o.voice) url.searchParams.set('voice', (newVoice || o.voice)!);
+
+    const ws = new WebSocket(url.toString(), ['akropolys.token.' + o.token]);
+    wsRef.current = ws;
+    attachWsHandlers(ws);
+  }, [attachWsHandlers, flushPlayback, stopHold]);
+
+  const currentVoiceRef = useRef(opts.voice);
+  useEffect(() => {
+    if (currentVoiceRef.current !== opts.voice) {
+      currentVoiceRef.current = opts.voice;
+      if (wsRef.current && (state === 'listening' || state === 'thinking' || state === 'speaking')) {
+        hotReconnect(opts.voice);
+      }
+    }
+  }, [opts.voice, state, hotReconnect]);
+
+  const start = useCallback(async () => {
+    if (wsRef.current) return;
+    setState('connecting');
+    const o = optsRef.current;
+
+    const AC: typeof AudioContext = (window as any).AudioContext || (window as any).webkitAudioContext;
+    if (AC) {
+      if (!ctxRef.current || ctxRef.current.state === 'closed') {
+        ctxRef.current = new AC();
+      }
+      if (ctxRef.current.state === 'suspended') {
+        ctxRef.current.resume().catch(() => {});
+      }
+    }
+
+    const base = o.apiUrl.replace(/\/+$/, '');
+    const url = new URL(base + '/voice/live', window.location.href);
+    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+    url.searchParams.set('siteId', o.siteId);
+    if (o.kikuId) url.searchParams.set('kikuId', o.kikuId);
+    if (o.language) url.searchParams.set('language', o.language);
+    if (o.voice) url.searchParams.set('voice', o.voice);
+
+    const ws = new WebSocket(url.toString(), ['akropolys.token.' + o.token]);
+    wsRef.current = ws;
+    attachWsHandlers(ws);
 
     let stream: MediaStream;
     try {
@@ -338,10 +391,16 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
       return;
     }
     streamRef.current = stream;
+    for (const track of stream.getAudioTracks()) {
+      track.enabled = !optsRef.current.muted;
+    }
 
-    const AC: typeof AudioContext = (window as any).AudioContext || (window as any).webkitAudioContext;
-    const ctx = new AC();
+    const ctx = ctxRef.current && ctxRef.current.state !== 'closed' ? ctxRef.current : (AC ? new AC() : null);
+    if (!ctx) return;
     ctxRef.current = ctx;
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
 
     const inAnalyser = ctx.createAnalyser();
     inAnalyser.fftSize = 1024;
@@ -367,8 +426,9 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
       const node = new AudioWorkletNode(ctx, 'kiku-capture');
       nodeRef.current = node;
       node.port.onmessage = e => {
-        if (ws.readyState !== WebSocket.OPEN) return;
-        ws.send(JSON.stringify({ type: 'audio', audio: toBase64(e.data) }));
+        const curWs = wsRef.current;
+        if (!curWs || curWs.readyState !== WebSocket.OPEN) return;
+        curWs.send(JSON.stringify({ type: 'audio', audio: toBase64(e.data) }));
       };
       const srcNode = ctx.createMediaStreamSource(stream);
       armCaptureRef.current = () => {

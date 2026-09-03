@@ -147,7 +147,13 @@ export function useVoiceSession({
     consumedRef.current = resultLenRef.current;
     setInterim('');
     setHearing(false);
-    if (text) onUtteranceRef.current(text);
+    if (text) {
+      wantRestartRef.current = false;
+      const r = recognitionRef.current;
+      recognitionRef.current = null;
+      try { r?.stop(); } catch { }
+      onUtteranceRef.current(text);
+    }
   }, []);
 
   const monitor = useCallback(() => {

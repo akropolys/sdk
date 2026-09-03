@@ -185,7 +185,7 @@ export const DEFAULT_UI_STRINGS = {
   termsCookieDesc: 'The host website where Kiku is embedded may collect cookies and analytics per their own cookie policy, outside Kiku\'s control.',
   termsAgreeButton: 'Agree & Continue',
   termsAgreeCounting: 'Agree & Continue ({seconds}s)',
-  termsPlaceholder: 'Please review and accept our Privacy & Terms above…',
+  termsPlaceholder: 'Please review our Privacy & Terms above…',
   allSet: "You're all set, {name}.",
   replyingTranslated: 'Replying in {lang}, results translated too. Ask me anything.',
   replyingOriginal: 'Replying in {lang}, results as this site wrote them. Ask me anything.',

@@ -178,10 +178,14 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
   }, []);
 
   const videoPollsRef = useRef<Set<string>>(new Set());
+  const videoTimeoutsRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
 
   useEffect(() => {
-    const polls = videoPollsRef.current;
-    return () => polls.clear();
+    return () => {
+      videoPollsRef.current.clear();
+      videoTimeoutsRef.current.forEach(t => clearTimeout(t));
+      videoTimeoutsRef.current.clear();
+    };
   }, []);
 
   const followVideoJob = useCallback((jobId: string) => {
@@ -225,10 +229,18 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
         return;
       }
       delay = Math.min(delay * 1.4, 20000);
-      setTimeout(tick, delay);
+      const timer = setTimeout(() => {
+        videoTimeoutsRef.current.delete(timer);
+        tick();
+      }, delay);
+      videoTimeoutsRef.current.add(timer);
     };
 
-    setTimeout(tick, delay);
+    const initialTimer = setTimeout(() => {
+      videoTimeoutsRef.current.delete(initialTimer);
+      tick();
+    }, delay);
+    videoTimeoutsRef.current.add(initialTimer);
   }, [client]);
 
   const consumeStream = useCallback((stream: any, continuing: boolean, baseText: string) => {
@@ -591,6 +603,9 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     displayedLenRef.current = 0;
     pendingRef.current = null;
     spokenQueueRef.current = [];
+    videoPollsRef.current.clear();
+    videoTimeoutsRef.current.forEach(t => clearTimeout(t));
+    videoTimeoutsRef.current.clear();
     setQueuedMessage(null);
     setMessages([]);
     setSources([]);

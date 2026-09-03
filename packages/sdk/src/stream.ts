@@ -80,7 +80,8 @@ interface SSEFrame {
 
 function parseSSEChunk(raw: string): SSEFrame[] {
   const frames: SSEFrame[] = [];
-  const blocks = raw.split(/\n\n+/);
+  const normalized = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const blocks = normalized.split(/\n\n+/);
   for (const block of blocks) {
     if (!block.trim()) continue;
     let event = '';
@@ -205,10 +206,13 @@ export class KikuStream {
               complete = buffer;
               buffer = '';
             } else {
-              const lastBoundary = buffer.lastIndexOf('\n\n');
+              const lastLf = buffer.lastIndexOf('\n\n');
+              const lastCrlf = buffer.lastIndexOf('\r\n\r\n');
+              const lastBoundary = Math.max(lastLf, lastCrlf);
               if (lastBoundary === -1) continue;
-              complete = buffer.slice(0, lastBoundary + 2);
-              buffer = buffer.slice(lastBoundary + 2);
+              const boundaryLen = lastBoundary === lastCrlf ? 4 : 2;
+              complete = buffer.slice(0, lastBoundary + boundaryLen);
+              buffer = buffer.slice(lastBoundary + boundaryLen);
             }
 
             const frames = parseSSEChunk(complete);
