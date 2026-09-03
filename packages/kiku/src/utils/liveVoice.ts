@@ -98,6 +98,8 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
   const playAtRef = useRef(0);
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const outAnalyserRef = useRef<AnalyserNode | null>(null);
+  const outGainRef = useRef<GainNode | null>(null);
+  const isSpeakingRef = useRef(false);
   const outRateRef = useRef(24000);
 
   const optsRef = useRef(opts);
@@ -159,11 +161,31 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
 
   
   const flushPlayback = useCallback(() => {
-    for (const src of sourcesRef.current) {
-      try { src.onended = null; src.stop(); } catch {  }
+    isSpeakingRef.current = false;
+    const g = outGainRef.current;
+    const ctx = ctxRef.current;
+    if (g && ctx && ctx.state !== 'closed') {
+      const now = ctx.currentTime;
+      g.gain.cancelScheduledValues(now);
+      g.gain.setValueAtTime(g.gain.value, now);
+      g.gain.linearRampToValueAtTime(0, now + 0.012);
+      setTimeout(() => {
+        for (const src of sourcesRef.current) {
+          try { src.onended = null; src.stop(); } catch { }
+        }
+        sourcesRef.current.clear();
+        playAtRef.current = 0;
+        if (g && ctxRef.current && ctxRef.current.state !== 'closed') {
+          g.gain.setValueAtTime(1, ctxRef.current.currentTime);
+        }
+      }, 15);
+    } else {
+      for (const src of sourcesRef.current) {
+        try { src.onended = null; src.stop(); } catch { }
+      }
+      sourcesRef.current.clear();
+      playAtRef.current = 0;
     }
-    sourcesRef.current.clear();
-    playAtRef.current = 0;
   }, []);
 
   const enqueue = useCallback((pcm: Int16Array) => {
@@ -187,15 +209,18 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
     src.connect(out);
 
     const now = ctx.currentTime;
-    const at = Math.max(now + 0.01, playAtRef.current || now + 0.01);
+    // 80ms jitter buffer cushion when starting from silence to absorb network packet jitter
+    const at = playAtRef.current > now ? playAtRef.current : now + 0.08;
     src.start(at);
     playAtRef.current = at + buf.duration;
+    isSpeakingRef.current = true;
 
     sourcesRef.current.add(src);
     src.onended = () => {
       sourcesRef.current.delete(src);
       if (sourcesRef.current.size === 0) {
         playAtRef.current = 0;
+        isSpeakingRef.current = false;
         setState(s => (s === 'speaking' ? 'listening' : s));
       }
     };
@@ -223,6 +248,8 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
     streamRef.current = null;
     analyserRef.current = null;
     outAnalyserRef.current = null;
+    outGainRef.current = null;
+    isSpeakingRef.current = false;
     ctxRef.current?.close().catch(() => {  });
     ctxRef.current = null;
     setState(finalState);
@@ -407,10 +434,15 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
     inAnalyser.smoothingTimeConstant = 0.25;
     analyserRef.current = inAnalyser;
 
+    const outGain = ctx.createGain();
+    outGain.gain.value = 1;
+    outGain.connect(ctx.destination);
+    outGainRef.current = outGain;
+
     const outAnalyser = ctx.createAnalyser();
     outAnalyser.fftSize = 1024;
     outAnalyser.smoothingTimeConstant = 0.25;
-    outAnalyser.connect(ctx.destination);
+    outAnalyser.connect(outGain);
     outAnalyserRef.current = outAnalyser;
 
     try {
@@ -428,6 +460,8 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
       node.port.onmessage = e => {
         const curWs = wsRef.current;
         if (!curWs || curWs.readyState !== WebSocket.OPEN) return;
+        // On laptop speakers, prevent the assistant's voice from feeding back into Gemini Live
+        if (isSpeakingRef.current) return;
         curWs.send(JSON.stringify({ type: 'audio', audio: toBase64(e.data) }));
       };
       const srcNode = ctx.createMediaStreamSource(stream);
