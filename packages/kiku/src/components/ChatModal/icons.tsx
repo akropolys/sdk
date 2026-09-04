@@ -128,16 +128,70 @@ export const PaperclipIcon = () => (
   </svg>
 );
 
-export const CopyIcon = ({ size = 13 }: { size?: number } = {}) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect className="hsk-copy-sheet" x="9" y="9" width="13" height="13" rx="2"/>
-    <path className="hsk-copy-back" d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+export const RetryIcon = ({ className, size = 13 }: { className?: string; size?: number } = {}) => (
+  <svg
+    className={cn("hsk-retry-icon", className)}
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path className="hsk-retry-arrow" d="M21.5 2v6h-6" />
+    <path className="hsk-retry-arc" d="M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.19" />
   </svg>
 );
 
-export const CheckIcon = ({ size = 13 }: { size?: number } = {}) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polyline className="hsk-check-mark" points="20 6 9 17 4 12"/>
+export const EditIcon = ({ className, size = 13 }: { className?: string; size?: number } = {}) => (
+  <svg
+    className={cn("hsk-edit-icon", className)}
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path className="hsk-edit-pencil" d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+    <path className="hsk-edit-lead" d="m15 5 4 4" />
+  </svg>
+);
+
+export const CopyIcon = ({ className, size = 13 }: { className?: string; size?: number } = {}) => (
+  <svg
+    className={cn("hsk-copy-icon", className)}
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <rect className="hsk-copy-sheet" x="9" y="9" width="13" height="13" rx="2" />
+    <path className="hsk-copy-back" d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+  </svg>
+);
+
+export const CheckIcon = ({ className, size = 13 }: { className?: string; size?: number } = {}) => (
+  <svg
+    className={cn("hsk-check-icon", className)}
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.4"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <polyline className="hsk-check-mark" points="20 6 9 17 4 12" />
   </svg>
 );
 

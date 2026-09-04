@@ -245,10 +245,36 @@ export function ChatModal({
     await send(queryToSend, raw, toSend.length > 0 ? toSend : undefined, forcedIntent, captureTargets);
   };
 
+  const [retrying, setRetrying] = useState(false);
+
+  const handleRetryMessage = useCallback(async (msg?: ChatMessage) => {
+    const target = msg || [...messages].reverse().find(m => m.role === 'user');
+    if (!target?.content) return;
+    setRetrying(true);
+    try {
+      await handleSend(target.content);
+    } finally {
+      setRetrying(false);
+    }
+  }, [messages, handleSend]);
+
+  const handleEditMessage = useCallback((msg: ChatMessage) => {
+    if (!msg?.content) return;
+    setInput(msg.content);
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        const len = msg.content.length;
+        try {
+          textareaRef.current.setSelectionRange(len, len);
+        } catch {}
+      }
+    }, 50);
+  }, [setInput, textareaRef]);
+
   const retryLastMessage = useCallback(async () => {
-    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
-    if (lastUserMsg) await handleSend(lastUserMsg.content);
-  }, [messages]);
+    await handleRetryMessage();
+  }, [handleRetryMessage]);
 
   const {
     keyInput,
@@ -748,6 +774,9 @@ export function ChatModal({
                   setMarkupSrc={setMarkupSrc}
                   handleSend={handleSend}
                   handleSourceClick={handleSourceClick}
+                  onRetry={handleRetryMessage}
+                  onEdit={handleEditMessage}
+                  retrying={retrying}
                   continueGenerating={continueGenerating}
                   t={t}
                   bottomRef={bottomRef}

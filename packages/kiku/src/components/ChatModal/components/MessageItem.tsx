@@ -6,7 +6,7 @@ import { LiveTable } from '../../LiveTable';
 import { ThinkingBlock, parseThinking } from './ThinkingBlock';
 import { SourcesCarousel } from './SourcesCarousel';
 import { SmartContextPills } from './SmartContextPills';
-import { MicIcon, ExternalIcon } from '../icons';
+import { MicIcon, ExternalIcon, RetryIcon, EditIcon, CopyIcon, CheckIcon } from '../icons';
 import type { UIStringKey } from '../types';
 
 const MarkdownBlock = React.memo(
@@ -40,6 +40,10 @@ export interface MessageItemProps {
   setMarkupSrc: (src: string | null) => void;
   handleSend: (text?: string) => Promise<void>;
   handleSourceClick: (src: ChatSource) => void;
+  onRetry?: (msg: ChatMessage) => void;
+  onEdit?: (msg: ChatMessage) => void;
+  hasError?: boolean;
+  retrying?: boolean;
   t: (key: UIStringKey, vars?: Record<string, string>) => string;
   messageRef: (el: HTMLDivElement | null) => void;
 }
@@ -69,11 +73,31 @@ export function MessageItem({
   setMarkupSrc,
   handleSend,
   handleSourceClick,
+  onRetry,
+  onEdit,
+  hasError,
+  retrying,
   t,
   messageRef,
 }: MessageItemProps) {
   const isUser = msg.role === 'user';
   const displayContent = msg.content;
+  const [copied, setCopied] = React.useState(false);
+
+  const handleCopy = React.useCallback((text: string) => {
+    if (!text) return;
+    try {
+      navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {}
+  }, []);
+
+  const parsed = React.useMemo(() => parseThinking(displayContent), [displayContent]);
+  const thinking = msg.thinking || parsed.thinking;
+  const CALC_DISCLAIMER_REGEX = /(?:^|\n+)(?:[>*_~`\s]*)(?:This is a calculation from live figures,?\s*not a guarantee\s*[—–-]\s*the market can move against it\.?)(?:[>*_~`\s]*)/gi;
+  const hasCalcDisclaimer = CALC_DISCLAIMER_REGEX.test(parsed.content);
+  const cleanContent = hasCalcDisclaimer ? parsed.content.replace(CALC_DISCLAIMER_REGEX, '').trimEnd() : parsed.content;
 
   return (
     <div
@@ -108,6 +132,7 @@ export function MessageItem({
               'hsk-cb-user-bubble',
               isRunEnd && 'hsk-cb-user-bubble--tail',
               msg.spoken && 'hsk-cb-user-bubble--spoken',
+              hasError && 'hsk-cb-user-bubble--error',
             )}>
               {msg.spoken && <MicIcon className="hsk-cb-spoken-mark" size={10} />}
               {/^@kiku\b/i.test(msg.content) ? (
@@ -118,23 +143,61 @@ export function MessageItem({
               ) : msg.content}
             </div>
           )}
-          {isLastUser && (
-            <span className="hsk-cb-sent-status">
-              {stopped || interrupted ? t('statusStopped') : t('statusSent')}
-            </span>
-          )}
+          <div className="hsk-cb-user-footer">
+            {isLastUser && !hasError && (
+              <span className="hsk-cb-sent-status">
+                {stopped || interrupted ? t('statusStopped') : t('statusSent')}
+              </span>
+            )}
+            {hasError && (
+              <span className="hsk-cb-failed-notice">
+                <span className="hsk-cb-failed-dot" />
+                {t('msgFailed')}
+              </span>
+            )}
+            <div className={cn('hsk-cb-msg-actions', hasError && 'hsk-cb-msg-actions--failed')}>
+              {onRetry && (hasError || isLastUser) && (
+                <button
+                  type="button"
+                  className="hsk-cb-msg-action hsk-cb-msg-action--retry"
+                  onClick={() => onRetry(msg)}
+                  title={t('retry')}
+                  aria-label={t('retry')}
+                >
+                  <RetryIcon className={retrying ? 'hsk-retry-icon--spinning' : ''} size={12} />
+                  <span>{t('retry')}</span>
+                </button>
+              )}
+              {onEdit && (
+                <button
+                  type="button"
+                  className="hsk-cb-msg-action hsk-cb-msg-action--edit"
+                  onClick={() => onEdit(msg)}
+                  title={t('edit')}
+                  aria-label={t('edit')}
+                >
+                  <EditIcon size={12} />
+                  <span>{t('edit')}</span>
+                </button>
+              )}
+              <button
+                type="button"
+                className={cn('hsk-cb-msg-action hsk-cb-msg-action--copy', copied && 'hsk-cb-msg-action--copied')}
+                onClick={() => handleCopy(msg.content)}
+                title={copied ? t('copied') : t('copy')}
+                aria-label={copied ? t('copied') : t('copy')}
+              >
+                {copied ? <CheckIcon size={12} /> : <CopyIcon size={12} />}
+                <span>{copied ? t('copied') : t('copy')}</span>
+              </button>
+            </div>
+          </div>
         </div>
       ) : (
         <div className={cn('hsk-cb-ai-msg', isNarrow && 'hsk-cb-ai-msg--inline')}>
           <div className="hsk-cb-ai-body">
             {(() => {
-              const parsed = parseThinking(displayContent);
-              const thinking = msg.thinking || parsed.thinking;
-              let content = parsed.content;
-              const CALC_DISCLAIMER_REGEX = /(?:^|\n+)(?:[>*_~`\s]*)(?:This is a calculation from live figures,?\s*not a guarantee\s*[—–-]\s*the market can move against it\.?)(?:[>*_~`\s]*)/gi;
-              const hasCalcDisclaimer = CALC_DISCLAIMER_REGEX.test(content);
-              const cleanContent = hasCalcDisclaimer ? content.replace(CALC_DISCLAIMER_REGEX, '').trimEnd() : content;
-              const isComplete = msg.thoughtForSeconds != null || content.length > 0 || !(isLast && (streaming || loading));
+              const isComplete = msg.thoughtForSeconds != null || cleanContent.length > 0 || !(isLast && (streaming || loading));
               return (
                 <>
                   {!msg.spoken && (thinking || msg.thoughtForSeconds != null || (isLast && (streaming || loading))) && (
@@ -293,6 +356,35 @@ export function MessageItem({
                 loading={loading}
                 defaultCurrency={defaultCurrency}
               />
+            )}
+
+            {!isUser && !streaming && cleanContent && (
+              <div className="hsk-cb-ai-footer">
+                <div className={cn('hsk-cb-msg-actions', (hasError || cleanContent.includes("We're experiencing high demand right now")) && 'hsk-cb-msg-actions--failed')}>
+                  <button
+                    type="button"
+                    className={cn('hsk-cb-msg-action hsk-cb-msg-action--copy', copied && 'hsk-cb-msg-action--copied')}
+                    onClick={() => handleCopy(cleanContent)}
+                    title={copied ? t('copied') : t('copy')}
+                    aria-label={copied ? t('copied') : t('copy')}
+                  >
+                    {copied ? <CheckIcon size={12} /> : <CopyIcon size={12} />}
+                    <span>{copied ? t('copied') : t('copy')}</span>
+                  </button>
+                  {isLast && (hasError || cleanContent.includes("We're experiencing high demand right now")) && onRetry && (
+                    <button
+                      type="button"
+                      className="hsk-cb-msg-action hsk-cb-msg-action--retry"
+                      onClick={() => onRetry(msg)}
+                      title={t('retry')}
+                      aria-label={t('retry')}
+                    >
+                      <RetryIcon className={retrying ? 'hsk-retry-icon--spinning' : ''} size={12} />
+                      <span>{t('retry')}</span>
+                    </button>
+                  )}
+                </div>
+              </div>
             )}
           </div>
         </div>

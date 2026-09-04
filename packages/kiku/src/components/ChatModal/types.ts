@@ -281,6 +281,11 @@ export const DEFAULT_UI_STRINGS = {
   displayCaptureAll: 'capture all ({count} items)',
   displayViewHistory: 'what have you saved?',
   displayDelete: 'delete this',
+  retry: 'Retry',
+  edit: 'Edit',
+  copy: 'Copy',
+  copied: 'Copied',
+  msgFailed: 'Failed to send',
 } as const;
 
 export type UIStringKey = keyof typeof DEFAULT_UI_STRINGS;

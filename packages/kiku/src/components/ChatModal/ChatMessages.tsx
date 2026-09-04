@@ -43,6 +43,9 @@ export interface ChatMessagesProps {
   setMarkupSrc: (src: string | null) => void;
   handleSend: (text?: string) => Promise<void>;
   handleSourceClick: (src: ChatSource) => void;
+  onRetry?: (msg: ChatMessage) => void;
+  onEdit?: (msg: ChatMessage) => void;
+  retrying?: boolean;
   continueGenerating: () => void;
   t: (key: UIStringKey, vars?: Record<string, string>) => string;
   bottomRef: React.RefObject<HTMLDivElement | null>;
@@ -88,6 +91,9 @@ export function ChatMessages({
   setMarkupSrc,
   handleSend,
   handleSourceClick,
+  onRetry,
+  onEdit,
+  retrying,
   continueGenerating,
   t,
   bottomRef,
@@ -113,6 +119,9 @@ export function ChatMessages({
           const runMid = isUser && !isRunEnd;
           const runCont = isUser && displayMessages[idx - 1]?.role === 'user';
           const key = (msg as any).id || `${msg.role}-${idx}`;
+          const hasError = (isLastUser && Boolean(error)) ||
+            (!isUser && isLast && Boolean(error)) ||
+            (!isUser && Boolean(msg.content?.includes("We're experiencing high demand right now")));
 
           return (
             <MessageItem
@@ -141,6 +150,10 @@ export function ChatMessages({
               setMarkupSrc={setMarkupSrc}
               handleSend={handleSend}
               handleSourceClick={handleSourceClick}
+              onRetry={onRetry}
+              onEdit={onEdit}
+              hasError={hasError}
+              retrying={retrying}
               t={t}
               messageRef={(el) => { messageRefs.current[idx] = el; }}
             />

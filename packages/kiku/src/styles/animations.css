@@ -692,4 +692,71 @@
   }
 }
 
+/* --- Message Action Micro-Interactions (Retry, Edit, Copy) --- */
+
+.hsk-retry-icon {
+  display: inline-flex;
+  transform-origin: center;
+  transition: transform .36s cubic-bezier(.34, 1.56, .64, 1);
+}
+.hsk-cb-msg-action:hover:not(:disabled) .hsk-retry-icon {
+  transform: rotate(-180deg);
+}
+.hsk-cb-msg-action:active:not(:disabled) .hsk-retry-icon {
+  transform: rotate(-360deg) scale(0.85);
+  transition-duration: .18s;
+}
+.hsk-retry-icon--spinning {
+  animation: hsk-spin .65s linear infinite !important;
+}
+
+.hsk-edit-icon {
+  display: inline-flex;
+  transform-origin: 20% 80%;
+  transition: transform .26s cubic-bezier(.34, 1.56, .64, 1);
+}
+.hsk-cb-msg-action:hover:not(:disabled) .hsk-edit-icon {
+  transform: translateY(-1.5px) rotate(-14deg);
+}
+.hsk-cb-msg-action:active:not(:disabled) .hsk-edit-icon {
+  transform: translateY(1px) scale(0.88);
+  transition-duration: .1s;
+}
+
+.hsk-copy-icon {
+  display: inline-flex;
+}
+.hsk-copy-sheet {
+  transition: transform .22s cubic-bezier(.34, 1.56, .64, 1);
+}
+.hsk-cb-msg-action:hover:not(:disabled) .hsk-copy-sheet {
+  transform: translate(-1.5px, -1.5px);
+}
+
+.hsk-check-icon {
+  display: inline-flex;
+  animation: hsk-check-pop .28s cubic-bezier(.34, 1.56, .64, 1) both;
+}
+@keyframes hsk-check-pop {
+  0%   { transform: scale(0.4); opacity: 0; }
+  60%  { transform: scale(1.24); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes hsk-actions-enter {
+  0%   { opacity: 0; transform: translateY(4px) scale(0.96); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-cb-msg-action:hover:not(:disabled) .hsk-retry-icon,
+  .hsk-cb-msg-action:hover:not(:disabled) .hsk-edit-icon,
+  .hsk-cb-msg-action:hover:not(:disabled) .hsk-copy-sheet,
+  .hsk-check-icon {
+    transform: none !important;
+    animation: none !important;
+  }
+}
+
+
 

@@ -115,7 +115,12 @@
     "voiceMutedHint": "اضغط على الميكروفون للتحدث مرة أخرى.",
     "voicePhaseListening": "استماع",
     "voicePhaseSpeaking": "تحدث",
-    "voicePhaseThinking": "تفكير"
+    "voicePhaseThinking": "تفكير",
+    "retry": "إعادة المحاولة",
+    "edit": "تعديل",
+    "copy": "نسخ",
+    "copied": "تم النسخ",
+    "msgFailed": "فشل الإرسال"
   },
   "chinese": {
     "allSet": "您已准备好，{name}。",
@@ -233,7 +238,12 @@
     "voicePhaseListening": "正在聆听",
     "voicePhaseSpeaking": "正在回答",
     "voicePhaseThinking": "正在思考",
-    "voiceSending": "已收到 — 正在发送…"
+    "voiceSending": "已收到 — 正在发送…",
+    "retry": "重试",
+    "edit": "编辑",
+    "copy": "复制",
+    "copied": "已复制",
+    "msgFailed": "发送失败"
   },
   "english": {
     "allSet": "You're all set, {name}.",
@@ -351,7 +361,12 @@
     "termsAgreeButton": "Agree & Continue",
     "termsAgreeCounting": "Agree & Continue ({seconds}s)",
     "termsPlaceholder": "Please review and accept our Privacy & Terms above…",
-    "whatHaveYouSaved": "What have you saved?"
+    "whatHaveYouSaved": "What have you saved?",
+    "retry": "Retry",
+    "edit": "Edit",
+    "copy": "Copy",
+    "copied": "Copied",
+    "msgFailed": "Failed to send"
   },
   "french": {
     "allSet": "C'est tout bon, {name}.",
@@ -469,7 +484,12 @@
     "voiceMutedHint": "Appuyez sur le micro pour parler à nouveau.",
     "voicePhaseListening": "Écoute",
     "voicePhaseSpeaking": "Parle",
-    "voicePhaseThinking": "Réflexion"
+    "voicePhaseThinking": "Réflexion",
+    "retry": "Réessayer",
+    "edit": "Modifier",
+    "copy": "Copier",
+    "copied": "Copié",
+    "msgFailed": "Échec de l'envoi"
   },
   "hindi": {
     "allSet": "आप तैयार हैं, {name}.",
@@ -587,7 +607,12 @@
     "voicePhaseListening": "सुन रहा है",
     "voicePhaseSpeaking": "बोल रहा है",
     "voicePhaseThinking": "सोच रहा है",
-    "voiceSending": "समझ गया — भेजा जा रहा है…"
+    "voiceSending": "समझ गया — भेजा जा रहा है…",
+    "retry": "पुनः प्रयास करें",
+    "edit": "संपादित करें",
+    "copy": "कॉपी करें",
+    "copied": "कॉपी किया गया",
+    "msgFailed": "भेजने में विफल"
   },
   "japanese": {
     "allSet": "準備が完了しました、{name}さん。",
@@ -705,7 +730,12 @@
     "termsAgreeButton": "同意して続行",
     "termsAgreeCounting": "同意して続行 ({seconds}秒)",
     "termsPlaceholder": "上記のプライバシーと規約をご確認いただき、同意してください…",
-    "whatHaveYouSaved": "何を保存しましたか？"
+    "whatHaveYouSaved": "何を保存しましたか？",
+    "retry": "再試行",
+    "edit": "編集",
+    "copy": "コピー",
+    "copied": "コピー完了",
+    "msgFailed": "送信に失敗しました"
   },
   "portuguese": {
     "allSet": "Tudo pronto, {name}.",
@@ -823,7 +853,12 @@
     "voicePhaseListening": "Ouvindo",
     "voicePhaseSpeaking": "Falando",
     "voicePhaseThinking": "Pensando",
-    "voiceSending": "Entendido — enviando…"
+    "voiceSending": "Entendido — enviando…",
+    "retry": "Tentar novamente",
+    "edit": "Editar",
+    "copy": "Copiar",
+    "copied": "Copiado",
+    "msgFailed": "Falha ao enviar"
   },
   "spanish": {
     "allSet": "Todo listo, {name}.",
@@ -941,7 +976,12 @@
     "voiceMutedHint": "Toca el micrófono para hablar de nuevo.",
     "voicePhaseListening": "Escuchando",
     "voicePhaseSpeaking": "Hablando",
-    "voicePhaseThinking": "Pensando"
+    "voicePhaseThinking": "Pensando",
+    "retry": "Reintentar",
+    "edit": "Editar",
+    "copy": "Copiar",
+    "copied": "Copiado",
+    "msgFailed": "Error al enviar"
   },
   "swahili": {
     "allSet": "Uko tayari, {name}.",
@@ -1059,7 +1099,12 @@
     "voiceMutedHint": "Gonga kipaza sauti ili kuongea tena.",
     "voicePhaseListening": "Inasikiliza",
     "voicePhaseSpeaking": "Inazungumza",
-    "voicePhaseThinking": "Inafikiri"
+    "voicePhaseThinking": "Inafikiri",
+    "retry": "Jaribu tena",
+    "edit": "Hariri",
+    "copy": "Nakili",
+    "copied": "Imenakiliwa",
+    "msgFailed": "Imeshindwa kutuma"
   },
   "urdu": {
     "allSet": "آپ بالکل تیار ہیں، {name}۔",
@@ -1177,6 +1222,11 @@
     "termsAgreeButton": "متفق ہوں اور جاری رکھیں",
     "termsAgreeCounting": "متفق ہوں اور جاری رکھیں ({seconds}s)",
     "termsPlaceholder": "برائے مہربانی اوپر دی گئی رازداری اور شرائط کا جائزہ لیں اور قبول کریں…",
-    "whatHaveYouSaved": "آپ نے کیا محفوظ کیا ہے؟"
+    "whatHaveYouSaved": "آپ نے کیا محفوظ کیا ہے؟",
+    "retry": "دوبارہ کوشش کریں",
+    "edit": "ترمیم کریں",
+    "copy": "کاپی کریں",
+    "copied": "کاپی ہو گیا",
+    "msgFailed": "ارسال ناکام ہو گیا"
   }
 }
