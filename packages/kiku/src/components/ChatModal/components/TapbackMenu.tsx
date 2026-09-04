@@ -162,12 +162,14 @@ export function TapbackMenu({
           </button>
         </div>
 
-        {/* Dual connector speech bubbles */}
+        {/* Dual connector speech bubbles fused seamlessly to the capsule */}
         <div
           className={cn("hsk-tapback-tail", `hsk-tapback-tail--${tailSide}`, placeAbove ? "is-above" : "is-below")}
           style={{ left: `${tailOffset}px` }}
         >
-          <span className="hsk-tapback-dot hsk-tapback-dot--large" />
+          <span className="hsk-tapback-dot hsk-tapback-dot--large">
+            <span className="hsk-tapback-dot-bridge" />
+          </span>
           <span className="hsk-tapback-dot hsk-tapback-dot--small" />
         </div>
       </div>

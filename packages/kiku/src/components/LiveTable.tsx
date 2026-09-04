@@ -72,17 +72,18 @@ function LiveQuoteCard({ record, now }: { record: LiveValue; now: number }) {
 
   return (
     <div className={`hsk-live-card${stale ? ' is-stale' : ''}`} role="region" aria-label="Live quote">
-      <div className="hsk-live-card__header">
-        <div className="hsk-live-card__status">
+      <div className="hsk-live-card__top">
+        <div className="hsk-live-card__badge">
           <span className={`hsk-live-dot${stale ? ' is-stale' : ''}`} aria-hidden="true" />
-          <span className="hsk-live-card__title" title={rawTitle}>{shortTitle}</span>
-        </div>
-        <div className="hsk-live-card__meta">
-          {formattedClose && <span className="hsk-live-card__close">Closes {formattedClose}</span>}
           <span className="hsk-live-card__age">
             {stale ? `Paused · ${describeAge(now - record.at)}` : `Live · ${describeAge(now - record.at)}`}
           </span>
         </div>
+        {formattedClose && <span className="hsk-live-card__close">Closes {formattedClose}</span>}
+      </div>
+
+      <div className="hsk-live-card__body">
+        <span className="hsk-live-card__title" title={rawTitle}>{shortTitle}</span>
       </div>
 
       <div className="hsk-live-card__pills">
