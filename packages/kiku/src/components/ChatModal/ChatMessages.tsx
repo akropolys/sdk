@@ -45,6 +45,7 @@ export interface ChatMessagesProps {
   handleSourceClick: (src: ChatSource) => void;
   onRetry?: (msg: ChatMessage) => void;
   onEdit?: (msg: ChatMessage) => void;
+  onLongPress?: (msg: ChatMessage, rect: { top: number; left: number; width: number; height: number }, isUser: boolean) => void;
   retrying?: boolean;
   continueGenerating: () => void;
   t: (key: UIStringKey, vars?: Record<string, string>) => string;
@@ -93,6 +94,7 @@ export function ChatMessages({
   handleSourceClick,
   onRetry,
   onEdit,
+  onLongPress,
   retrying,
   continueGenerating,
   t,
@@ -152,6 +154,7 @@ export function ChatMessages({
               handleSourceClick={handleSourceClick}
               onRetry={onRetry}
               onEdit={onEdit}
+              onLongPress={onLongPress}
               hasError={hasError}
               retrying={retrying}
               t={t}

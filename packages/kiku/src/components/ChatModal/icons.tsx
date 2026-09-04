@@ -335,4 +335,64 @@ export const XIcon = ({ size = 11 }: { size?: number }) => (
   </svg>
 );
 
+export const PinIcon = ({ className, size = 16, filled = false }: { className?: string; size?: number; filled?: boolean } = {}) => (
+  <svg
+    className={cn("hsk-pin-icon", className)}
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill={filled ? "currentColor" : "none"}
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <line x1="12" y1="17" x2="12" y2="22" />
+    <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17z" />
+  </svg>
+);
+
+export const ShareTrayIcon = ({ className, size = 16 }: { className?: string; size?: number } = {}) => (
+  <svg
+    className={cn("hsk-share-tray-icon", className)}
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+    <polyline points="16 6 12 2 8 6" />
+    <line x1="12" y1="2" x2="12" y2="15" />
+  </svg>
+);
+
+export const VisualSearchSparkleIcon = ({ className, size = 16 }: { className?: string; size?: number } = {}) => (
+  <svg
+    className={cn("hsk-visual-search-icon", className)}
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <circle cx="10" cy="10" r="6.5" />
+    <line x1="21" y1="21" x2="14.65" y2="14.65" />
+    <path
+      d="M10 5.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2z"
+      fill="currentColor"
+      stroke="none"
+    />
+  </svg>
+);
+
+
+
+
 

@@ -31,6 +31,7 @@ import { ChatComposer } from './ChatComposer';
 import { VoiceOverlay } from './VoiceOverlay';
 import { LightboxModal } from './components/LightboxModal';
 import { ConversationTimeline } from './components/ConversationTimeline';
+import { TapbackMenu } from './components/TapbackMenu';
 
 export function ChatModal({
   title = 'kiku',
@@ -249,7 +250,7 @@ export function ChatModal({
   const [retrying, setRetrying] = useState(false);
 
   const handleRetryMessage = useCallback(async (msg?: ChatMessage) => {
-    const target = msg || [...messages].reverse().find(m => m.role === 'user');
+    const target = (msg && msg.role === 'user') ? msg : [...messages].reverse().find(m => m.role === 'user');
     if (!target?.content) return;
     setRetrying(true);
     try {
@@ -308,6 +309,26 @@ export function ChatModal({
   }, []);
 
   const displayKikuPub = mintedPub ?? client?.getKikuPub?.() ?? getStoredKikuId();
+
+  const [tapbackTarget, setTapbackTarget] = useState<{
+    msg: any;
+    rect: { top: number; left: number; width: number; height: number };
+    isUser: boolean;
+  } | null>(null);
+
+  const handleLongPressMessage = useCallback((
+    msg: any,
+    rect: { top: number; left: number; width: number; height: number },
+    isUser: boolean
+  ) => {
+    setTapbackTarget({ msg, rect, isUser });
+  }, []);
+
+  const handlePinMessage = useCallback(async (msg: any) => {
+    const snippet = (msg.content || '').slice(0, 50).replace(/\n+/g, ' ');
+    const display = `@kiku pin ${snippet}`;
+    await send(msg.content || 'pin message', display, undefined, 'capture');
+  }, [send]);
 
   const {
     handleKikuCapture,
@@ -776,6 +797,7 @@ export function ChatModal({
                   handleSourceClick={handleSourceClick}
                   onRetry={handleRetryMessage}
                   onEdit={handleEditMessage}
+                  onLongPress={handleLongPressMessage}
                   retrying={retrying}
                   continueGenerating={continueGenerating}
                   t={t}
@@ -903,6 +925,25 @@ export function ChatModal({
               onSelectSource={onSelectSource}
               defaultCurrency={defaultCurrency}
               voiceError={voiceError}
+              t={t}
+            />
+          )}
+
+          {tapbackTarget && (
+            <TapbackMenu
+              msg={tapbackTarget.msg}
+              rect={tapbackTarget.rect}
+              containerRect={panelRef.current?.getBoundingClientRect()}
+              isUser={tapbackTarget.isUser}
+              canRetry={!loading && !streaming}
+              canEdit={tapbackTarget.isUser}
+              onPin={handlePinMessage}
+              onRetry={handleRetryMessage}
+              onEdit={handleEditMessage}
+              onCopy={(text) => {
+                try { navigator.clipboard.writeText(text); } catch {}
+              }}
+              onClose={() => setTapbackTarget(null)}
               t={t}
             />
           )}

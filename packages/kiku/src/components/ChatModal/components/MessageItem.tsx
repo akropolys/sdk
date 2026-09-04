@@ -6,7 +6,14 @@ import { LiveTable } from '../../LiveTable';
 import { ThinkingBlock, parseThinking } from './ThinkingBlock';
 import { SourcesCarousel } from './SourcesCarousel';
 import { SmartContextPills } from './SmartContextPills';
-import { MicIcon, ExternalIcon, RetryIcon, EditIcon, CopyIcon, CheckIcon } from '../icons';
+import {
+  MicIcon,
+  ExternalIcon,
+  RetryIcon,
+  EditIcon,
+  CopyIcon,
+  CheckIcon,
+} from '../icons';
 import type { UIStringKey } from '../types';
 
 const MarkdownBlock = React.memo(
@@ -42,6 +49,7 @@ export interface MessageItemProps {
   handleSourceClick: (src: ChatSource) => void;
   onRetry?: (msg: ChatMessage) => void;
   onEdit?: (msg: ChatMessage) => void;
+  onLongPress?: (msg: ChatMessage, rect: { top: number; left: number; width: number; height: number }, isUser: boolean) => void;
   hasError?: boolean;
   retrying?: boolean;
   t: (key: UIStringKey, vars?: Record<string, string>) => string;
@@ -75,6 +83,7 @@ export function MessageItem({
   handleSourceClick,
   onRetry,
   onEdit,
+  onLongPress,
   hasError,
   retrying,
   t,
@@ -83,6 +92,61 @@ export function MessageItem({
   const isUser = msg.role === 'user';
   const displayContent = msg.content;
   const [copied, setCopied] = React.useState(false);
+
+  const touchStartPos = React.useRef<{ x: number; y: number } | null>(null);
+  const longPressTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const startLongPress = React.useCallback((targetEl: HTMLElement) => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    longPressTimer.current = setTimeout(() => {
+      if (onLongPress) {
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          try { navigator.vibrate(25); } catch {}
+        }
+        const r = targetEl.getBoundingClientRect();
+        onLongPress(msg, { top: r.top, left: r.left, width: r.width, height: r.height }, isUser);
+      }
+      longPressTimer.current = null;
+    }, 420);
+  }, [msg, isUser, onLongPress]);
+
+  const handleTouchStart = React.useCallback((e: React.TouchEvent<HTMLElement>) => {
+    if (e.touches.length !== 1) return;
+    const touch = e.touches[0];
+    touchStartPos.current = { x: touch.clientX, y: touch.clientY };
+    startLongPress(e.currentTarget);
+  }, [startLongPress]);
+
+  const handleTouchMove = React.useCallback((e: React.TouchEvent<HTMLElement>) => {
+    if (!touchStartPos.current || !longPressTimer.current) return;
+    const touch = e.touches[0];
+    const dist = Math.hypot(touch.clientX - touchStartPos.current.x, touch.clientY - touchStartPos.current.y);
+    if (dist > 8) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }, []);
+
+  const handleTouchEnd = React.useCallback(() => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+    touchStartPos.current = null;
+  }, []);
+
+  const handleContextMenu = React.useCallback((e: React.MouseEvent<HTMLElement>) => {
+    if (!onLongPress) return;
+    e.preventDefault();
+    const r = e.currentTarget.getBoundingClientRect();
+    onLongPress(msg, { top: r.top, left: r.left, width: r.width, height: r.height }, isUser);
+  }, [msg, isUser, onLongPress]);
+
+  React.useEffect(() => {
+    return () => {
+      if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    };
+  }, []);
 
   const handleCopy = React.useCallback((text: string) => {
     if (!text) return;
@@ -128,12 +192,19 @@ export function MessageItem({
             </div>
           )}
           {msg.content && (
-            <div className={cn(
-              'hsk-cb-user-bubble',
-              isRunEnd && 'hsk-cb-user-bubble--tail',
-              msg.spoken && 'hsk-cb-user-bubble--spoken',
-              hasError && 'hsk-cb-user-bubble--error',
-            )}>
+            <div
+              className={cn(
+                'hsk-cb-user-bubble',
+                isRunEnd && 'hsk-cb-user-bubble--tail',
+                msg.spoken && 'hsk-cb-user-bubble--spoken',
+                hasError && 'hsk-cb-user-bubble--error',
+              )}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onTouchCancel={handleTouchEnd}
+              onContextMenu={handleContextMenu}
+            >
               {msg.spoken && <MicIcon className="hsk-cb-spoken-mark" size={10} />}
               {/^@kiku\b/i.test(msg.content) ? (
                 <>
@@ -192,7 +263,14 @@ export function MessageItem({
         </div>
       ) : (
         <div className={cn('hsk-cb-ai-msg', isNarrow && 'hsk-cb-ai-msg--inline')}>
-          <div className="hsk-cb-ai-body">
+          <div
+            className="hsk-cb-ai-body"
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onTouchCancel={handleTouchEnd}
+            onContextMenu={handleContextMenu}
+          >
             {(() => {
               const isComplete = msg.thoughtForSeconds != null || cleanContent.length > 0 || !(isLast && (streaming || loading));
               return (
