@@ -212,6 +212,7 @@ export function ChatModal({
   useHostFontFace(theme);
 
   const handleSendRef = useRef<(text: string) => void>(() => {});
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSend = async (text?: string, extraAttachments?: ChatAttachment[], forcedIntent?: string, captureTargets?: CaptureTarget[]) => {
     const raw = (text ?? input).trim();
@@ -355,7 +356,6 @@ export function ChatModal({
   const themeMenuRef = useRef<HTMLDivElement>(null);
   const mobileThemeRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const gooId = `hsk-goo-${useId()}`;

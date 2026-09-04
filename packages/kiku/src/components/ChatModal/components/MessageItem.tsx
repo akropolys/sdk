@@ -144,6 +144,42 @@ export function MessageItem({
             </div>
           )}
           <div className="hsk-cb-user-footer">
+            <div className={cn('hsk-cb-msg-actions', hasError && 'hsk-cb-msg-actions--failed')}>
+              {onRetry && (hasError || isLastUser) && (
+                <button
+                  type="button"
+                  className="hsk-cb-msg-action hsk-cb-msg-action--retry"
+                  onClick={() => onRetry(msg)}
+                  title={t('retry')}
+                  aria-label={t('retry')}
+                >
+                  <RetryIcon className={retrying ? 'hsk-retry-icon--spinning' : ''} size={11} />
+                  <span className="hsk-cb-msg-action-label">{t('retry')}</span>
+                </button>
+              )}
+              {onEdit && (
+                <button
+                  type="button"
+                  className="hsk-cb-msg-action hsk-cb-msg-action--edit"
+                  onClick={() => onEdit(msg)}
+                  title={t('edit')}
+                  aria-label={t('edit')}
+                >
+                  <EditIcon size={11} />
+                  <span className="hsk-cb-msg-action-label">{t('edit')}</span>
+                </button>
+              )}
+              <button
+                type="button"
+                className={cn('hsk-cb-msg-action hsk-cb-msg-action--copy', copied && 'hsk-cb-msg-action--copied')}
+                onClick={() => handleCopy(msg.content)}
+                title={copied ? t('copied') : t('copy')}
+                aria-label={copied ? t('copied') : t('copy')}
+              >
+                {copied ? <CheckIcon size={11} /> : <CopyIcon size={11} />}
+                <span className="hsk-cb-msg-action-label">{copied ? t('copied') : t('copy')}</span>
+              </button>
+            </div>
             {isLastUser && !hasError && (
               <span className="hsk-cb-sent-status">
                 {stopped || interrupted ? t('statusStopped') : t('statusSent')}
@@ -155,42 +191,6 @@ export function MessageItem({
                 {t('msgFailed')}
               </span>
             )}
-            <div className={cn('hsk-cb-msg-actions', hasError && 'hsk-cb-msg-actions--failed')}>
-              {onRetry && (hasError || isLastUser) && (
-                <button
-                  type="button"
-                  className="hsk-cb-msg-action hsk-cb-msg-action--retry"
-                  onClick={() => onRetry(msg)}
-                  title={t('retry')}
-                  aria-label={t('retry')}
-                >
-                  <RetryIcon className={retrying ? 'hsk-retry-icon--spinning' : ''} size={12} />
-                  <span>{t('retry')}</span>
-                </button>
-              )}
-              {onEdit && (
-                <button
-                  type="button"
-                  className="hsk-cb-msg-action hsk-cb-msg-action--edit"
-                  onClick={() => onEdit(msg)}
-                  title={t('edit')}
-                  aria-label={t('edit')}
-                >
-                  <EditIcon size={12} />
-                  <span>{t('edit')}</span>
-                </button>
-              )}
-              <button
-                type="button"
-                className={cn('hsk-cb-msg-action hsk-cb-msg-action--copy', copied && 'hsk-cb-msg-action--copied')}
-                onClick={() => handleCopy(msg.content)}
-                title={copied ? t('copied') : t('copy')}
-                aria-label={copied ? t('copied') : t('copy')}
-              >
-                {copied ? <CheckIcon size={12} /> : <CopyIcon size={12} />}
-                <span>{copied ? t('copied') : t('copy')}</span>
-              </button>
-            </div>
           </div>
         </div>
       ) : (
@@ -368,8 +368,8 @@ export function MessageItem({
                     title={copied ? t('copied') : t('copy')}
                     aria-label={copied ? t('copied') : t('copy')}
                   >
-                    {copied ? <CheckIcon size={12} /> : <CopyIcon size={12} />}
-                    <span>{copied ? t('copied') : t('copy')}</span>
+                    {copied ? <CheckIcon size={11} /> : <CopyIcon size={11} />}
+                    <span className="hsk-cb-msg-action-label">{copied ? t('copied') : t('copy')}</span>
                   </button>
                   {isLast && (hasError || cleanContent.includes("We're experiencing high demand right now")) && onRetry && (
                     <button
@@ -379,8 +379,8 @@ export function MessageItem({
                       title={t('retry')}
                       aria-label={t('retry')}
                     >
-                      <RetryIcon className={retrying ? 'hsk-retry-icon--spinning' : ''} size={12} />
-                      <span>{t('retry')}</span>
+                      <RetryIcon className={retrying ? 'hsk-retry-icon--spinning' : ''} size={11} />
+                      <span className="hsk-cb-msg-action-label">{t('retry')}</span>
                     </button>
                   )}
                 </div>
