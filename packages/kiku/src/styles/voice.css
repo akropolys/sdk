@@ -501,21 +501,35 @@
 
 .hsk-live-wrap {
   margin: 8px 0 2px;
-  max-width: min(88%, 560px);
+  width: 100%;
+  max-width: 100%;
   box-sizing: border-box;
 }
 
 .hsk-live-carousel {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: row;
+  flex-wrap: nowrap;
   gap: 8px;
-  align-items: flex-start;
+  align-items: stretch;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x mandatory;
+  padding: 2px 0 6px;
+}
+
+.hsk-live-carousel::-webkit-scrollbar {
+  display: none;
 }
 
 .hsk-live-card {
   flex: 0 0 auto;
+  scroll-snap-align: start;
   width: fit-content;
-  max-width: 100%;
+  min-width: 160px;
+  max-width: 250px;
   background: var(--hsk-chat-source-bg, rgba(0, 0, 0, 0.035));
   border: 1px solid var(--hsk-chat-divide, rgba(0, 0, 0, 0.08));
   border-radius: 12px;
