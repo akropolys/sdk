@@ -150,7 +150,6 @@ export function MessageItem({
                   type="button"
                   className="hsk-cb-msg-action hsk-cb-msg-action--retry"
                   onClick={() => onRetry(msg)}
-                  title={t('retry')}
                   aria-label={t('retry')}
                 >
                   <RetryIcon className={retrying ? 'hsk-retry-icon--spinning' : ''} size={11} />
@@ -162,7 +161,6 @@ export function MessageItem({
                   type="button"
                   className="hsk-cb-msg-action hsk-cb-msg-action--edit"
                   onClick={() => onEdit(msg)}
-                  title={t('edit')}
                   aria-label={t('edit')}
                 >
                   <EditIcon size={11} />
@@ -173,7 +171,6 @@ export function MessageItem({
                 type="button"
                 className={cn('hsk-cb-msg-action hsk-cb-msg-action--copy', copied && 'hsk-cb-msg-action--copied')}
                 onClick={() => handleCopy(msg.content)}
-                title={copied ? t('copied') : t('copy')}
                 aria-label={copied ? t('copied') : t('copy')}
               >
                 {copied ? <CheckIcon size={11} /> : <CopyIcon size={11} />}
@@ -365,7 +362,6 @@ export function MessageItem({
                     type="button"
                     className={cn('hsk-cb-msg-action hsk-cb-msg-action--copy', copied && 'hsk-cb-msg-action--copied')}
                     onClick={() => handleCopy(cleanContent)}
-                    title={copied ? t('copied') : t('copy')}
                     aria-label={copied ? t('copied') : t('copy')}
                   >
                     {copied ? <CheckIcon size={11} /> : <CopyIcon size={11} />}
@@ -376,7 +372,6 @@ export function MessageItem({
                       type="button"
                       className="hsk-cb-msg-action hsk-cb-msg-action--retry"
                       onClick={() => onRetry(msg)}
-                      title={t('retry')}
                       aria-label={t('retry')}
                     >
                       <RetryIcon className={retrying ? 'hsk-retry-icon--spinning' : ''} size={11} />
