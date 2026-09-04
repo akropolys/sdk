@@ -93,43 +93,42 @@ export function TapbackMenu({
   const bWidth = rect.width;
   const bHeight = rect.height;
 
-  // Capsule width based on enabled tools (refined, compact proportions)
+  // Capsule width based on enabled tools
   let btnCount = 2; // Pin + Copy
   if (canRetry && onRetry) btnCount++;
   if (isUser && canEdit && onEdit) btnCount++;
-  const estimatedWidth = btnCount === 2 ? 120 : btnCount === 3 ? 172 : 228;
+  const estimatedWidth = btnCount === 2 ? 140 : btnCount === 3 ? 195 : 252;
   const capsuleWidth = measuredWidth || estimatedWidth;
-  const capsuleHeight = 35;
+  const capsuleHeight = 38;
 
-  // Decide layout mode:
-  // For user response: bubbles come from the left side of the user bubble!
-  // If space permits on the left, place capsule to the left of the bubble.
-  const isHorizontalUser = isUser && (bLeft - 10 >= capsuleWidth || bLeft >= 180);
+  // Always position above if space permits (bTop >= 58), else below
+  const placeAbove = bTop >= 58;
+  const capsuleTop = placeAbove
+    ? Math.max(8, bTop - capsuleHeight - 16)
+    : Math.min(bTop + bHeight + 16, (containerRect?.height ?? 800) - capsuleHeight - 8);
 
-  let capsuleLeft: number;
-  let capsuleTop: number;
-  let tailOffset = 0;
-  let placeAbove = true;
+  // Target X where the anchor bubble touches the message bubble corner:
+  // For user: top-right corner (18px from its right edge)
+  // For model: top-left corner (20px from its left edge)
+  const targetX = isUser
+    ? Math.max(28, bLeft + bWidth - 18)
+    : Math.min(cWidth - 28, bLeft + 20);
 
-  if (isHorizontalUser) {
-    // Position to the LEFT of the user message bubble:
-    // Right edge of capsule sits 10px to the left of user bubble
-    capsuleLeft = Math.max(8, bLeft - capsuleWidth - 10);
-    // Vertically center capsule with user bubble
-    const bubbleCenterY = bTop + bHeight / 2;
-    capsuleTop = Math.max(8, Math.min(bubbleCenterY - capsuleHeight / 2, (containerRect?.height ?? 800) - capsuleHeight - 8));
-  } else {
-    // Model message (or fallback if user message has no space to the left):
-    // "for model response, top is ok"
-    placeAbove = bTop >= 50;
-    capsuleTop = placeAbove
-      ? Math.max(8, bTop - capsuleHeight - 10)
-      : Math.min(bTop + bHeight + 10, (containerRect?.height ?? 800) - capsuleHeight - 8);
+  // Position capsule so the upward bubble column (at 18px from capsule edge) aligns directly with targetX:
+  let capsuleLeft = isUser
+    ? targetX - capsuleWidth + 18
+    : targetX - 18;
 
-    const targetX = isUser ? Math.max(20, bLeft + 20) : Math.min(cWidth - 20, bLeft + 20);
-    capsuleLeft = Math.max(10, Math.min(targetX - 20, cWidth - capsuleWidth - 10));
-    tailOffset = Math.max(16, Math.min(targetX - capsuleLeft, capsuleWidth - 16));
-  }
+  // Clamp capsule within container bounds
+  capsuleLeft = Math.max(10, Math.min(capsuleLeft, cWidth - capsuleWidth - 10));
+
+  // Compute exact tail offset inside capsule so it aligns with targetX
+  const tailOffset = Math.max(18, Math.min(targetX - capsuleLeft, capsuleWidth - 18));
+
+  // Anchor droplet in the message bubble's exact color to seem like an organic extension!
+  const anchorColor = isUser
+    ? 'var(--hsk-user-bubble-bg, var(--hsk-primary, #007aff))'
+    : 'var(--hsk-chat-source-bg, var(--hsk-bubble-bg, rgba(255, 255, 255, 0.12)))';
 
   let toolIdx = 0;
 
@@ -139,17 +138,18 @@ export function TapbackMenu({
         ref={menuRef}
         className={cn(
           "hsk-tapback-group",
-          isHorizontalUser ? "is-side-left" : (placeAbove ? "is-above" : "is-below"),
+          placeAbove ? "is-above" : "is-below",
           isUser ? "is-user" : "is-ai"
         )}
         style={{
           top: `${capsuleTop}px`,
           left: `${capsuleLeft}px`,
           '--tail-x': `${tailOffset}px`,
+          '--hsk-anchor-color': anchorColor,
         } as React.CSSProperties}
         onClick={e => e.stopPropagation()}
       >
-        {/* Floating Refined Capsule with tools */}
+        {/* Floating Tool Capsule */}
         <div className="hsk-tapback-capsule">
           <button
             type="button"
@@ -200,21 +200,20 @@ export function TapbackMenu({
           </button>
         </div>
 
-        {/* Fused connector speech bubble: side tail for user message, vertical tail for model response */}
-        {isHorizontalUser ? (
-          <div className="hsk-tapback-tail hsk-tapback-tail--side">
-            <span className="hsk-tapback-dot hsk-tapback-dot--medium" />
-            <span className="hsk-tapback-dot hsk-tapback-dot--small" />
-          </div>
-        ) : (
-          <div
-            className={cn("hsk-tapback-tail hsk-tapback-tail--vertical", placeAbove ? "is-above" : "is-below")}
-            style={{ left: `${tailOffset}px` }}
-          >
-            <span className="hsk-tapback-dot hsk-tapback-dot--medium" />
-            <span className="hsk-tapback-dot hsk-tapback-dot--small" />
-          </div>
-        )}
+        {/* Upward-flowing connector bubbles:
+            - Dot 3 (top): 20px, melted into capsule
+            - Dot 2 (middle): 11px, frosted glass
+            - Dot 1 (bottom): 6px, in the exact message bubble color, touching the bubble! */}
+        <div
+          className={cn("hsk-tapback-tail", placeAbove ? "is-above" : "is-below")}
+          style={{ left: `${tailOffset}px` }}
+        >
+          <span className="hsk-tapback-dot hsk-tapback-dot--top">
+            <span className="hsk-tapback-dot-bridge" />
+          </span>
+          <span className="hsk-tapback-dot hsk-tapback-dot--mid" />
+          <span className="hsk-tapback-dot hsk-tapback-dot--anchor" />
+        </div>
       </div>
     </div>
   );

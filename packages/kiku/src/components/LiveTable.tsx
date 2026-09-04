@@ -62,6 +62,16 @@ function LiveQuoteCard({ record, now }: { record: LiveValue; now: number }) {
   if (fields.moneyline || fields.ml) quotePills.push({ label: 'ML', value: formatLiveValue('ml', fields.moneyline || fields.ml), rawKey: 'moneyline' });
   if (fields.over_under || fields.total) quotePills.push({ label: 'O/U', value: formatLiveValue('total', fields.over_under || fields.total), rawKey: 'over_under' });
 
+  if (fields['1_home'] || fields.home_odd || fields['1']) {
+    quotePills.push({ label: '1', value: formatLiveValue('odds', fields['1_home'] || fields.home_odd || fields['1']), rawKey: '1_home' });
+  }
+  if (fields['X_draw'] || fields.neutral_odd || fields.draw_odd || fields['X']) {
+    quotePills.push({ label: 'X', value: formatLiveValue('odds', fields['X_draw'] || fields.neutral_odd || fields.draw_odd || fields['X']), rawKey: 'X_draw' });
+  }
+  if (fields['2_away'] || fields.away_odd || fields['2']) {
+    quotePills.push({ label: '2', value: formatLiveValue('odds', fields['2_away'] || fields.away_odd || fields['2']), rawKey: '2_away' });
+  }
+
   const volVal = fields.volume || fields.vol || fields['24h_volume'] || fields.turnover;
   if (volVal) {
     quotePills.push({ label: 'Vol', value: formatLiveValue('volume', volVal), rawKey: 'volume' });
