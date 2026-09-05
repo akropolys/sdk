@@ -174,7 +174,7 @@ export function useScriptFont({ shopperLanguage, theme }: UseScriptFontOptions) 
       : (hostName ? `"${hostName}", ` : '');
 
     if (scriptFont) {
-      return `${host}"Geist", "${scriptFont.family}", system-ui, sans-serif`;
+      return `"${scriptFont.family}", ${host}"Geist", system-ui, sans-serif`;
     }
 
     const l = shopperLanguage ? shopperLanguage.trim().toLowerCase() : '';
@@ -185,13 +185,13 @@ export function useScriptFont({ shopperLanguage, theme }: UseScriptFontOptions) 
       return `${host}"Geist", "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", system-ui, sans-serif`;
     }
     if (l === 'urdu' || l === 'ur' || l === 'اردو') {
-      return `${host}"Noto Nastaliq Urdu", "IBM Plex Sans Arabic", "Geist", system-ui, sans-serif`;
+      return `"Noto Nastaliq Urdu", ${host}"IBM Plex Sans Arabic", "Geist", system-ui, sans-serif`;
     }
     if (l === 'arabic' || l === 'ar' || l === 'العربية') {
-      return `${host}"IBM Plex Sans Arabic", "Geist", system-ui, sans-serif`;
+      return `"IBM Plex Sans Arabic", ${host}"Geist", system-ui, sans-serif`;
     }
     if (l === 'hindi' || l === 'hi' || l === 'हिन्दी') {
-      return `${host}"Hind", "Geist", system-ui, sans-serif`;
+      return `"Hind", ${host}"Geist", system-ui, sans-serif`;
     }
 
     return undefined;
