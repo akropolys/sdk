@@ -87,6 +87,8 @@ export interface AkropolysConfig {
   indexContent?: boolean;
 
   display?: DisplayConfig;
+
+  kikuKey?: string;
 }
 
 export interface SearchRequest {
@@ -201,5 +203,65 @@ export interface SignedPayload<T = Record<string, any>> {
   siteId?: string;
   envelope: SignedEnvelope<T>;
   sig: string;
+}
+
+export type ScoutStatus = 'active' | 'paused' | 'triggered' | 'expired' | 'canceled';
+
+export interface Scout {
+  id: string;
+  siteId: string;
+  shopperId: string;
+  name: string;
+  instrument: string;
+  conditionField: string;
+  operator: string;
+  targetValue: string;
+  actionType: string;
+  status: ScoutStatus;
+  durationMinutes: number;
+  minutesRemaining: number;
+  initialValue?: string;
+  triggerValue?: string;
+  createdAt: string;
+  updatedAt: string;
+  triggeredAt?: string;
+}
+
+export interface ScoutEvent {
+  id: string;
+  scoutId: string;
+  eventType: string;
+  message: string;
+  payload?: Record<string, any>;
+  createdAt: string;
+}
+
+export interface CreateScoutInput {
+  name?: string;
+  instrument: string;
+  conditionField?: string;
+  operator?: string;
+  targetValue: string;
+  actionType?: string;
+  durationMinutes?: number;
+  initialValue?: string;
+  siteId?: string;
+  kikuKey?: string;
+}
+
+export interface ListScoutsResponse {
+  count: number;
+  scouts: Scout[];
+}
+
+export interface GetScoutResponse {
+  scout: Scout;
+  events: ScoutEvent[];
+}
+
+export interface ScoutActionResponse {
+  ok: boolean;
+  id: string;
+  status: ScoutStatus;
 }
 

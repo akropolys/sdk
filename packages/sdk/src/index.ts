@@ -13,6 +13,8 @@ export { useKiku } from './hooks/useKiku';
 export { useLiveContext } from './hooks/useLiveContext';
 export { useLiveValue, useLiveValues } from './hooks/useLiveValues';
 export { useLiveData } from './hooks/useLiveData';
+export { useScouts } from './hooks/useScouts';
+export type { UseScoutsOptions, UseScoutsReturn } from './hooks/useScouts';
 export {
   setLiveValue,
   getLiveValue,
@@ -54,5 +56,12 @@ export type {
   CaptureTarget,
   SignedPayload,
   SignedEnvelope,
+  Scout,
+  ScoutEvent,
+  ScoutStatus,
+  CreateScoutInput,
+  ListScoutsResponse,
+  GetScoutResponse,
+  ScoutActionResponse,
 } from './types';
 

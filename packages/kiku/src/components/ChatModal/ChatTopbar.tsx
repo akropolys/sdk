@@ -15,6 +15,9 @@ export interface ChatTopbarProps {
   themeMenuClosing?: boolean;
   isNarrow?: boolean;
   currentTheme?: ThemeId;
+  activeScoutCount?: number;
+  scoutDockOpen?: boolean;
+  onToggleScoutDock?: () => void;
   onJumpToLatest?: () => void;
   onReset: () => void;
   onClose: () => void;
@@ -32,6 +35,9 @@ export function ChatTopbar({
   themeMenuClosing = false,
   isNarrow = false,
   currentTheme = 'dark',
+  activeScoutCount = 0,
+  scoutDockOpen = false,
+  onToggleScoutDock,
   onJumpToLatest,
   onReset,
   onClose,
@@ -132,7 +138,33 @@ export function ChatTopbar({
         <span className="hsk-cb-topbar-name">{title}</span>
       </div>
 
-      <div className="hsk-cb-topbar-actions">
+      <div className="hsk-cb-topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        {onToggleScoutDock && (
+          <button
+            type="button"
+            className={cn("hsk-cb-topbar-btn", scoutDockOpen && "is-active")}
+            onClick={onToggleScoutDock}
+            title="Scout Watchers Dock"
+            aria-label="Toggle Scout Watchers Dock"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '4px 8px',
+              color: activeScoutCount > 0 ? '#10b981' : undefined,
+              borderRadius: '8px',
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Z"/>
+              <path d="M12 6a6 6 0 1 0 6 6 6 6 0 0 0-6-6Z"/>
+              <circle cx="12" cy="12" r="2"/>
+            </svg>
+            {activeScoutCount > 0 && (
+              <span style={{ fontSize: '11px', fontWeight: 700 }}>{activeScoutCount}</span>
+            )}
+          </button>
+        )}
         {hasMessages && (
           <button className="hsk-cb-topbar-btn" onClick={onReset}>
             {tr('clearChat')}

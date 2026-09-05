@@ -1,4 +1,15 @@
-import { AkropolysConfig, ContentIngestPayload, ChatAttachment, CaptureTarget } from './types';
+import {
+  AkropolysConfig,
+  ContentIngestPayload,
+  ChatAttachment,
+  CaptureTarget,
+  Scout,
+  ScoutEvent,
+  CreateScoutInput,
+  ListScoutsResponse,
+  GetScoutResponse,
+  ScoutActionResponse,
+} from './types';
 import { AkropolysAPI, UIStrings, ScriptFont } from './api';
 import { KikuStream } from './stream';
 import { initContentIndexer } from './content/contentIndexer';
@@ -144,6 +155,16 @@ export class AkropolysClient {
       });
     }
   };
+
+  readonly scouts = {
+    create: (input: CreateScoutInput, signal?: AbortSignal) => this.api.createScout(input, signal),
+    list: (filter?: { siteId?: string; status?: string; kikuKey?: string }, signal?: AbortSignal) => this.api.listScouts(filter, signal),
+    get: (id: string, kikuKey?: string, signal?: AbortSignal) => this.api.getScout(id, kikuKey, signal),
+    pause: (id: string, kikuKey?: string, signal?: AbortSignal) => this.api.pauseScout(id, kikuKey, signal),
+    resume: (id: string, kikuKey?: string, signal?: AbortSignal) => this.api.resumeScout(id, kikuKey, signal),
+    cancel: (id: string, kikuKey?: string, signal?: AbortSignal) => this.api.cancelScout(id, kikuKey, signal),
+  };
+
   private ingestQueue: Record<string, any>[] = [];
   private ingestTimer: ReturnType<typeof setTimeout> | null = null;
   private ingestedUrls = new Map<string, string>();
@@ -152,6 +173,7 @@ export class AkropolysClient {
   private sessionId: string = '';
   private deviceId: string = '';
   private kikuPub: string | null = null;
+  private kikuKey: string | null = null;
   private shopperName: string | null = null;
   private authLoading?: boolean;
   public onAction?: (action: import('./types').ChatAction) => void;
@@ -216,6 +238,7 @@ export class AkropolysClient {
     this.onError = config.onError;
     this.vertical = config.vertical || 'commerce';
     this.display = config.display;
+    if (config.kikuKey) this.kikuKey = config.kikuKey;
     this.initSession();
     this.initDevice();
     this.initKikuKey();
@@ -236,7 +259,8 @@ export class AkropolysClient {
       () => this.shopperName ?? undefined,
       () => { try { return this.getCart?.(); } catch { return undefined; } },
       () => this.shopperLanguage ?? undefined,
-      () => this.entityLanguageMode ?? undefined
+      () => this.entityLanguageMode ?? undefined,
+      () => this.kikuKey ?? undefined
     );
     setInstance(this);
 
@@ -427,13 +451,18 @@ export class AkropolysClient {
    */
   async mintKikuKey(): Promise<{ secret: string; publicId: string }> {
     const res = await this.api.mintKikuKey();
-    this.setKikuPub(res.publicId);
+    if (res.secret) this.setKikuKey(res.secret);
+    if (res.publicId) this.setKikuPub(res.publicId);
     return res;
   }
 
   private initKikuKey() {
     if (typeof window === 'undefined') return;
     try {
+      if (!this.kikuKey) {
+        const sec = localStorage.getItem('akropolys_kiku_key') || localStorage.getItem('kiku_key') || sessionStorage.getItem('akropolys_kiku_key');
+        if (sec) this.kikuKey = sec;
+      }
       const fromSession = sessionStorage.getItem('akropolys_kiku_pub') || sessionStorage.getItem('kiku_pub');
       if (fromSession) { this.kikuPub = fromSession; return; }
       const fromLocal = localStorage.getItem('akropolys_kiku_pub') || localStorage.getItem('kiku_pub') || localStorage.getItem('kiku_id');
@@ -446,6 +475,26 @@ export class AkropolysClient {
   /** The active public id, if any. */
   getKikuPub(): string | undefined {
     return this.kikuPub ?? undefined;
+  }
+
+  /** The active shopper secret key, if any. */
+  getKikuKey(): string | undefined {
+    return this.kikuKey ?? undefined;
+  }
+
+  /** Set or update the active shopper secret key. */
+  setKikuKey(secret: string | null): void {
+    this.kikuKey = secret;
+    if (typeof window === 'undefined') return;
+    try {
+      if (secret) {
+        localStorage.setItem('akropolys_kiku_key', secret);
+        sessionStorage.setItem('akropolys_kiku_key', secret);
+      } else {
+        localStorage.removeItem('akropolys_kiku_key');
+        sessionStorage.removeItem('akropolys_kiku_key');
+      }
+    } catch { }
   }
 
   private initShopperName() {

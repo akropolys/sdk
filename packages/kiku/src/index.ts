@@ -12,6 +12,8 @@ export { VoiceButton } from './components/VoiceButton';
 export type { VoiceButtonProps } from './components/VoiceButton';
 export { VisualSearch } from './components/VisualSearch';
 export type { VisualSearchProps } from './components/VisualSearch';
+export { ScoutDock } from './components/ScoutDock';
+export type { ScoutDockProps } from './components/ScoutDock';
 
 export {
   normalizeShopifyProduct,

@@ -1,4 +1,16 @@
-import { Product, SearchResponse, IngestResponse, AkropolysError, CaptureTarget } from './types';
+import {
+  Product,
+  SearchResponse,
+  IngestResponse,
+  AkropolysError,
+  CaptureTarget,
+  Scout,
+  ScoutEvent,
+  CreateScoutInput,
+  ListScoutsResponse,
+  GetScoutResponse,
+  ScoutActionResponse,
+} from './types';
 
 export interface UIStrings {
   strings: Record<string, string>;
@@ -72,7 +84,8 @@ export class AkropolysAPI {
     private getShopperName?: () => string | undefined,
     private getCart?: () => unknown,
     private getShopperLanguage?: () => string | undefined,
-    private getEntityLanguageMode?: () => string | undefined
+    private getEntityLanguageMode?: () => string | undefined,
+    private getKikuKey?: () => string | undefined
   ) {}
 
   async entityPreview(language: string): Promise<{ original?: any; translated?: any } | null> {
@@ -167,7 +180,7 @@ export class AkropolysAPI {
     }
   }
 
-  private buildHeaders(includeKikuPub = false): Record<string, string> {
+  private buildHeaders(includeKikuPub = false, extraHeaders?: Record<string, string>): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'X-Akropolys-Token': this.apiToken,
@@ -184,14 +197,21 @@ export class AkropolysAPI {
       const kikuPub = this.getKikuPub?.();
       if (kikuPub) headers['X-Akropolys-Kiku-Pub'] = kikuPub;
     }
+    const kikuKey = this.getKikuKey?.();
+    if (kikuKey) {
+      headers['X-Akropolys-Kiku-Key'] = kikuKey;
+    }
+    if (extraHeaders) {
+      Object.assign(headers, extraHeaders);
+    }
     return headers;
   }
 
-  private async post<T>(path: string, body: unknown, attempt = 0, signal?: AbortSignal, keepalive?: boolean): Promise<T> {
+  private async post<T>(path: string, body: unknown, attempt = 0, signal?: AbortSignal, keepalive?: boolean, extraHeaders?: Record<string, string>): Promise<T> {
     const url = `${this.apiUrl}${path}`;
 
     try {
-      const headers = this.buildHeaders();
+      const headers = this.buildHeaders(false, extraHeaders);
 
       const res = await fetch(url, {
         method: 'POST',
@@ -221,7 +241,7 @@ export class AkropolysAPI {
         if (attempt < MAX_RETRIES - 1) {
           log('warn', `${path} [${res.status}] retrying (${attempt + 1}/${MAX_RETRIES})...`);
           await sleep(RETRY_DELAYS[attempt]);
-          return this.post(path, body, attempt + 1, signal, keepalive);
+          return this.post(path, body, attempt + 1, signal, keepalive, extraHeaders);
         }
 
         log('error', `${path} failed after ${MAX_RETRIES} attempts`, err);
@@ -237,10 +257,52 @@ export class AkropolysAPI {
         if (attempt < MAX_RETRIES - 1) {
           log('warn', `${path} network error, retrying (${attempt + 1}/${MAX_RETRIES})...`);
           await sleep(RETRY_DELAYS[attempt]);
-          return this.post(path, body, attempt + 1, signal, keepalive);
+          return this.post(path, body, attempt + 1, signal, keepalive, extraHeaders);
         }
         log('error', `${path} unreachable after ${MAX_RETRIES} attempts`);
       }
+      throw e;
+    }
+  }
+
+  private async get<T>(path: string, extraHeaders?: Record<string, string>, signal?: AbortSignal): Promise<T> {
+    const url = `${this.apiUrl}${path}`;
+    try {
+      const headers = this.buildHeaders(false, extraHeaders);
+      const res = await fetch(url, { method: 'GET', headers, signal });
+      if (!res.ok) {
+        const text = await res.text();
+        let message = text;
+        try {
+          const parsed = JSON.parse(text);
+          if (parsed && typeof parsed.error === 'string') message = parsed.error;
+        } catch {}
+        throw { status: res.status, message } as AkropolysError;
+      }
+      return res.json();
+    } catch (e) {
+      if ((e as any)?.name === 'AbortError' || signal?.aborted) throw e;
+      throw e;
+    }
+  }
+
+  private async del<T>(path: string, extraHeaders?: Record<string, string>, signal?: AbortSignal): Promise<T> {
+    const url = `${this.apiUrl}${path}`;
+    try {
+      const headers = this.buildHeaders(false, extraHeaders);
+      const res = await fetch(url, { method: 'DELETE', headers, signal });
+      if (!res.ok) {
+        const text = await res.text();
+        let message = text;
+        try {
+          const parsed = JSON.parse(text);
+          if (parsed && typeof parsed.error === 'string') message = parsed.error;
+        } catch {}
+        throw { status: res.status, message } as AkropolysError;
+      }
+      return res.json();
+    } catch (e) {
+      if ((e as any)?.name === 'AbortError' || signal?.aborted) throw e;
       throw e;
     }
   }
@@ -412,5 +474,72 @@ export class AkropolysAPI {
       sceneImage,
       productImage,
     }, 0, signal);
+  }
+
+  async createScout(input: CreateScoutInput, signal?: AbortSignal): Promise<Scout> {
+    log('info', 'createScout', input.instrument);
+    const siteId = input.siteId || this.siteId;
+    const extraHeaders: Record<string, string> = {};
+    if (input.kikuKey) {
+      extraHeaders['X-Akropolys-Kiku-Key'] = input.kikuKey;
+    }
+    const body: Record<string, any> = {
+      siteId,
+      name: input.name,
+      instrument: input.instrument,
+      conditionField: input.conditionField || 'price',
+      operator: input.operator || '<=',
+      targetValue: input.targetValue,
+      actionType: input.actionType || 'alert',
+      durationMinutes: input.durationMinutes ?? 60,
+      initialValue: input.initialValue,
+    };
+    if (input.kikuKey) body.kikuKey = input.kikuKey;
+    const res = await this.post<{ scout: Scout }>('/scouts', body, 0, signal, false, extraHeaders);
+    return res.scout;
+  }
+
+  async listScouts(filter?: { siteId?: string; status?: string; kikuKey?: string }, signal?: AbortSignal): Promise<ListScoutsResponse> {
+    log('info', 'listScouts', filter?.status ?? 'all');
+    const siteId = filter?.siteId || this.siteId;
+    const params = new URLSearchParams();
+    if (siteId) params.set('siteId', siteId);
+    if (filter?.status) params.set('status', filter.status);
+    if (filter?.kikuKey) params.set('kikuKey', filter.kikuKey);
+    const extraHeaders: Record<string, string> = {};
+    if (filter?.kikuKey) extraHeaders['X-Akropolys-Kiku-Key'] = filter.kikuKey;
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return this.get<ListScoutsResponse>(`/scouts${qs}`, extraHeaders, signal);
+  }
+
+  async getScout(id: string, kikuKey?: string, signal?: AbortSignal): Promise<GetScoutResponse> {
+    log('info', 'getScout', id);
+    const params = new URLSearchParams();
+    if (kikuKey) params.set('kikuKey', kikuKey);
+    const extraHeaders: Record<string, string> = {};
+    if (kikuKey) extraHeaders['X-Akropolys-Kiku-Key'] = kikuKey;
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return this.get<GetScoutResponse>(`/scouts/${encodeURIComponent(id)}${qs}`, extraHeaders, signal);
+  }
+
+  async pauseScout(id: string, kikuKey?: string, signal?: AbortSignal): Promise<ScoutActionResponse> {
+    log('info', 'pauseScout', id);
+    const extraHeaders: Record<string, string> = {};
+    if (kikuKey) extraHeaders['X-Akropolys-Kiku-Key'] = kikuKey;
+    return this.post<ScoutActionResponse>(`/scouts/${encodeURIComponent(id)}/pause`, {}, 0, signal, false, extraHeaders);
+  }
+
+  async resumeScout(id: string, kikuKey?: string, signal?: AbortSignal): Promise<ScoutActionResponse> {
+    log('info', 'resumeScout', id);
+    const extraHeaders: Record<string, string> = {};
+    if (kikuKey) extraHeaders['X-Akropolys-Kiku-Key'] = kikuKey;
+    return this.post<ScoutActionResponse>(`/scouts/${encodeURIComponent(id)}/resume`, {}, 0, signal, false, extraHeaders);
+  }
+
+  async cancelScout(id: string, kikuKey?: string, signal?: AbortSignal): Promise<ScoutActionResponse> {
+    log('info', 'cancelScout', id);
+    const extraHeaders: Record<string, string> = {};
+    if (kikuKey) extraHeaders['X-Akropolys-Kiku-Key'] = kikuKey;
+    return this.del<ScoutActionResponse>(`/scouts/${encodeURIComponent(id)}`, extraHeaders, signal);
   }
 }

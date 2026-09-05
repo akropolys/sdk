@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useId } from 'react';
 import { flushSync } from 'react-dom';
 import { THEMES, isThemeId, themeDef, DEFAULT_DARK, DEFAULT_LIGHT, type ThemeId } from './themes';
-import { useKiku, ChatSource, ChatAttachment, CaptureTarget, subscribeLiveStream } from '@akropolys/sdk';
+import { useKiku, useScouts, ChatSource, ChatAttachment, CaptureTarget, subscribeLiveStream } from '@akropolys/sdk';
 import { useAkropolysContext } from '@akropolys/sdk';
 import { cn } from '../../utils/cn';
 import { resolveTheme } from '../../utils/theme';
@@ -9,6 +9,7 @@ import { useHostFontFace } from '../../utils/hostFont';
 import { useDragToDismiss } from '../../utils/sheetGesture';
 import { downscaleImage } from '../../utils/downscaleImage';
 import { MarkupEditor } from '../MarkupEditor';
+import { ScoutDock } from '../ScoutDock';
 import type { KikuState } from '../KikuAvatar';
 import KikuDoodles from '../KikuDoodles';
 
@@ -55,6 +56,19 @@ export function ChatModal({
 }: ChatModalProps) {
   const client = useAkropolysContext();
   const { messages, sources, loading, streaming, error, errorCode, lastAction, lastIntent, allowedActions, send, queuedMessage, sendQueuedNow, appendSpokenExchange, stop, stopped, interrupted, continueGenerating, reset, referencedIds } = useKiku();
+  const { activeScouts } = useScouts();
+  const [scoutDockOpen, setScoutDockOpen] = useState(false);
+
+  useEffect(() => {
+    const handleScoutAction = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.type === 'scout_created' || detail?.type === 'scout_dock_sync') {
+        setScoutDockOpen(true);
+      }
+    };
+    window.addEventListener('akropolys:action', handleScoutAction);
+    return () => window.removeEventListener('akropolys:action', handleScoutAction);
+  }, []);
 
   const [shopperName, setShopperNameState] = useState<string>(() => {
     try { return client.getShopperName?.() ?? ''; } catch { return ''; }
@@ -727,12 +741,24 @@ export function ChatModal({
               themeMenuClosing={themeMenuClosing}
               isNarrow={isNarrow}
               currentTheme={currentTheme}
+              activeScoutCount={activeScouts.length}
+              scoutDockOpen={scoutDockOpen}
+              onToggleScoutDock={() => setScoutDockOpen(prev => !prev)}
               onJumpToLatest={jumpToBottom}
               onReset={handleReset}
               onClose={onClose}
               onToggleThemeMenu={() => (themeMenuOpen ? closeThemeMenu() : setThemeMenuOpen(true))}
               onSelectTheme={(t) => { handleToggleTheme(t, true); }}
             />
+
+            {scoutDockOpen && (
+              <div style={{ padding: '0 16px 10px 16px', display: 'flex', justifyContent: 'center', zIndex: 10 }}>
+                <ScoutDock
+                  defaultExpanded={true}
+                  onClose={() => setScoutDockOpen(false)}
+                />
+              </div>
+            )}
 
             <div className="hsk-cb-msgs" ref={msgsContainerRef as any}>
               {displayMessages.length === 0 ? (
