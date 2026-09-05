@@ -25,8 +25,17 @@ import { useKikuKey } from './hooks/useKikuKey';
 import { useChatCommands } from './hooks/useChatCommands';
 import { useVoiceController } from './hooks/useVoiceController';
 import { ChatTopbar } from './ChatTopbar';
-import { CopyIcon, CheckIcon } from './icons';
+import { CopyIcon, CheckIcon, CloseIcon } from './icons';
+import { ScoutControlBar } from '../ScoutDock';
 import { OnboardingView } from './OnboardingView';
+
+const RadarIcon = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Z"/>
+    <path d="M12 6a6 6 0 1 0 6 6 6 6 0 0 0-6-6Z"/>
+    <circle cx="12" cy="12" r="2"/>
+  </svg>
+);
 import { ChatMessages } from './ChatMessages';
 import { ChatComposer } from './ChatComposer';
 import { VoiceOverlay } from './VoiceOverlay';
@@ -390,6 +399,30 @@ export function ChatModal({
   const themeMenuCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const themeMenuRef = useRef<HTMLDivElement>(null);
   const mobileThemeRef = useRef<HTMLDivElement>(null);
+  const [scoutRailOpen, setScoutRailOpen] = useState(false);
+  const scoutRailRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!scoutRailOpen) return;
+    const handleOutside = (e: MouseEvent | TouchEvent) => {
+      const path = (e.composedPath ? e.composedPath() : []) as EventTarget[];
+      if (scoutRailRef.current && (path.includes(scoutRailRef.current) || scoutRailRef.current.contains(e.target as Node))) {
+        return;
+      }
+      setScoutRailOpen(false);
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setScoutRailOpen(false);
+    };
+    document.addEventListener('mousedown', handleOutside);
+    document.addEventListener('touchstart', handleOutside, { passive: true });
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('touchstart', handleOutside);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [scoutRailOpen]);
   const messageRefs = useRef<(HTMLDivElement | null)[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -890,16 +923,63 @@ export function ChatModal({
           />
 
           <div className={cn("hsk-cb-kiku-id-rail", isRTL ? "hsk-cb-kiku-id-rail--right" : "hsk-cb-kiku-id-rail--left")}>
-            <button
-              type="button"
-              className="hsk-cb-kiku-id-pill"
-              onClick={() => displayKikuPub !== 'N/A' && copyValue(displayKikuPub, 'pub')}
-              title={t('keyCopyId')}
-            >
-              <span className="hsk-cb-kiku-id-rail-val">{displayKikuPub}</span>
-              {copied === 'pub' ? <CheckIcon /> : <CopyIcon />}
-            </button>
+            {/* Scouts in Sidepanel on Desktop (ABOVE themes selection, moves with it) */}
+            <div className={cn("hsk-cb-scout-rail-wrap", scoutRailOpen && "is-open")} ref={scoutRailRef}>
+              {!scoutRailOpen ? (
+                <button
+                  type="button"
+                  className="hsk-cb-scout-rail-trigger"
+                  onClick={() => setScoutRailOpen(true)}
+                  aria-label="Scouts"
+                  aria-expanded="false"
+                >
+                  <span className="hsk-cb-scout-trigger-icon" style={{ color: activeScouts.length > 0 ? '#10b981' : undefined }}>
+                    <RadarIcon size={14} />
+                  </span>
+                  <span className="hsk-cb-scout-trigger-label">
+                    {activeScouts.length > 0 ? `${activeScouts.length} in motion` : 'Scouts'}
+                  </span>
+                  {activeScouts.length > 0 && (
+                    <span style={{ width: '6px', height: '6px', borderRadius: '999px', background: '#10b981', display: 'inline-block' }} />
+                  )}
+                </button>
+              ) : (
+                <div
+                  className="hsk-cb-scout-rail-card"
+                  role="dialog"
+                  aria-label="Scouts"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2px 4px 6px 4px' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 650, color: 'var(--hsk-chat-text, currentColor)', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      <RadarIcon size={13} /> Scouts
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setScoutRailOpen(false)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--hsk-chat-muted, currentColor)',
+                        cursor: 'pointer',
+                        padding: '2px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderRadius: '6px',
+                        opacity: 0.7,
+                      }}
+                      title="Close Scouts"
+                    >
+                      <CloseIcon />
+                    </button>
+                  </div>
+                  <ScoutControlBar />
+                </div>
+              )}
+            </div>
 
+            {/* Themes Expandable Selection */}
             <div className={cn("hsk-cb-theme-squircle-wrap", themeMenuOpen && "is-open", themeMenuClosing && "is-closing")} ref={themeMenuRef}>
               {!themeMenuOpen ? (
                 <button
@@ -932,6 +1012,17 @@ export function ChatModal({
                 </div>
               )}
             </div>
+
+            {/* Kiku ID Pill */}
+            <button
+              type="button"
+              className="hsk-cb-kiku-id-pill"
+              onClick={() => displayKikuPub !== 'N/A' && copyValue(displayKikuPub, 'pub')}
+              title={t('keyCopyId')}
+            >
+              <span className="hsk-cb-kiku-id-rail-val">{displayKikuPub}</span>
+              {copied === 'pub' ? <CheckIcon /> : <CopyIcon />}
+            </button>
           </div>
 
           {voiceMode === 'converse' && (

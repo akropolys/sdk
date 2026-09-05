@@ -1,8 +1,9 @@
 import React from 'react';
 import { useT } from './types';
-import { ChevronLeftIcon } from './icons';
+import { ChevronLeftIcon, CloseIcon } from './icons';
 import { THEMES, type ThemeId } from './themes';
 import { KikuAvatar, type KikuState } from '../KikuAvatar';
+import { ScoutControlBar } from '../ScoutDock';
 import { cn } from '../../utils/cn';
 
 export interface ChatTopbarProps {
@@ -24,6 +25,14 @@ export interface ChatTopbarProps {
   onToggleThemeMenu?: () => void;
   onSelectTheme?: (theme: ThemeId) => void;
 }
+
+const RadarIcon = ({ size = 15 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Z"/>
+    <path d="M12 6a6 6 0 1 0 6 6 6 6 0 0 0-6-6Z"/>
+    <circle cx="12" cy="12" r="2"/>
+  </svg>
+);
 
 export function ChatTopbar({
   title,
@@ -52,6 +61,8 @@ export function ChatTopbar({
   const longPressTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const isLongPressRef = React.useRef(false);
   const touchStartTimeRef = React.useRef(0);
+
+
 
   const startPress = React.useCallback(() => {
     isLongPressRef.current = false;
@@ -88,10 +99,12 @@ export function ChatTopbar({
     }
     if (awayFromBottom) {
       onJumpToLatest?.();
+    } else if (isNarrow) {
+      onToggleThemeMenu?.();
     } else {
       triggerRef.current?.();
     }
-  }, [awayFromBottom, onJumpToLatest]);
+  }, [awayFromBottom, isNarrow, onJumpToLatest, onToggleThemeMenu]);
 
   const handleImpact = React.useCallback((splat: number, color: string, glow: string) => {
     if (splat > 0.04) {
@@ -105,11 +118,21 @@ export function ChatTopbar({
 
   return (
     <div className="hsk-cb-topbar">
-      <div className="hsk-cb-topbar-left">
-        <button className="hsk-cb-back" onClick={onClose} aria-label="Close">
-          <span className="hsk-cb-back-icon"><ChevronLeftIcon /></span>
-        </button>
+      {/* Left Column: Back button on mobile, clean spacer on desktop */}
+      <div className="hsk-cb-topbar-left" style={{ minWidth: '34px' }}>
+        {isNarrow && (
+          <button
+            type="button"
+            className="hsk-cb-back"
+            onClick={onClose}
+            aria-label={tr('back')}
+          >
+            <span className="hsk-cb-back-icon"><ChevronLeftIcon /></span>
+          </button>
+        )}
       </div>
+
+      {/* Center Column: Avatar & Name */}
       <div
         className={cn("hsk-cb-topbar-mark", isNarrow && themeMenuOpen && "is-oozing")}
         data-impacting={isImpacting ? 'true' : 'false'}
@@ -125,7 +148,7 @@ export function ChatTopbar({
         onClick={handleClick}
         role="button"
         tabIndex={0}
-        aria-label={awayFromBottom ? tr('jumpToLatest') : 'kiku (long press for themes)'}
+        aria-label={awayFromBottom ? tr('jumpToLatest') : 'kiku (tap for scouts and themes)'}
       >
         <KikuAvatar
           state={avatarState}
@@ -138,45 +161,34 @@ export function ChatTopbar({
         <span className="hsk-cb-topbar-name">{title}</span>
       </div>
 
+      {/* Right Column: Actions (desktop exit button) */}
       <div className="hsk-cb-topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-        {onToggleScoutDock && (
-          <button
-            type="button"
-            className={cn("hsk-cb-topbar-btn", scoutDockOpen && "is-active")}
-            onClick={onToggleScoutDock}
-            title="Scout Watchers Dock"
-            aria-label="Toggle Scout Watchers Dock"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '4px 8px',
-              color: activeScoutCount > 0 ? '#10b981' : undefined,
-              borderRadius: '8px',
-            }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Z"/>
-              <path d="M12 6a6 6 0 1 0 6 6 6 6 0 0 0-6-6Z"/>
-              <circle cx="12" cy="12" r="2"/>
-            </svg>
-            {activeScoutCount > 0 && (
-              <span style={{ fontSize: '11px', fontWeight: 700 }}>{activeScoutCount}</span>
-            )}
-          </button>
-        )}
         {hasMessages && (
           <button className="hsk-cb-topbar-btn" onClick={onReset}>
             {tr('clearChat')}
           </button>
         )}
+
+        {/* Desktop: Exit button */}
+        {!isNarrow && (
+          <button
+            type="button"
+            className="hsk-cb-squircle-btn hsk-cb-exit-btn"
+            onClick={onClose}
+            title="Close"
+            aria-label="Close Chat"
+          >
+            <CloseIcon />
+          </button>
+        )}
       </div>
 
+      {/* Mobile Tray: Ooze menu above 2x2 theme grid */}
       {isNarrow && themeMenuOpen && (
         <div
           className={cn("hsk-cb-topbar-ooze-menu", themeMenuClosing && "is-closing")}
           role="dialog"
-          aria-label="Theme selector"
+          aria-label="Scouts and theme selector"
           style={{
             position: 'absolute',
             top: '100%',
@@ -189,6 +201,7 @@ export function ChatTopbar({
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
         >
+          <ScoutControlBar />
           <div className="hsk-cb-theme-2x2-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
             {THEMES.map(({ id, label, Icon }) => (
               <button
