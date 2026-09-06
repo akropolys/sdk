@@ -536,8 +536,6 @@ function generateGlyphs(
     const alpha = (alphaBase + rng() * (isLightMode ? 0.04 : 0.025)) * (0.75 + axis * 0.55) * (1 + bloom * 0.4);
 
     const baseColor = mix(ink, tint, bloom * 0.85);
-    // RTL: from Bottom-Right (w, h) to Top-Left (0, 0)
-    // LTR: from Top-Left (0, 0) to Bottom-Right (w, h)
     const normDist = isRTL
       ? (w - x + h - y) / (w + h || 1)
       : (x + y) / (w + h || 1);

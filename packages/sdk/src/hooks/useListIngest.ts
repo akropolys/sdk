@@ -2,9 +2,6 @@ import { useEffect, useRef } from 'react';
 import { useIngest } from './useIngest';
 import { stableStringify } from '../utils/stableStringify';
 
-/**
- * Automatically ingests an array of catalog items with deduplication guards.
- */
 export function useListIngest(items: Record<string, any>[] | null | undefined): void {
   const { ingestBatch } = useIngest();
   const processedFingerprintsRef = useRef<Map<string, string>>(new Map());

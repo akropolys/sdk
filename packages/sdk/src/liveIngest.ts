@@ -1,8 +1,5 @@
 import { getAkropolysClient } from './client';
 
-/**
- * Batches and streams live record updates to the platform.
- */
 export interface LiveRecord {
     key: string;
     fields: Record<string, unknown>;

@@ -103,7 +103,6 @@ function SparkleModal({
   const chatBottomRef = useRef<HTMLDivElement>(null);
   const chatTextareaRef = useRef<HTMLTextAreaElement>(null);
 
-  
   useEffect(() => {
     if (!initialProduct && !fetchedProduct) {
       client.api.searchVector(productName, 1)
@@ -117,7 +116,6 @@ function SparkleModal({
     search(productName, limit);
   }, [productName, initialProduct, fetchedProduct, client, limit, search]);
 
-  
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
     handleResize();
@@ -127,10 +125,8 @@ function SparkleModal({
     }
   }, []);
 
-  
   useEffect(() => { if (results.length > 0) onResult?.(results); }, [results, onResult]);
 
-  
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', h);
@@ -165,7 +161,6 @@ function SparkleModal({
 
   const chatBodyRef = useRef<HTMLDivElement>(null);
 
-  
   useEffect(() => {
     if (chatBodyRef.current) {
       chatBodyRef.current.scrollTop = chatBodyRef.current.scrollHeight;
@@ -743,4 +738,3 @@ export function Sparkle({
     </>
   );
 }
-

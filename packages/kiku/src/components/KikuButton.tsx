@@ -17,6 +17,9 @@ export interface KikuButtonProps {
   children?: React.ReactNode;
   icon?: React.ReactNode;
   title?: string;
+
+  /** Wordmark shown in place of the name in the topbar. */
+  logo?: string;
   placeholder?: string;
   backdropColor?: string;
   backdropBlur?: string | number;
@@ -54,6 +57,7 @@ export function KikuButton({
   children,
   icon,
   title,
+  logo,
   placeholder,
   backdropColor,
   backdropBlur,
@@ -76,8 +80,6 @@ export function KikuButton({
   const [mounted, setMounted] = useState(false);
   const [origin, setOrigin] = useState<import('./ChatModal/types').ModalOrigin | null>(null);
 
-  // The open path otherwise pays for ~190KB of CSS parsing plus the ui-strings and
-  // base-font round trips. Pulling both forward means the click only mounts React.
   const warmShadow = useCallback(() => {
     getShadowContainer();
     try {
@@ -186,6 +188,7 @@ export function KikuButton({
       {open && mounted && createPortal(
         <ChatModal
           title={title}
+          logo={logo}
           placeholder={placeholder}
           backdropColor={backdropColor}
           backdropBlur={backdropBlur}

@@ -664,4 +664,3 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
 
   return { messages, sources: resolvedSources, referencedIds, loading, streaming, error, errorCode, lastAction, lastIntent, allowedActions, send, queuedMessage, sendQueuedNow, appendSpokenExchange, stop, stopped, interrupted, continueGenerating, reset };
 }
-

@@ -49,7 +49,7 @@ export interface MessageItemProps {
   handleSourceClick: (src: ChatSource) => void;
   onRetry?: (msg: ChatMessage) => void;
   onEdit?: (msg: ChatMessage) => void;
-  onLongPress?: (msg: ChatMessage, rect: { top: number; left: number; width: number; height: number }, isUser: boolean) => void;
+  onLongPress?: (msg: ChatMessage, rect: { top: number; left: number; width: number; height: number }, isUser: boolean, el: HTMLElement) => void;
   hasError?: boolean;
   retrying?: boolean;
   t: (key: UIStringKey, vars?: Record<string, string>) => string;
@@ -96,6 +96,12 @@ export function MessageItem({
   const touchStartPos = React.useRef<{ x: number; y: number } | null>(null);
   const longPressTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const anchorFor = React.useCallback((el: HTMLElement): HTMLElement => {
+    const sel = isUser ? '.hsk-cb-user-bubble' : '.hsk-cb-ai-text';
+    if (el.matches?.(sel)) return el;
+    return (el.querySelector(sel) as HTMLElement) || el;
+  }, [isUser]);
+
   const startLongPress = React.useCallback((targetEl: HTMLElement) => {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
     longPressTimer.current = setTimeout(() => {
@@ -103,12 +109,13 @@ export function MessageItem({
         if (typeof navigator !== 'undefined' && navigator.vibrate) {
           try { navigator.vibrate(25); } catch {}
         }
-        const r = targetEl.getBoundingClientRect();
-        onLongPress(msg, { top: r.top, left: r.left, width: r.width, height: r.height }, isUser);
+        const anchor = anchorFor(targetEl);
+        const r = anchor.getBoundingClientRect();
+        onLongPress(msg, { top: r.top, left: r.left, width: r.width, height: r.height }, isUser, anchor);
       }
       longPressTimer.current = null;
     }, 420);
-  }, [msg, isUser, onLongPress]);
+  }, [msg, isUser, onLongPress, anchorFor]);
 
   const handleTouchStart = React.useCallback((e: React.TouchEvent<HTMLElement>) => {
     if (e.touches.length !== 1) return;
@@ -138,9 +145,10 @@ export function MessageItem({
   const handleContextMenu = React.useCallback((e: React.MouseEvent<HTMLElement>) => {
     if (!onLongPress) return;
     e.preventDefault();
-    const r = e.currentTarget.getBoundingClientRect();
-    onLongPress(msg, { top: r.top, left: r.left, width: r.width, height: r.height }, isUser);
-  }, [msg, isUser, onLongPress]);
+    const el = anchorFor(e.currentTarget);
+    const r = el.getBoundingClientRect();
+    onLongPress(msg, { top: r.top, left: r.left, width: r.width, height: r.height }, isUser, el);
+  }, [msg, isUser, onLongPress, anchorFor]);
 
   React.useEffect(() => {
     return () => {

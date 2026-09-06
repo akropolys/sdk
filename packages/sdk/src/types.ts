@@ -1,6 +1,3 @@
-/**
- * Generic ingested entity schema with optional URL and ID identifiers.
- */
 export type Entity<T extends Record<string, any> = Record<string, any>> = {
   url?: string;
   id?: string;
@@ -205,7 +202,8 @@ export interface SignedPayload<T = Record<string, any>> {
   sig: string;
 }
 
-export type ScoutStatus = 'active' | 'paused' | 'triggered' | 'expired' | 'canceled';
+// 'idle' is a paid avatar that has not been told what to watch yet.
+export type ScoutStatus = 'idle' | 'active' | 'paused' | 'triggered' | 'expired' | 'canceled';
 
 export interface Scout {
   id: string;
@@ -218,13 +216,20 @@ export interface Scout {
   targetValue: string;
   actionType: string;
   status: ScoutStatus;
-  durationMinutes: number;
-  minutesRemaining: number;
+  // Which animal the shopper put on this scout. Empty means "derive one".
+  avatar: string;
+  dedicatedMinutes: number;
   initialValue?: string;
   triggerValue?: string;
   createdAt: string;
   updatedAt: string;
   triggeredAt?: string;
+}
+
+export interface ScoutQuote {
+  minutes: number;
+  priceUSD: number;
+  unitPriceUSD: number;
 }
 
 export interface ScoutEvent {
@@ -243,7 +248,7 @@ export interface CreateScoutInput {
   operator?: string;
   targetValue: string;
   actionType?: string;
-  durationMinutes?: number;
+  dedicatedMinutes?: number;
   initialValue?: string;
   siteId?: string;
   kikuKey?: string;
@@ -252,6 +257,7 @@ export interface CreateScoutInput {
 export interface ListScoutsResponse {
   count: number;
   scouts: Scout[];
+  balance: number;
 }
 
 export interface GetScoutResponse {
@@ -264,4 +270,3 @@ export interface ScoutActionResponse {
   id: string;
   status: ScoutStatus;
 }
-

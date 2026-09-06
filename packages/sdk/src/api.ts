@@ -8,6 +8,7 @@ import {
   ScoutEvent,
   CreateScoutInput,
   ListScoutsResponse,
+  ScoutQuote,
   GetScoutResponse,
   ScoutActionResponse,
 } from './types';
@@ -491,7 +492,7 @@ export class AkropolysAPI {
       operator: input.operator || '<=',
       targetValue: input.targetValue,
       actionType: input.actionType || 'alert',
-      durationMinutes: input.durationMinutes ?? 60,
+      dedicatedMinutes: input.dedicatedMinutes ?? 0,
       initialValue: input.initialValue,
     };
     if (input.kikuKey) body.kikuKey = input.kikuKey;
@@ -510,6 +511,35 @@ export class AkropolysAPI {
     if (filter?.kikuKey) extraHeaders['X-Akropolys-Kiku-Key'] = filter.kikuKey;
     const qs = params.toString() ? `?${params.toString()}` : '';
     return this.get<ListScoutsResponse>(`/scouts${qs}`, extraHeaders, signal);
+  }
+
+  async scoutBalance(siteId?: string, kikuKey?: string, signal?: AbortSignal): Promise<number> {
+    const params = new URLSearchParams();
+    if (siteId || this.siteId) params.set('siteId', siteId || this.siteId);
+    if (kikuKey) params.set('kikuKey', kikuKey);
+    const extraHeaders: Record<string, string> = {};
+    if (kikuKey) extraHeaders['X-Akropolys-Kiku-Key'] = kikuKey;
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const res = await this.get<{ balance: number }>(`/scouts/balance${qs}`, extraHeaders, signal);
+    return res.balance ?? 0;
+  }
+
+  async addScoutMinutes(id: string, minutes: number, kikuKey?: string, signal?: AbortSignal): Promise<number> {
+    const extraHeaders: Record<string, string> = {};
+    if (kikuKey) extraHeaders['X-Akropolys-Kiku-Key'] = kikuKey;
+    const res = await this.post<{ dedicatedMinutes: number }>(`/scouts/${id}/minutes`, { minutes }, 0, signal, false, extraHeaders);
+    return res.dedicatedMinutes ?? 0;
+  }
+
+  async scoutQuote(minutes: number, signal?: AbortSignal): Promise<ScoutQuote> {
+    return this.get<ScoutQuote>(`/scouts/quote?minutes=${minutes}`, {}, signal);
+  }
+
+  async setScoutAvatar(id: string, avatar: string, kikuKey?: string, signal?: AbortSignal): Promise<string> {
+    const extraHeaders: Record<string, string> = {};
+    if (kikuKey) extraHeaders['X-Akropolys-Kiku-Key'] = kikuKey;
+    const res = await this.post<{ avatar: string }>(`/scouts/${id}/avatar`, { avatar }, 0, signal, false, extraHeaders);
+    return res.avatar;
   }
 
   async getScout(id: string, kikuKey?: string, signal?: AbortSignal): Promise<GetScoutResponse> {

@@ -373,6 +373,8 @@ export function ChatComposer({
                 onClick={() => {
                   if (voiceMode !== 'off') {
                     stopVoice();
+                  } else if (voiceBlocked) {
+                    setVoiceError?.('errAccountRequired');
                   } else if (canConverse) {
                     startVoice('converse');
                   } else {

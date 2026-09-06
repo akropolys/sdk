@@ -1,13 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { pipeLiveData } from '../liveIngest';
 
-/**
- * Streams component live data records to the platform.
- * Coalesces and batches updates per key.
- *
- * @param key - Stable identifier for the live entity (e.g. "EUR/USD", "Team A vs Team B").
- * @param fields - Map of live fields (e.g. odds, prices, score, volume).
- */
 export function useLiveData(
   key: string,
   fields: Record<string, string | number | boolean | null | undefined>

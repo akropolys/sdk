@@ -977,8 +977,7 @@
   top: calc(100% + 12px) !important;
   left: 50%;
   transform: translateX(-50%);
-  width: 216px !important;
-  max-width: calc(100vw - 32px);
+  width: min(300px, calc(100vw - 28px)) !important;
   padding: 6px !important;
   border-radius: 18px;
   background: color-mix(in srgb, var(--hsk-chat-bg, #ffffff) 68%, transparent) !important;
@@ -995,43 +994,82 @@
   animation: hsk-topbar-ooze 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.hsk-cb-topbar-ooze-menu .hsk-cb-theme-2x2-grid {
-  display: grid !important;
-  grid-template-columns: repeat(2, 1fr) !important;
-  gap: 4px !important;
-  width: 100% !important;
-  box-shadow: none !important;
-  margin-top: 6px !important;
-  padding: 0 !important;
-  background: transparent !important;
+.hsk-cb-topbar-ooze-menu .hsk-cb-theme-grid-item {
+  width: max-content;
+  max-width: 100%;
 }
 
+
+.hsk-cb-topbar-ooze-menu .hsk-cb-theme-block {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  padding: 6px 7px 0;
+}
+
+.hsk-cb-topbar-ooze-menu .hsk-cb-theme-vlabel {
+  flex: 0 0 auto;
+  align-self: center;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--hsk-chat-muted);
+  opacity: 0.38;
+  user-select: none;
+}
+
+.hsk-cb-topbar-ooze-menu .hsk-cb-theme-2x2-grid {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  justify-content: flex-start !important;
+  gap: 6px !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
+  margin-top: 0 !important;
+  background: none !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Each pill fills its column, so the three columns give both rows the same
+   left and right edge as the dock above without any gap to eyeball. */
 .hsk-cb-topbar-ooze-menu .hsk-cb-theme-grid-item {
-  width: 100%;
-  height: 30px;
+  width: max-content;
+  max-width: 100%;
+  height: 34px;
   display: inline-flex;
   align-items: center;
-  justify-content: flex-start;
-  gap: 6px;
-  padding: 6px 10px;
-  border-radius: 12px;
-  border: 1px solid color-mix(in srgb, var(--hsk-chat-border, rgba(255, 255, 255, 0.4)) 25%, transparent) !important;
-  border-top: 1px solid rgba(255, 255, 255, 0.6) !important;
-  background: color-mix(in srgb, var(--hsk-chat-bg, #ffffff) 62%, transparent) !important;
-  backdrop-filter: blur(14px) !important;
-  -webkit-backdrop-filter: blur(14px) !important;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--hsk-chat-border, rgba(255, 255, 255, 0.4)) 22%, transparent) !important;
+  background: color-mix(in srgb, var(--hsk-chat-bg, #ffffff) 34%, transparent) !important;
   color: var(--hsk-chat-muted, #71717a);
-  font-size: 11px;
-  font-weight: 550;
+  font-size: 11.5px;
+  font-weight: 600;
   box-sizing: border-box;
   white-space: nowrap;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 0 0 rgba(255, 255, 255, 0.35) inset !important;
   cursor: pointer;
   transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+.hsk-cb-topbar-ooze-menu .hsk-cb-theme-grid-item svg {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+}
+
 .hsk-cb-topbar-ooze-menu .hsk-cb-theme-grid-item:hover {
-  background: color-mix(in srgb, var(--hsk-chat-bg, #ffffff) 80%, transparent) !important;
   color: var(--hsk-chat-text, currentColor) !important;
   transform: translateY(-1px);
 }
@@ -1040,7 +1078,7 @@
   background: var(--hsk-primary, #ff6a33) !important;
   color: #ffffff !important;
   border-color: var(--hsk-primary, #ff6a33) !important;
-  box-shadow: 0 3px 12px color-mix(in srgb, var(--hsk-primary, #ff6a33) 35%, transparent), 0 1px 0 0 rgba(255, 255, 255, 0.4) inset !important;
+  box-shadow: 0 3px 12px color-mix(in srgb, var(--hsk-primary, #ff6a33) 35%, transparent) !important;
 }
 
 @keyframes hsk-topbar-ooze {
@@ -1320,30 +1358,13 @@
   }
 
   .hsk-cb-scout-rail-card {
-    width: 200px;
-    max-width: 200px;
-    min-width: 200px;
-    box-sizing: border-box;
-    border-radius: 18px;
-    background: color-mix(in srgb, var(--hsk-chat-bg, #ffffff) 70%, transparent);
-    backdrop-filter: blur(28px) saturate(190%) contrast(102%);
-    -webkit-backdrop-filter: blur(28px) saturate(190%) contrast(102%);
-    border: 1px solid color-mix(in srgb, var(--hsk-chat-border, rgba(255, 255, 255, 0.4)) 35%, transparent);
-    border-top: 1px solid rgba(255, 255, 255, 0.65);
-    border-bottom: 1px solid color-mix(in srgb, #000 6%, transparent);
-    box-shadow:
-      0 16px 38px -6px color-mix(in srgb, var(--hsk-chat-text, #000) 10%, transparent),
-      0 0 0 1px rgba(255, 255, 255, 0.2) inset,
-      0 1px 0 0 rgba(255, 255, 255, 0.5) inset;
-    padding: 7px;
-    z-index: 100;
-    transform-origin: bottom center;
-    animation: hsk-theme-morph-in 0.26s cubic-bezier(0.16, 1, 0.3, 1) both;
+    inline-size: 200px;
   }
 
   .hsk-cb-theme-2x2-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
     gap: 5px;
     padding: 6px;
     width: 200px;
@@ -1373,18 +1394,16 @@
     display: inline-flex;
     flex-direction: row;
     align-items: center;
-    justify-content: flex-start;
+    justify-content: center;
     gap: 6px;
     height: 30px;
-    padding: 0 10px;
-    border-radius: 12px;
+    padding: 0 12px;
+    border-radius: 999px;
     border: 1px solid color-mix(in srgb, var(--hsk-chat-border, rgba(255, 255, 255, 0.3)) 25%, transparent) !important;
     border-top: 1px solid rgba(255, 255, 255, 0.45) !important;
     outline: none !important;
     background: color-mix(in srgb, var(--hsk-chat-bg, #ffffff) 65%, transparent);
     color: var(--hsk-chat-text, currentColor);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
     font-size: 11px;
     font-weight: 550;
     cursor: pointer;
@@ -2151,6 +2170,76 @@
   font-size: 12.5px;
   color: var(--hsk-chat-muted, #71717a);
   line-height: 1.45;
+}
+
+/* Calligraphic Ink Bloom Skeleton */
+.hsk-cb-ink-skeleton {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  gap: 12px;
+  animation: hsk-ink-bloom-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.hsk-cb-ink-line {
+  position: relative;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--hsk-chat-text, #ffffff) 6%, transparent);
+}
+
+.hsk-cb-ink-line::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--hsk-primary, #ff6a33) 12%, transparent) 35%,
+    color-mix(in srgb, var(--hsk-chat-text, #ffffff) 14%, transparent) 50%,
+    color-mix(in srgb, var(--hsk-primary, #ff6a33) 12%, transparent) 65%,
+    transparent 100%
+  );
+  transform: translateX(-100%);
+  animation: hsk-ink-sheen 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.hsk-cb-ink-line--title {
+  height: 30px;
+  width: 50%;
+  max-width: 220px;
+  border-radius: 14px;
+  margin-bottom: 2px;
+}
+
+.hsk-cb-ink-line--lead1 {
+  height: 14px;
+  width: 78%;
+  max-width: 340px;
+}
+
+.hsk-cb-ink-line--lead2 {
+  height: 14px;
+  width: 60%;
+  max-width: 260px;
+}
+
+.hsk-cb-ink-line--ask {
+  height: 15px;
+  width: 40%;
+  max-width: 170px;
+  margin-top: 3px;
+}
+
+@keyframes hsk-ink-sheen {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+@keyframes hsk-ink-bloom-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes hsk-hello-rise {
@@ -3362,7 +3451,7 @@
 .hsk-cb-textarea::placeholder {
   color: var(--hsk-chat-muted, #9ca3af);
   font-family: var(--hsk-font);
-  font-size: 16px;
+  font-size: var(--hsk-ph-font-size, var(--hsk-input-font-size, 16px));
 }
 
 .hsk-cb-attach-btn,
@@ -3562,9 +3651,14 @@
   }
 }
 
+/* Long strings clip inside the field's overflow, so the placeholder steps down
+   a tier or two by length rather than by language. */
+.hsk-animated-placeholder[data-fit="2"] { --hsk-ph-font-size: 14px; }
+.hsk-animated-placeholder[data-fit="3"] { --hsk-ph-font-size: 12.5px; }
+
 .hsk-animated-placeholder__char {
   display: inline-block;
-  font-size: var(--hsk-input-font-size, 16px);
+  font-size: var(--hsk-ph-font-size, var(--hsk-input-font-size, 16px));
   line-height: var(--hsk-input-line-height, 1.55);
   color: var(--hsk-chat-muted, #9ca3af);
   font-family: var(--hsk-font);
@@ -4308,133 +4402,101 @@
   animation: hsk-tapback-flow-up 0.26s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
+.hsk-tapback-group.is-closing {
+  animation: hsk-tapback-flow-down 0.19s cubic-bezier(0.55, 0, 0.85, 0.35) forwards;
+}
+
 .hsk-tapback-group.is-above {
-  transform-origin: var(--tail-x, 80%) calc(100% + 14px);
+  transform-origin: var(--tail-x, 80%) calc(100% + 16px);
 }
 
 .hsk-tapback-group.is-below {
-  transform-origin: var(--tail-x, 80%) -14px;
+  transform-origin: var(--tail-x, 80%) -16px;
 }
 
-/* Floating Tool Capsule - Refined & Elegantly Frosted Glass */
+/* The capsule is cut from the same sheet as the bubble: the bubble's own fill,
+   no border, and a ring in the page colour so it reads as tucked into the
+   thread rather than floating over it. Same recipe as .hsk-cb-think-head. */
 .hsk-tapback-capsule {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 4px 6px;
-  height: 38px;
-  min-height: 38px;
+  gap: 1px;
+  padding: 3px 5px;
+  height: 36px;
+  min-height: 36px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--hsk-surface-1, var(--hsk-bubble-bg, var(--hsk-chat-bg, #1c1c1e))) 80%, transparent);
-  border: 1px solid color-mix(in srgb, var(--hsk-chat-text, #ffffff) 14%, transparent);
+  border: none;
+  background: var(--hsk-skin, var(--hsk-bubble-bg, #eeeef0));
   box-shadow:
-    0 12px 32px rgba(0, 0, 0, 0.26),
-    0 3px 8px rgba(0, 0, 0, 0.08),
-    inset 0 1px 1px color-mix(in srgb, var(--hsk-chat-text, #ffffff) 12%, transparent);
-  backdrop-filter: blur(28px) saturate(190%);
-  -webkit-backdrop-filter: blur(28px) saturate(190%);
+    0 0 0 3px var(--hsk-chat-bg, #ffffff),
+    0 6px 18px rgba(0, 0, 0, 0.16);
   max-width: calc(100vw - 20px);
   position: relative;
   z-index: 2;
   box-sizing: border-box;
 }
 
-/* Upward-Flowing Connector Bubbles */
+/* Two solid droplets tapering into the bubble. They wear the same skin and the
+   same page-colour ring, so the tail reads as one body with the capsule. */
 .hsk-tapback-tail {
   position: absolute;
-  top: calc(100% - 6px);
+  top: calc(100% - 2px);
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: 3px;
   pointer-events: none;
   z-index: 1;
 }
 
 .hsk-tapback-tail.is-below {
   top: auto;
-  bottom: calc(100% - 6px);
+  bottom: calc(100% - 2px);
   flex-direction: column-reverse;
 }
+
+/* Each droplet sits further toward the bubble's middle than the one above it,
+   so the tail reads as a diagonal run. margin, not transform: the bead
+   animation owns transform on these. */
+.hsk-tapback-dot--mid { margin-left: calc(var(--tail-dir, 0) * var(--tail-step, 5px)); }
+.hsk-tapback-dot--anchor { margin-left: calc(var(--tail-dir, 0) * var(--tail-step, 5px) * 2.2); }
 
 .hsk-tapback-dot {
   display: block;
   border-radius: 50%;
   flex-shrink: 0;
-  position: relative;
+  border: none;
 }
 
-/* Dot 3: Upper Fused Droplet (20px) */
-.hsk-tapback-dot--top {
-  width: 20px;
-  height: 20px;
-  background: color-mix(in srgb, var(--hsk-surface-1, var(--hsk-bubble-bg, var(--hsk-chat-bg, #1c1c1e))) 80%, transparent);
-  border: 1px solid color-mix(in srgb, var(--hsk-chat-text, #ffffff) 14%, transparent);
-  backdrop-filter: blur(28px) saturate(190%);
-  -webkit-backdrop-filter: blur(28px) saturate(190%);
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.16);
-  z-index: 3;
-}
-
-/* Smooth bridge fusing Dot 3 seamlessly into the capsule body */
-.hsk-tapback-dot-bridge {
-  position: absolute;
-  top: -3px;
-  left: 2px;
-  right: 2px;
-  height: 8px;
-  background: color-mix(in srgb, var(--hsk-surface-1, var(--hsk-bubble-bg, var(--hsk-chat-bg, #1c1c1e))) 90%, transparent);
-  border-radius: 999px;
-  z-index: 4;
-}
-
-.hsk-tapback-tail.is-below .hsk-tapback-dot-bridge {
-  top: auto;
-  bottom: -3px;
-}
-
-/* Dot 2: Middle Transition Droplet (11px) */
 .hsk-tapback-dot--mid {
-  width: 11px;
-  height: 11px;
-  margin-top: -3px;
-  background: color-mix(in srgb, var(--hsk-surface-1, var(--hsk-bubble-bg, var(--hsk-chat-bg, #1c1c1e))) 80%, transparent);
-  border: 1px solid color-mix(in srgb, var(--hsk-chat-text, #ffffff) 14%, transparent);
-  backdrop-filter: blur(28px) saturate(190%);
-  -webkit-backdrop-filter: blur(28px) saturate(190%);
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.14);
-  z-index: 2;
+  width: 12px;
+  height: 12px;
+  background: var(--hsk-skin, var(--hsk-bubble-bg, #eeeef0));
+  box-shadow: 0 0 0 3px var(--hsk-chat-bg, #ffffff), 0 2px 5px rgba(0, 0, 0, 0.12);
+  animation: hsk-tapback-bead 0.2s cubic-bezier(0.16, 1, 0.3, 1) 0.06s backwards;
 }
 
-.hsk-tapback-tail.is-below .hsk-tapback-dot--mid {
-  margin-top: 0;
-  margin-bottom: -3px;
-}
-
-/* Dot 1: Anchor Droplet in the exact message color! (6px) */
+/* The last droplet takes the bubble's exact colour, so the tail lands in the
+   message it belongs to instead of near it. */
+/* No page-colour ring here: the ring is what cuts a droplet out of the page, and
+   this one has to land on the bubble and read as part of it. */
 .hsk-tapback-dot--anchor {
-  width: 6px;
-  height: 6px;
-  margin-top: -2px;
+  width: 9px;
+  height: 9px;
   background: var(--hsk-anchor-color, var(--hsk-primary, #007aff));
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
-  z-index: 1;
-}
-
-.hsk-tapback-tail.is-below .hsk-tapback-dot--anchor {
-  margin-top: 0;
-  margin-bottom: -2px;
+  animation: hsk-tapback-bead 0.2s cubic-bezier(0.16, 1, 0.3, 1) 0.02s backwards;
 }
 
 /* Tool Capsule Buttons */
 .hsk-tapback-tool-btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 11px;
+  gap: 4px;
+  padding: 4px 8px;
   height: 30px;
   border-radius: 999px;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 500;
   font-family: var(--hsk-font);
   line-height: 1;
@@ -4470,22 +4532,30 @@
   color: #10b981 !important;
 }
 
+/* Opacity is front-loaded: it is solid by 18%, so the growth out of the tail is
+   the part you watch, not a pop that has already finished under a fade. */
 @keyframes hsk-tapback-flow-up {
-  0% {
-    opacity: 0;
-    transform: scale(0.18) translateY(14px);
-  }
-  55% {
-    opacity: 1;
-    transform: scale(1.05) translateY(-2px);
-  }
-  75% {
-    transform: scale(0.98) translateY(0);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
+  0%   { opacity: 0; transform: scale(0.12, 0.04); }
+  18%  { opacity: 1; }
+  46%  { transform: scale(1.06, 1.13); }
+  74%  { transform: scale(0.985, 0.95); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* Collapses back into its own origin, which is the tail. Opacity holds until the
+   retreat is nearly done, or the shrink happens invisibly. */
+@keyframes hsk-tapback-flow-down {
+  0%   { opacity: 1; transform: scale(1); }
+  65%  { opacity: 1; transform: scale(0.5, 0.34); }
+  100% { opacity: 0; transform: scale(0.12, 0.04); }
+}
+
+/* The droplets arrive before the capsule settles, so the tail reads as the
+   thing the capsule grew out of. backwards, never both - both would freeze
+   the end frame over the resting state. */
+@keyframes hsk-tapback-bead {
+  from { opacity: 0; transform: scale(0.2); }
+  to   { opacity: 1; transform: scale(1); }
 }
 
 @keyframes hsk-tapback-tool-pop {
@@ -4499,6 +4569,1196 @@
   }
 }
 
+
+/* --- Scouts: docked in the rail the way the theme selector is --- */
+
+.hsk-cb-scout-rail-card {
+  inline-size: min(200px, 100%);
+  box-sizing: border-box;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--hsk-chat-bg, #ffffff) 70%, transparent);
+  backdrop-filter: blur(28px) saturate(190%) contrast(102%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%) contrast(102%);
+  border: 1px solid color-mix(in srgb, var(--hsk-chat-border, rgba(255, 255, 255, 0.4)) 35%, transparent);
+  border-top: 1px solid rgba(255, 255, 255, 0.65);
+  border-bottom: 1px solid color-mix(in srgb, #000 6%, transparent);
+  box-shadow:
+    0 16px 38px -6px color-mix(in srgb, var(--hsk-chat-text, #000) 10%, transparent),
+    0 0 0 1px rgba(255, 255, 255, 0.2) inset,
+    0 1px 0 0 rgba(255, 255, 255, 0.5) inset;
+  padding: 7px;
+  z-index: 100;
+  transform-origin: bottom center;
+  /* Chrome re-rasterises a backdrop-filtered surface while its transform
+     animates, which flashes as a sheen across the glass on open. Fading it
+     in without the scale keeps the surface stable. */
+  will-change: opacity;
+  animation: hsk-scout-card-in 0.26s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes hsk-scout-card-in {
+  from { opacity: 0; translate: 0 6px; }
+  to   { opacity: 1; translate: none; }
+}
+
+
+/* The tray dock: the mobile home for scouts, above the theme grid. Below 900px
+   the rail is display:none, so this is the only way in. */
+.hsk-cb-scout-rail-wrap.is-compact {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  inline-size: 100%;
+  padding: 0;
+}
+
+.hsk-cb-scout-dock {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  padding: 2px 7px;
+}
+
+.hsk-cb-scout-dock::-webkit-scrollbar { display: none; }
+
+.hsk-cb-scout-dock-pick {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  inline-size: 34px;
+  block-size: 34px;
+  padding: 0;
+  border: none;
+  border-radius: 12px;
+  background: none;
+  cursor: pointer;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+/* Grey means inert: not paid for. Tapping one picks that shape and opens the
+   buy flow, same as the hatch on desktop. */
+.hsk-cb-scout-dock-pick.is-unpaid { opacity: 0.38; filter: grayscale(1); }
+
+.hsk-cb-scout-dock-pick:active { transform: scale(0.92); }
+
+.hsk-cb-scout-dock-new {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  inline-size: 34px;
+  block-size: 34px;
+  padding: 0;
+  border-radius: 12px;
+  border: 1px dashed color-mix(in srgb, var(--hsk-chat-border, rgba(0, 0, 0, 0.25)) 60%, transparent);
+  background: none;
+  color: var(--hsk-chat-muted);
+  cursor: pointer;
+}
+
+.hsk-cb-scout-dock-new:active { transform: scale(0.92); }
+
+.hsk-cb-scout-rail-wrap.is-compact .hsk-cb-scout-rail-card {
+  inline-size: 100%;
+  max-inline-size: 100%;
+  min-inline-size: 0;
+}
+
+
+.hsk-cb-scout-defs { position: absolute; width: 0; height: 0; }
+
+.hsk-cb-scout-trigger-icon { display: inline-flex; align-items: center; flex-shrink: 0; }
+
+.hsk-cb-scout-trigger-dot {
+  inline-size: 6px;
+  block-size: 6px;
+  border-radius: 999px;
+  background: #10b981;
+  box-shadow: 0 0 6px #10b981;
+}
+
+.hsk-cb-scout-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 3px 6px;
+}
+
+.hsk-cb-scout-card-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--hsk-chat-text);
+}
+
+.hsk-cb-scout-card-x {
+  border: none;
+  background: none;
+  padding: 2px;
+  display: inline-flex;
+  color: var(--hsk-chat-muted);
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.hsk-cb-scout-card-x:hover { opacity: 1; }
+
+/* --- The glue: metaballs that actually read as liquid --- */
+
+.hsk-cb-scouts-stage { position: relative; }
+
+/* One ball under each shared face and a thinner link between neighbours, so
+   the goo filter has two radii to fuse and forms a visible neck instead of a
+   single flat slab. Each drifts on its own clock, which is what sells it as a
+   liquid rather than a shape. */
+.hsk-cb-scouts-glue {
+  position: absolute;
+  inset-block-start: 3px;
+  inset-inline-start: 0;
+  inline-size: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 2px;
+  row-gap: 24px;
+  pointer-events: none;
+}
+
+/* Cells match the row's cadence exactly so each silhouette lands under its own
+   character. Scaling them slightly wider is what closes the gap enough for the
+   blur to bridge neighbours into one body. */
+.hsk-cb-glue-cell {
+  flex: 0 0 46px;
+  display: grid;
+  place-items: center;
+  transform: scaleX(1.34);
+  animation: hsk-glue-drift 3.4s ease-in-out infinite;
+}
+
+.hsk-cb-glue-cell:nth-child(2n) { animation-duration: 4.1s; }
+.hsk-cb-glue-cell:nth-child(3n) { animation-duration: 3.7s; }
+
+/* A scout on its own minutes is not tied to the others, so it keeps its own
+   outline instead of melting into the shared body. */
+.hsk-cb-glue-cell.is-loose {
+  transform: none;
+  animation: none;
+}
+
+@keyframes hsk-glue-drift {
+  0%, 100% { transform: scaleX(1.34) translateY(0); }
+  35%      { transform: scaleX(1.42) translateY(-1px); }
+  70%      { transform: scaleX(1.29) translateY(0.5px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-cb-glue-cell { animation: none; }
+  .hsk-cb-scout-hatch-pick,
+  .hsk-cb-scout { transition: opacity 0.2s ease, filter 0.2s ease; }
+  .hsk-cb-scout-hatch-pick:hover,
+  .hsk-cb-scout:hover { transform: none; }
+}
+
+/* --- The dial: a filled track with real stops --- */
+
+.hsk-cb-scout-time { padding: 10px 2px 2px; }
+
+.hsk-cb-dial {
+  position: relative;
+  block-size: 18px;
+  display: flex;
+  align-items: center;
+  transform-origin: center;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.hsk-cb-dial.is-dragging { transform: scale(1.045); }
+
+.hsk-cb-dial-track {
+  position: relative;
+  inline-size: 100%;
+  block-size: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--hsk-chat-text) 10%, transparent);
+  overflow: visible;
+  transition: block-size 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.hsk-cb-dial.is-dragging .hsk-cb-dial-track { block-size: 12px; }
+
+.hsk-cb-dial-fill {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--hsk-primary) 62%, transparent),
+    var(--hsk-primary)
+  );
+  transition: inline-size 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* The native input rides invisibly on top so the thumb keeps real drag,
+   keyboard and touch behaviour while the track above is ours to draw. */
+.hsk-cb-dial-input {
+  position: absolute;
+  inset-inline: 0;
+  inset-block: 0;
+  inline-size: 100%;
+  margin: 0;
+  padding: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  cursor: grab;
+}
+
+.hsk-cb-dial-input:active { cursor: grabbing; }
+
+.hsk-cb-dial-input::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  inline-size: 16px;
+  block-size: 16px;
+  border: 2.5px solid var(--hsk-chat-bg);
+  border-radius: 999px;
+  background: var(--hsk-primary);
+  box-shadow: 0 2px 8px -1px color-mix(in srgb, var(--hsk-primary) 70%, transparent);
+  cursor: grab;
+  transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.16s ease;
+}
+
+.hsk-cb-dial-input:hover::-webkit-slider-thumb { transform: scale(1.12); }
+
+.hsk-cb-dial.is-dragging .hsk-cb-dial-input::-webkit-slider-thumb {
+  transform: scale(1.28);
+  box-shadow: 0 0 0 7px color-mix(in srgb, var(--hsk-primary) 18%, transparent);
+}
+
+.hsk-cb-dial-input:active::-webkit-slider-thumb {
+  transform: scale(1.24);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--hsk-primary) 20%, transparent);
+}
+
+.hsk-cb-dial-input:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--hsk-primary) 32%, transparent);
+}
+
+.hsk-cb-dial-input::-moz-range-thumb {
+  inline-size: 16px;
+  block-size: 16px;
+  border: 2.5px solid var(--hsk-chat-bg);
+  border-radius: 999px;
+  background: var(--hsk-primary);
+  cursor: grab;
+}
+
+.hsk-cb-dial-input::-moz-range-track { background: transparent; }
+
+.hsk-cb-scout-time-row {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  padding-block-start: 7px;
+  transform-origin: center;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.hsk-cb-scout-time-row.is-lifted { transform: scale(1.06); }
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-cb-dial,
+  .hsk-cb-dial-track,
+  .hsk-cb-scout-time-row { transition: none; }
+  .hsk-cb-dial.is-dragging,
+  .hsk-cb-scout-time-row.is-lifted { transform: none; }
+}
+
+.hsk-cb-scouts-row {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.hsk-cb-scout-slot { position: relative; flex: 0 0 auto; }
+
+.hsk-cb-scout {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 3px 4px 2px;
+  border: none;
+  border-radius: 13px;
+  background: transparent;
+  color: var(--hsk-chat-text);
+  cursor: pointer;
+  font: inherit;
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.hsk-cb-scout:hover,
+.hsk-cb-scout:focus-visible { transform: translateY(-3px) scale(1.14); z-index: 2; outline: none; }
+.hsk-cb-scout:active { transform: translateY(0) scale(0.96); }
+
+.hsk-cb-scout-face {
+  position: relative;
+  inline-size: 38px;
+  block-size: 38px;
+  display: grid;
+  place-items: center;
+}
+
+.hsk-cb-scout-char { display: block; overflow: visible; }
+
+/* The one green thing: a scout is either drawing minutes or it is not. */
+.hsk-cb-scout-pulse {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  inline-size: 6px;
+  block-size: 6px;
+  border-radius: 999px;
+  background: #10b981;
+  box-shadow: 0 0 0 2px var(--hsk-chat-bg);
+  animation: hsk-scout-breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes hsk-scout-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.hsk-cb-scout-own {
+  direction: ltr;
+  position: absolute;
+  inset-block-end: -2px;
+  inset-inline-end: -3px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--hsk-surface-2);
+  color: var(--hsk-chat-muted);
+  unicode-bidi: isolate;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 12px;
+  box-shadow: 0 0 0 1.5px var(--hsk-chat-bg);
+}
+
+.hsk-cb-scout-name {
+  max-inline-size: 48px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  unicode-bidi: isolate;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--hsk-chat-muted);
+}
+
+.hsk-cb-scout.is-triggered .hsk-cb-scout-name { color: var(--hsk-primary); }
+.hsk-cb-scout.is-paused .hsk-cb-scout-face { opacity: 0.72; }
+
+/* Calling a scout back is destructive, so it stays out of the way until the
+   pointer is actually on that scout. */
+.hsk-cb-scout-bin {
+  position: absolute;
+  inset-block-start: -1px;
+  inset-inline-start: -1px;
+  z-index: 3;
+  inline-size: 16px;
+  block-size: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: var(--hsk-surface-2);
+  color: var(--hsk-chat-muted);
+  box-shadow: 0 0 0 1.5px var(--hsk-chat-bg);
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 0.16s ease, transform 0.16s cubic-bezier(0.16, 1, 0.3, 1), color 0.16s ease;
+}
+
+.hsk-cb-scout-slot:hover .hsk-cb-scout-bin,
+.hsk-cb-scout-bin:focus-visible {
+  opacity: 1;
+  transform: none;
+}
+
+.hsk-cb-scout-bin:hover { color: #e5484d; }
+
+.hsk-cb-scout-new {
+  flex: 0 0 auto;
+  align-self: center;
+  inline-size: 34px;
+  block-size: 34px;
+  margin-block-end: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1.5px dashed color-mix(in srgb, var(--hsk-chat-text) 24%, transparent);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--hsk-chat-muted);
+  cursor: pointer;
+  transition: color 0.18s ease, border-color 0.18s ease, transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.hsk-cb-scout-new:hover {
+  color: var(--hsk-primary);
+  border-color: var(--hsk-primary);
+  transform: translateY(-2px);
+}
+
+.hsk-cb-scout-pool-line {
+  direction: ltr;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 2px;
+  padding: 6px 4px 2px;
+  unicode-bidi: isolate;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--hsk-chat-muted);
+}
+
+.hsk-cb-scout-picker {
+  position: absolute;
+  inset-block-end: calc(100% + 5px);
+  inset-inline-start: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  display: flex;
+  gap: 1px;
+  padding: 3px;
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--hsk-chat-bg) 88%, transparent);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid color-mix(in srgb, var(--hsk-chat-text) 12%, transparent);
+  box-shadow: 0 12px 30px -8px color-mix(in srgb, var(--hsk-chat-text) 26%, transparent);
+  animation: hsk-theme-morph-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.hsk-cb-scout-pick {
+  display: inline-flex;
+  padding: 1px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.hsk-cb-scout-pick:hover { background: color-mix(in srgb, var(--hsk-primary) 14%, transparent); transform: translateY(-1px); }
+.hsk-cb-scout-pick.is-on { background: color-mix(in srgb, var(--hsk-primary) 22%, transparent); }
+
+/* --- No scouts out yet: the hatch --- */
+
+.hsk-cb-scout-hatch { padding: 2px 0 4px; }
+
+.hsk-cb-scout-hatch-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.hsk-cb-scout-hatch-pick {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 1px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+  animation: hsk-scout-ooze 0.5s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  transition:
+    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.2s ease,
+    filter 0.2s ease;
+}
+
+/* Hovering lifts one animal out of the shelf and brings it close enough to
+   actually look at — at 30px there is no other way to see what you are
+   choosing. The magnified one draws above its neighbours. */
+.hsk-cb-scout-hatch-pick:hover,
+.hsk-cb-scout-hatch-pick:focus-visible {
+  transform: translateY(-5px) scale(1.42);
+  z-index: 3;
+  outline: none;
+}
+
+.hsk-cb-scout-hatch-pick.is-on {
+  transform: translateY(-3px) scale(1.2);
+  z-index: 2;
+  animation: hsk-scout-burst 0.42s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes hsk-scout-burst {
+  0%   { filter: grayscale(1) saturate(1); transform: translateY(0) scale(1); }
+  45%  { filter: grayscale(0) saturate(1.9); transform: translateY(-6px) scale(1.34); }
+  100% { filter: grayscale(0) saturate(1); transform: translateY(-3px) scale(1.2); }
+}
+
+.hsk-cb-scout-hatch-pick.is-on:hover,
+.hsk-cb-scout-hatch-pick.is-on:focus-visible { transform: translateY(-5px) scale(1.48); }
+
+.hsk-cb-scout-hatch-pick:not(.is-on) { opacity: 0.75; }
+
+/* An avatar nobody has paid for yet is drained of colour: it is on the shelf,
+   not in the field. */
+.hsk-cb-scout-hatch-pick.is-unpaid {
+  filter: grayscale(1);
+  opacity: 0.5;
+}
+
+.hsk-cb-scout-nick {
+  font-size: 7.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--hsk-chat-muted);
+  white-space: nowrap;
+}
+
+.hsk-cb-scout-hatch-pick.is-on .hsk-cb-scout-nick { color: var(--hsk-primary); }
+
+/* Colour returns under the pointer: a look at what the money would buy,
+   without pretending the animal is already yours. */
+.hsk-cb-scout-hatch-pick.is-unpaid:hover,
+.hsk-cb-scout-hatch-pick.is-unpaid:focus-visible {
+  filter: grayscale(0.25);
+  opacity: 0.92;
+}
+
+.hsk-cb-scout-hatch-pick.is-unpaid.is-on { filter: grayscale(0.4); opacity: 0.85; }
+
+/* --- Time, and what it costs --- */
+
+.hsk-cb-scout-time { padding: 8px 2px 2px; }
+
+.hsk-cb-scout-time-row {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  padding-block-start: 7px;
+  transform-origin: center;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.hsk-cb-scout-time-row.is-lifted { transform: scale(1.06); }
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-cb-dial,
+  .hsk-cb-dial-track,
+  .hsk-cb-scout-time-row { transition: none; }
+  .hsk-cb-dial.is-dragging,
+  .hsk-cb-scout-time-row.is-lifted { transform: none; }
+}
+
+.hsk-cb-scouts-row {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.hsk-cb-scout-slot { position: relative; flex: 0 0 auto; }
+
+.hsk-cb-scout {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 3px 4px 2px;
+  border: none;
+  border-radius: 13px;
+  background: transparent;
+  color: var(--hsk-chat-text);
+  cursor: pointer;
+  font: inherit;
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.hsk-cb-scout:hover,
+.hsk-cb-scout:focus-visible { transform: translateY(-3px) scale(1.14); z-index: 2; outline: none; }
+.hsk-cb-scout:active { transform: translateY(0) scale(0.96); }
+
+.hsk-cb-scout-face {
+  position: relative;
+  inline-size: 38px;
+  block-size: 38px;
+  display: grid;
+  place-items: center;
+}
+
+.hsk-cb-scout-char { display: block; overflow: visible; }
+
+/* The one green thing: a scout is either drawing minutes or it is not. */
+.hsk-cb-scout-pulse {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  inline-size: 6px;
+  block-size: 6px;
+  border-radius: 999px;
+  background: #10b981;
+  box-shadow: 0 0 0 2px var(--hsk-chat-bg);
+  animation: hsk-scout-breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes hsk-scout-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.hsk-cb-scout-own {
+  direction: ltr;
+  position: absolute;
+  inset-block-end: -2px;
+  inset-inline-end: -3px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--hsk-surface-2);
+  color: var(--hsk-chat-muted);
+  unicode-bidi: isolate;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 12px;
+  box-shadow: 0 0 0 1.5px var(--hsk-chat-bg);
+}
+
+.hsk-cb-scout-name {
+  max-inline-size: 48px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  unicode-bidi: isolate;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--hsk-chat-muted);
+}
+
+.hsk-cb-scout.is-triggered .hsk-cb-scout-name { color: var(--hsk-primary); }
+.hsk-cb-scout.is-paused .hsk-cb-scout-face { opacity: 0.72; }
+
+/* Calling a scout back is destructive, so it stays out of the way until the
+   pointer is actually on that scout. */
+.hsk-cb-scout-bin {
+  position: absolute;
+  inset-block-start: -1px;
+  inset-inline-start: -1px;
+  z-index: 3;
+  inline-size: 16px;
+  block-size: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: var(--hsk-surface-2);
+  color: var(--hsk-chat-muted);
+  box-shadow: 0 0 0 1.5px var(--hsk-chat-bg);
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 0.16s ease, transform 0.16s cubic-bezier(0.16, 1, 0.3, 1), color 0.16s ease;
+}
+
+.hsk-cb-scout-slot:hover .hsk-cb-scout-bin,
+.hsk-cb-scout-bin:focus-visible {
+  opacity: 1;
+  transform: none;
+}
+
+.hsk-cb-scout-bin:hover { color: #e5484d; }
+
+.hsk-cb-scout-new {
+  flex: 0 0 auto;
+  align-self: center;
+  inline-size: 34px;
+  block-size: 34px;
+  margin-block-end: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1.5px dashed color-mix(in srgb, var(--hsk-chat-text) 24%, transparent);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--hsk-chat-muted);
+  cursor: pointer;
+  transition: color 0.18s ease, border-color 0.18s ease, transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.hsk-cb-scout-new:hover {
+  color: var(--hsk-primary);
+  border-color: var(--hsk-primary);
+  transform: translateY(-2px);
+}
+
+.hsk-cb-scout-pool-line {
+  direction: ltr;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 2px;
+  padding: 6px 4px 2px;
+  unicode-bidi: isolate;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--hsk-chat-muted);
+}
+
+.hsk-cb-scout-picker {
+  position: absolute;
+  inset-block-end: calc(100% + 5px);
+  inset-inline-start: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  display: flex;
+  gap: 1px;
+  padding: 3px;
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--hsk-chat-bg) 88%, transparent);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid color-mix(in srgb, var(--hsk-chat-text) 12%, transparent);
+  box-shadow: 0 12px 30px -8px color-mix(in srgb, var(--hsk-chat-text) 26%, transparent);
+  animation: hsk-theme-morph-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.hsk-cb-scout-pick {
+  display: inline-flex;
+  padding: 1px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.hsk-cb-scout-pick:hover { background: color-mix(in srgb, var(--hsk-primary) 14%, transparent); transform: translateY(-1px); }
+.hsk-cb-scout-pick.is-on { background: color-mix(in srgb, var(--hsk-primary) 22%, transparent); }
+
+/* --- No scouts out yet: the hatch --- */
+
+.hsk-cb-scout-hatch { padding: 2px 0 4px; }
+
+@keyframes hsk-scout-ooze {
+  from { transform: scale(0.15); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+
+.hsk-cb-scout-hatch-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.hsk-cb-scout-hatch-pick {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 1px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+  animation: hsk-scout-ooze 0.5s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  transition:
+    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.2s ease,
+    filter 0.2s ease;
+}
+
+/* Hovering lifts one animal out of the shelf and brings it close enough to
+   actually look at — at 30px there is no other way to see what you are
+   choosing. The magnified one draws above its neighbours. */
+.hsk-cb-scout-hatch-pick:hover,
+.hsk-cb-scout-hatch-pick:focus-visible {
+  transform: translateY(-5px) scale(1.42);
+  z-index: 3;
+  outline: none;
+}
+
+.hsk-cb-scout-hatch-pick.is-on {
+  transform: translateY(-3px) scale(1.2);
+  z-index: 2;
+  animation: hsk-scout-burst 0.42s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes hsk-scout-burst {
+  0%   { filter: grayscale(1) saturate(1); transform: translateY(0) scale(1); }
+  45%  { filter: grayscale(0) saturate(1.9); transform: translateY(-6px) scale(1.34); }
+  100% { filter: grayscale(0) saturate(1); transform: translateY(-3px) scale(1.2); }
+}
+
+.hsk-cb-scout-hatch-pick.is-on:hover,
+.hsk-cb-scout-hatch-pick.is-on:focus-visible { transform: translateY(-5px) scale(1.48); }
+
+.hsk-cb-scout-hatch-pick:not(.is-on) { opacity: 0.75; }
+
+/* An avatar nobody has paid for yet is drained of colour: it is on the shelf,
+   not in the field. */
+.hsk-cb-scout-hatch-pick.is-unpaid {
+  filter: grayscale(1);
+  opacity: 0.5;
+}
+
+.hsk-cb-scout-nick {
+  font-size: 7.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--hsk-chat-muted);
+  white-space: nowrap;
+}
+
+.hsk-cb-scout-hatch-pick.is-on .hsk-cb-scout-nick { color: var(--hsk-primary); }
+
+/* Colour returns under the pointer: a look at what the money would buy,
+   without pretending the animal is already yours. */
+.hsk-cb-scout-hatch-pick.is-unpaid:hover,
+.hsk-cb-scout-hatch-pick.is-unpaid:focus-visible {
+  filter: grayscale(0.25);
+  opacity: 0.92;
+}
+
+.hsk-cb-scout-hatch-pick.is-unpaid.is-on { filter: grayscale(0.4); opacity: 0.85; }
+
+/* --- Time, and what it costs --- */
+
+.hsk-cb-scout-time { padding: 8px 2px 2px; }
+
+.hsk-cb-scout-slider {
+  inline-size: 100%;
+  block-size: 4px;
+  margin: 0 0 8px;
+  padding: 0;
+  border-radius: 999px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: color-mix(in srgb, var(--hsk-chat-text) 14%, transparent);
+  cursor: pointer;
+}
+
+.hsk-cb-scout-slider::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  inline-size: 14px;
+  block-size: 14px;
+  border: none;
+  border-radius: 999px;
+  background: var(--hsk-primary);
+  box-shadow: 0 1px 5px color-mix(in srgb, var(--hsk-primary) 55%, transparent);
+  cursor: pointer;
+}
+
+.hsk-cb-scout-slider::-moz-range-thumb {
+  inline-size: 14px;
+  block-size: 14px;
+  border: none;
+  border-radius: 999px;
+  background: var(--hsk-primary);
+  cursor: pointer;
+}
+
+.hsk-cb-scout-time-row {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+/* No box: the number is the thing, not the field it sits in. */
+.hsk-cb-scout-mins {
+  direction: ltr;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: text;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  unicode-bidi: isolate;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--hsk-chat-text);
+}
+
+/* No box here either: typing replaces the number in place. */
+.hsk-cb-scout-mins-input {
+  direction: ltr;
+  inline-size: 46px;
+  padding: 0;
+  border: none;
+  border-block-end: 1.5px solid var(--hsk-primary);
+  background: transparent;
+  color: var(--hsk-chat-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  outline: none;
+}
+
+.hsk-cb-scout-mins-input::-webkit-outer-spin-button,
+.hsk-cb-scout-mins-input::-webkit-inner-spin-button { appearance: none; margin: 0; }
+
+.hsk-cb-scout-mins-unit {
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--hsk-chat-muted);
+}
+
+.hsk-cb-scout-price {
+  direction: ltr;
+  margin-inline-start: auto;
+  unicode-bidi: isolate;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--hsk-primary);
+}
+
+/* --- Odometer: each digit rolls in its own clipped column --- */
+
+.hsk-cb-num {
+  display: inline-flex;
+  align-items: baseline;
+  direction: ltr;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.hsk-cb-num-fix { display: inline-block; }
+
+.hsk-cb-num-slot {
+  display: inline-block;
+  block-size: 1em;
+  overflow: hidden;
+  vertical-align: baseline;
+}
+
+.hsk-cb-num-col {
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.52s cubic-bezier(0.22, 1, 0.28, 1);
+  will-change: transform;
+}
+
+.hsk-cb-num-d {
+  display: block;
+  block-size: 1em;
+  line-height: 1;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-cb-num-col { transition: none; }
+}
+
+.hsk-cb-scout-buy-go {
+  inline-size: 100%;
+  margin-block-start: 9px;
+  padding: 11px 0;
+  border: none;
+  border-radius: 13px;
+  background: var(--hsk-primary);
+  color: var(--hsk-on-active, #fff);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.hsk-cb-scout-buy-go:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.hsk-cb-scout-foot-note {
+  display: block;
+  padding: 5px 2px 0;
+  unicode-bidi: isolate;
+  font-size: 9px;
+  line-height: 1.35;
+  color: var(--hsk-chat-muted);
+}
+
+/* --- The pinned window: the scout card, floating above everything --- */
+
+.hsk-cb-scout-card-pin {
+  border: none;
+  background: none;
+  padding: 2px;
+  margin-inline-start: auto;
+  margin-inline-end: 2px;
+  display: inline-flex;
+  color: var(--hsk-chat-muted);
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.hsk-cb-scout-card-pin:hover { opacity: 1; color: var(--hsk-primary); }
+
+.hsk-cb-pin-body {
+  margin: 0;
+  padding: 8px;
+  box-sizing: border-box;
+  background: var(--hsk-chat-bg, #18181b);
+  font-family: var(--hsk-font);
+}
+
+/* The card is the whole window here, so it gives up the rail's fixed width. */
+.hsk-cb-scout-rail-card.hsk-cb-pin-card {
+  inline-size: 100%;
+  max-inline-size: none;
+  min-inline-size: 0;
+  animation: none;
+}
+
+.hsk-cb-pin-count {
+  font-size: 9px;
+  font-weight: 700;
+  color: #10b981;
+}
+
+.hsk-cb-pin-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.hsk-cb-pin-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-inline-size: 0;
+  flex: 1;
+}
+
+.hsk-cb-pin-watch {
+  direction: ltr;
+  font-size: 9.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--hsk-chat-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hsk-cb-pin-bar {
+  block-size: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--hsk-chat-text) 12%, transparent);
+  overflow: hidden;
+}
+
+.hsk-cb-pin-fill {
+  display: block;
+  block-size: 100%;
+  border-radius: 999px;
+  background: var(--hsk-primary);
+  transition: inline-size 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.hsk-cb-pin-meta {
+  direction: ltr;
+  font-size: 8.5px;
+  font-weight: 600;
+  color: var(--hsk-chat-muted);
+}
+
+.hsk-cb-pin-hit {
+  font-size: 8.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--hsk-primary);
+}
+
+/* Scouts trigger: a droplet whose contents actually move. The silhouette is
+   fixed so the icon stays legible at 13px; the wave inside it is what reads as
+   fluid, and it only runs while scouts are out. */
+.hsk-cb-fluid-wave {
+  transform-box: view-box;
+}
+
+.hsk-cb-fluid.is-flowing .hsk-cb-fluid-wave {
+  animation: hsk-fluid-wave 2.6s linear infinite;
+}
+
+@keyframes hsk-fluid-wave {
+  to { transform: translateX(24px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-cb-fluid.is-flowing .hsk-cb-fluid-wave { animation: none; }
+}
+
+.hsk-cb-topbar-logo {
+  display: block;
+  max-height: 18px;
+  max-width: 104px;
+  object-fit: contain;
+}
+
+/* Sound switch. Wears the theme trigger's skin so the rail reads as one set of
+   controls rather than a pill someone bolted on. */
+.hsk-cb-sound-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 16px;
+  font-family: var(--hsk-font);
+  font-size: 11px;
+  font-weight: 550;
+  color: var(--hsk-chat-muted, #71717a);
+  background: color-mix(in srgb, var(--hsk-chat-bg, #ffffff) 65%, transparent);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid color-mix(in srgb, var(--hsk-chat-border, rgba(255, 255, 255, 0.35)) 30%, transparent);
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.hsk-cb-sound-pill.is-on { color: var(--hsk-chat-text, #111); }
+
+.hsk-cb-sound-pill:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--hsk-primary, #ff6a33) 25%, transparent);
+  color: var(--hsk-primary, #ff6a33);
+}
+
+.hsk-cb-sound-pill--tray {
+  align-self: flex-start;
+  margin-bottom: 8px;
+}
 
 .hsk-sp-btn {
   --hsk-primary: var(--chat-primary-color, #ff6a33);
@@ -4984,47 +6244,67 @@
     display: none !important;
   }
 
-    .hsk-cb-hello-wrap {
+  .hsk-cb-hello-wrap {
     align-items: center !important;
     text-align: center !important;
-    gap: 3px !important;
-    max-width: 30ch;
-    margin-inline: auto;
+    gap: 4px !important;
+    width: 100% !important;
+    max-width: min(520px, 100%) !important;
+    padding-inline: 16px !important;
+    box-sizing: border-box !important;
+    margin-inline: auto !important;
+  }
+
+  .hsk-cb-ink-skeleton {
+    align-items: center !important;
   }
 
   .hsk-cb-hello {
-    font-size: 21px !important;
+    font-size: clamp(21px, 5.8vw, 30px) !important;
     font-weight: 600 !important;
-    letter-spacing: -.015em;
+    line-height: 1.25 !important;
+    letter-spacing: -0.02em !important;
     color: var(--hsk-chat-muted, #8b8b8f) !important;
     text-align: center !important;
+    text-wrap: balance;
+    max-width: 100% !important;
+    overflow-wrap: break-word;
   }
 
   .hsk-cb-hello-lead,
   .hsk-cb-hello-ask {
     font-size: 14px !important;
     font-weight: 400 !important;
+    line-height: 1.45 !important;
     text-align: center !important;
+    text-wrap: balance;
+    max-width: 100% !important;
+    overflow-wrap: break-word;
     color: color-mix(in srgb, var(--hsk-chat-muted, #8b8b8f) 78%, transparent) !important;
+  }
+
+  .hsk-cb-hello-lead {
+    font-size: 14px !important;
+    margin-top: 4px !important;
+  }
+
+  .hsk-cb-lang-chips {
+    justify-content: center !important;
+    width: 100% !important;
+    gap: 8px !important;
+    margin: 12px 0 6px !important;
+  }
+
+  .hsk-cb-lang-chips-hint {
+    width: 100% !important;
+    justify-content: center !important;
+    margin-top: 6px !important;
+    margin-inline-start: 0 !important;
   }
 
   .hsk-cb-onboarding-head {
     justify-content: flex-end !important;
     margin-bottom: 12px !important;
-  }
-
-  .hsk-cb-hello {
-    font-size: clamp(26px, 6.8vw, 36px) !important;
-    font-weight: 600 !important;
-    line-height: 1.22 !important;
-    letter-spacing: -0.025em !important;
-  }
-
-  .hsk-cb-hello-lead {
-    font-size: 15px !important;
-    line-height: 1.45 !important;
-    color: var(--hsk-chat-muted, #71717a) !important;
-    margin-top: 4px !important;
   }
 
   .hsk-cb-doodles {
@@ -6685,6 +7965,10 @@
   min-width: 0;
 }
 
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cascade__w {
+  white-space: normal;
+}
+
 .hsk-cb-panel[data-nastaliq="true"] .hsk-cb-hello,
 .hsk-cb-panel[data-nastaliq="true"] .hsk-cb-hello-lead,
 .hsk-cb-panel[data-nastaliq="true"] .hsk-cb-hello-ask,
@@ -6783,6 +8067,25 @@
 }
 
 .hsk-cb-mic-btn--processing { color: var(--hsk-primary, #ff6a33); opacity: .7; }
+
+.hsk-cb-panel[data-script="nonlatin"] .hsk-animated-placeholder[data-fit="2"] { --hsk-ph-font-size: 13.5px; }
+.hsk-cb-panel[data-script="nonlatin"] .hsk-animated-placeholder[data-fit="3"] { --hsk-ph-font-size: 12px; }
+
+.hsk-cb-panel[data-nastaliq="true"] .hsk-animated-placeholder[data-fit="1"] { --hsk-ph-font-size: 15px; }
+.hsk-cb-panel[data-nastaliq="true"] .hsk-animated-placeholder[data-fit="2"] { --hsk-ph-font-size: 13px; }
+.hsk-cb-panel[data-nastaliq="true"] .hsk-animated-placeholder[data-fit="3"] { --hsk-ph-font-size: 11.5px; }
+
+.hsk-cb-panel[data-script="nonlatin"] .hsk-animated-placeholder__char {
+  line-height: 1.35;
+}
+
+/* The loading screen must not restyle itself as the font it is waiting for
+   arrives, so it is pinned to the one stack guaranteed to be present.
+   Specificity has to beat [data-script="nonlatin"] *. */
+.hsk-cb-panel[data-script] .hsk-cb-chrome-loading,
+.hsk-cb-panel[data-script] .hsk-cb-chrome-loading * {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
+}
 
 .hsk-voice-overlay {
   position: absolute;
@@ -7593,17 +8896,40 @@
   color: var(--hsk-primary) !important;
 }
 
+/* Glass panels: 2x2 theme grid, scout card, mobile ooze menu */
 [data-hsk-theme] .hsk-cb-theme-2x2-grid,
-[data-hsk-theme] .hsk-cb-topbar-ooze-menu {
-  background: var(--hsk-surface-2) !important;
-  box-shadow: none !important;
+[data-hsk-theme] .hsk-cb-topbar-ooze-menu,
+[data-hsk-theme] .hsk-cb-scout-rail-card {
+  background: var(--hsk-glass-bg) !important;
+  border: var(--hsk-glass-border) !important;
+  border-top: var(--hsk-glass-border-top) !important;
+  box-shadow: var(--hsk-glass-shadow) !important;
+  backdrop-filter: blur(28px) saturate(var(--hsk-glass-saturate, 180%)) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(var(--hsk-glass-saturate, 180%)) !important;
 }
 
-[data-hsk-theme] .hsk-cb-theme-squircle-trigger {
-  background: var(--hsk-surface-1) !important;
-  color: var(--hsk-chat-text) !important;
+/* Inside the mobile tray these are not panels — the tray is the panel. Left
+   glassed they nest a second blurred surface and read as a box within a box. */
+[data-hsk-theme] .hsk-cb-topbar-ooze-menu .hsk-cb-theme-2x2-grid,
+[data-hsk-theme] .hsk-cb-topbar-ooze-menu .hsk-cb-scout-rail-card {
+  background: none !important;
   border: none !important;
+  border-top: none !important;
   box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Trigger pills: theme squircle + scout rail */
+[data-hsk-theme] .hsk-cb-theme-squircle-trigger,
+[data-hsk-theme] .hsk-cb-scout-rail-trigger {
+  background: var(--hsk-pill-bg) !important;
+  color: var(--hsk-chat-text) !important;
+  border: var(--hsk-glass-border) !important;
+  border-top: var(--hsk-glass-border-top) !important;
+  box-shadow: var(--hsk-glass-shadow) !important;
+  backdrop-filter: blur(20px) saturate(var(--hsk-glass-saturate, 160%)) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(var(--hsk-glass-saturate, 160%)) !important;
 }
 
 [data-hsk-theme] .hsk-cb-theme-grid-item {
@@ -7691,6 +9017,13 @@
   --hsk-chip-border: 1px solid rgba(0, 0, 0, 0.08) !important;
   --hsk-ink: 55, 65, 81 !important;
   --hsk-tint: 145, 77, 47 !important;
+  /* Glass tokens */
+  --hsk-glass-bg: rgba(255, 255, 255, 0.72) !important;
+  --hsk-glass-border: 1px solid rgba(0, 0, 0, 0.07) !important;
+  --hsk-glass-border-top: 1px solid rgba(255, 255, 255, 0.9) !important;
+  --hsk-glass-shadow: 0 12px 32px -4px rgba(0,0,0,0.10), 0 1px 0 0 rgba(255,255,255,0.85) inset !important;
+  --hsk-glass-saturate: 190% !important;
+  --hsk-pill-bg: rgba(255, 255, 255, 0.65) !important;
 }
 
 .hsk-cb-overlay[data-hsk-theme="dark"],
@@ -7720,6 +9053,13 @@
   --hsk-sheet-bg: #1f1f22 !important;
   --hsk-ink: 240, 239, 237 !important;
   --hsk-tint: 248, 195, 174 !important;
+  /* Glass tokens — dark: very low white tint so backdrop-blur shows through */
+  --hsk-glass-bg: rgba(255, 255, 255, 0.07) !important;
+  --hsk-glass-border: 1px solid rgba(255, 255, 255, 0.10) !important;
+  --hsk-glass-border-top: 1px solid rgba(255, 255, 255, 0.22) !important;
+  --hsk-glass-shadow: 0 12px 32px -4px rgba(0,0,0,0.45), 0 1px 0 0 rgba(255,255,255,0.10) inset !important;
+  --hsk-glass-saturate: 160% !important;
+  --hsk-pill-bg: rgba(255, 255, 255, 0.06) !important;
 }
 
 .hsk-cb-overlay[data-hsk-theme="mahogany"],
@@ -7749,6 +9089,13 @@
   --hsk-sheet-bg: #211610 !important;
   --hsk-ink: 246, 238, 227 !important;
   --hsk-tint: 235, 180, 142 !important;
+  /* Glass tokens — mahogany: warm amber-tinted translucent glass */
+  --hsk-glass-bg: rgba(255, 220, 180, 0.07) !important;
+  --hsk-glass-border: 1px solid rgba(217, 140, 85, 0.15) !important;
+  --hsk-glass-border-top: 1px solid rgba(255, 200, 150, 0.25) !important;
+  --hsk-glass-shadow: 0 12px 32px -4px rgba(0,0,0,0.55), 0 1px 0 0 rgba(255,200,150,0.12) inset !important;
+  --hsk-glass-saturate: 155% !important;
+  --hsk-pill-bg: rgba(255, 220, 180, 0.06) !important;
 }
 
 .hsk-cb-overlay[data-hsk-theme="blush"],
@@ -7780,6 +9127,13 @@
   --hsk-sheet-hover: #ffd2e0 !important;
   --hsk-ink: 130, 36, 75 !important;
   --hsk-tint: 175, 38, 97 !important;
+  /* Glass tokens — blush: warm pink-tinted light glass */
+  --hsk-glass-bg: rgba(255, 240, 248, 0.75) !important;
+  --hsk-glass-border: 1px solid rgba(236, 72, 153, 0.10) !important;
+  --hsk-glass-border-top: 1px solid rgba(255, 255, 255, 0.90) !important;
+  --hsk-glass-shadow: 0 12px 32px -4px rgba(180, 30, 100, 0.08), 0 1px 0 0 rgba(255,255,255,0.85) inset !important;
+  --hsk-glass-saturate: 185% !important;
+  --hsk-pill-bg: rgba(255, 228, 236, 0.80) !important;
 }
 
 .hsk-cb-overlay[data-hsk-theme="coffee"],
@@ -7810,6 +9164,13 @@
   --hsk-sheet-hover: #e6d7c4 !important;
   --hsk-ink: 59, 42, 29 !important;
   --hsk-tint: 120, 88, 62 !important;
+  /* Glass tokens — coffee: warm creamy light glass */
+  --hsk-glass-bg: rgba(247, 241, 232, 0.78) !important;
+  --hsk-glass-border: 1px solid rgba(169, 113, 75, 0.12) !important;
+  --hsk-glass-border-top: 1px solid rgba(255, 255, 255, 0.88) !important;
+  --hsk-glass-shadow: 0 12px 32px -4px rgba(90, 55, 20, 0.10), 0 1px 0 0 rgba(255,255,255,0.80) inset !important;
+  --hsk-glass-saturate: 185% !important;
+  --hsk-pill-bg: rgba(239, 228, 214, 0.82) !important;
 }
 
 .hsk-cb-overlay[data-hsk-theme="midnight"],
@@ -7840,7 +9201,15 @@
   --hsk-sheet-hover: #222b40 !important;
   --hsk-ink: 223, 230, 245 !important;
   --hsk-tint: 150, 160, 200 !important;
+  /* Glass tokens — midnight: cool indigo-tinted dark glass */
+  --hsk-glass-bg: rgba(180, 190, 255, 0.06) !important;
+  --hsk-glass-border: 1px solid rgba(99, 102, 241, 0.18) !important;
+  --hsk-glass-border-top: 1px solid rgba(180, 185, 255, 0.25) !important;
+  --hsk-glass-shadow: 0 12px 32px -4px rgba(0,0,0,0.55), 0 1px 0 0 rgba(180,190,255,0.10) inset !important;
+  --hsk-glass-saturate: 155% !important;
+  --hsk-pill-bg: rgba(180, 190, 255, 0.06) !important;
 }
+
 
 /* --- Micro-interactions --- */
 

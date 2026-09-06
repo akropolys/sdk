@@ -51,9 +51,10 @@ export function AnimatedPlaceholder({
 
   const units = splitPlaceholder(content);
   const last = Math.max(units.length - 1, 1);
+  const fit = content.length > 44 ? '3' : content.length > 26 ? '2' : '1';
 
   return (
-    <div className="hsk-animated-placeholder" dir="auto" aria-hidden="true">
+    <div className="hsk-animated-placeholder" data-fit={fit} dir="auto" aria-hidden="true">
       {units.map((unit, i) => (
         <span
           key={`${content}|${seed}|${i}`}

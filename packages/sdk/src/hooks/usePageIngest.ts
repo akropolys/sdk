@@ -4,9 +4,6 @@ import { stableStringify } from '../utils/stableStringify';
 
 declare const process: any;
 
-/**
- * Automatically captures and queues a page entity for ingestion on render.
- */
 export function usePageIngest(product: Record<string, any> | null | undefined): void {
   const isSigned = !!(product as any)?.envelope;
   const url = isSigned

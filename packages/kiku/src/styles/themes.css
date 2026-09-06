@@ -102,17 +102,40 @@
   color: var(--hsk-primary) !important;
 }
 
+/* Glass panels: 2x2 theme grid, scout card, mobile ooze menu */
 [data-hsk-theme] .hsk-cb-theme-2x2-grid,
-[data-hsk-theme] .hsk-cb-topbar-ooze-menu {
-  background: var(--hsk-surface-2) !important;
-  box-shadow: none !important;
+[data-hsk-theme] .hsk-cb-topbar-ooze-menu,
+[data-hsk-theme] .hsk-cb-scout-rail-card {
+  background: var(--hsk-glass-bg) !important;
+  border: var(--hsk-glass-border) !important;
+  border-top: var(--hsk-glass-border-top) !important;
+  box-shadow: var(--hsk-glass-shadow) !important;
+  backdrop-filter: blur(28px) saturate(var(--hsk-glass-saturate, 180%)) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(var(--hsk-glass-saturate, 180%)) !important;
 }
 
-[data-hsk-theme] .hsk-cb-theme-squircle-trigger {
-  background: var(--hsk-surface-1) !important;
-  color: var(--hsk-chat-text) !important;
+/* Inside the mobile tray these are not panels — the tray is the panel. Left
+   glassed they nest a second blurred surface and read as a box within a box. */
+[data-hsk-theme] .hsk-cb-topbar-ooze-menu .hsk-cb-theme-2x2-grid,
+[data-hsk-theme] .hsk-cb-topbar-ooze-menu .hsk-cb-scout-rail-card {
+  background: none !important;
   border: none !important;
+  border-top: none !important;
   box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Trigger pills: theme squircle + scout rail */
+[data-hsk-theme] .hsk-cb-theme-squircle-trigger,
+[data-hsk-theme] .hsk-cb-scout-rail-trigger {
+  background: var(--hsk-pill-bg) !important;
+  color: var(--hsk-chat-text) !important;
+  border: var(--hsk-glass-border) !important;
+  border-top: var(--hsk-glass-border-top) !important;
+  box-shadow: var(--hsk-glass-shadow) !important;
+  backdrop-filter: blur(20px) saturate(var(--hsk-glass-saturate, 160%)) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(var(--hsk-glass-saturate, 160%)) !important;
 }
 
 [data-hsk-theme] .hsk-cb-theme-grid-item {
@@ -200,6 +223,13 @@
   --hsk-chip-border: 1px solid rgba(0, 0, 0, 0.08) !important;
   --hsk-ink: 55, 65, 81 !important;
   --hsk-tint: 145, 77, 47 !important;
+  /* Glass tokens */
+  --hsk-glass-bg: rgba(255, 255, 255, 0.72) !important;
+  --hsk-glass-border: 1px solid rgba(0, 0, 0, 0.07) !important;
+  --hsk-glass-border-top: 1px solid rgba(255, 255, 255, 0.9) !important;
+  --hsk-glass-shadow: 0 12px 32px -4px rgba(0,0,0,0.10), 0 1px 0 0 rgba(255,255,255,0.85) inset !important;
+  --hsk-glass-saturate: 190% !important;
+  --hsk-pill-bg: rgba(255, 255, 255, 0.65) !important;
 }
 
 .hsk-cb-overlay[data-hsk-theme="dark"],
@@ -229,6 +259,13 @@
   --hsk-sheet-bg: #1f1f22 !important;
   --hsk-ink: 240, 239, 237 !important;
   --hsk-tint: 248, 195, 174 !important;
+  /* Glass tokens — dark: very low white tint so backdrop-blur shows through */
+  --hsk-glass-bg: rgba(255, 255, 255, 0.07) !important;
+  --hsk-glass-border: 1px solid rgba(255, 255, 255, 0.10) !important;
+  --hsk-glass-border-top: 1px solid rgba(255, 255, 255, 0.22) !important;
+  --hsk-glass-shadow: 0 12px 32px -4px rgba(0,0,0,0.45), 0 1px 0 0 rgba(255,255,255,0.10) inset !important;
+  --hsk-glass-saturate: 160% !important;
+  --hsk-pill-bg: rgba(255, 255, 255, 0.06) !important;
 }
 
 .hsk-cb-overlay[data-hsk-theme="mahogany"],
@@ -258,6 +295,13 @@
   --hsk-sheet-bg: #211610 !important;
   --hsk-ink: 246, 238, 227 !important;
   --hsk-tint: 235, 180, 142 !important;
+  /* Glass tokens — mahogany: warm amber-tinted translucent glass */
+  --hsk-glass-bg: rgba(255, 220, 180, 0.07) !important;
+  --hsk-glass-border: 1px solid rgba(217, 140, 85, 0.15) !important;
+  --hsk-glass-border-top: 1px solid rgba(255, 200, 150, 0.25) !important;
+  --hsk-glass-shadow: 0 12px 32px -4px rgba(0,0,0,0.55), 0 1px 0 0 rgba(255,200,150,0.12) inset !important;
+  --hsk-glass-saturate: 155% !important;
+  --hsk-pill-bg: rgba(255, 220, 180, 0.06) !important;
 }
 
 .hsk-cb-overlay[data-hsk-theme="blush"],
@@ -289,6 +333,13 @@
   --hsk-sheet-hover: #ffd2e0 !important;
   --hsk-ink: 130, 36, 75 !important;
   --hsk-tint: 175, 38, 97 !important;
+  /* Glass tokens — blush: warm pink-tinted light glass */
+  --hsk-glass-bg: rgba(255, 240, 248, 0.75) !important;
+  --hsk-glass-border: 1px solid rgba(236, 72, 153, 0.10) !important;
+  --hsk-glass-border-top: 1px solid rgba(255, 255, 255, 0.90) !important;
+  --hsk-glass-shadow: 0 12px 32px -4px rgba(180, 30, 100, 0.08), 0 1px 0 0 rgba(255,255,255,0.85) inset !important;
+  --hsk-glass-saturate: 185% !important;
+  --hsk-pill-bg: rgba(255, 228, 236, 0.80) !important;
 }
 
 .hsk-cb-overlay[data-hsk-theme="coffee"],
@@ -319,6 +370,13 @@
   --hsk-sheet-hover: #e6d7c4 !important;
   --hsk-ink: 59, 42, 29 !important;
   --hsk-tint: 120, 88, 62 !important;
+  /* Glass tokens — coffee: warm creamy light glass */
+  --hsk-glass-bg: rgba(247, 241, 232, 0.78) !important;
+  --hsk-glass-border: 1px solid rgba(169, 113, 75, 0.12) !important;
+  --hsk-glass-border-top: 1px solid rgba(255, 255, 255, 0.88) !important;
+  --hsk-glass-shadow: 0 12px 32px -4px rgba(90, 55, 20, 0.10), 0 1px 0 0 rgba(255,255,255,0.80) inset !important;
+  --hsk-glass-saturate: 185% !important;
+  --hsk-pill-bg: rgba(239, 228, 214, 0.82) !important;
 }
 
 .hsk-cb-overlay[data-hsk-theme="midnight"],
@@ -349,5 +407,12 @@
   --hsk-sheet-hover: #222b40 !important;
   --hsk-ink: 223, 230, 245 !important;
   --hsk-tint: 150, 160, 200 !important;
+  /* Glass tokens — midnight: cool indigo-tinted dark glass */
+  --hsk-glass-bg: rgba(180, 190, 255, 0.06) !important;
+  --hsk-glass-border: 1px solid rgba(99, 102, 241, 0.18) !important;
+  --hsk-glass-border-top: 1px solid rgba(180, 185, 255, 0.25) !important;
+  --hsk-glass-shadow: 0 12px 32px -4px rgba(0,0,0,0.55), 0 1px 0 0 rgba(180,190,255,0.10) inset !important;
+  --hsk-glass-saturate: 155% !important;
+  --hsk-pill-bg: rgba(180, 190, 255, 0.06) !important;
 }
-
+

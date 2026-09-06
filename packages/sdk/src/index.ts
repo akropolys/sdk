@@ -64,4 +64,3 @@ export type {
   GetScoutResponse,
   ScoutActionResponse,
 } from './types';
-

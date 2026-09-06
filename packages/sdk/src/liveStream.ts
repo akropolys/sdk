@@ -1,9 +1,6 @@
 import { getAkropolysClient, AkropolysClient } from './client';
 import { setLiveValue } from './liveValues';
 
-/**
- * Subscribes to live WebSocket stream to keep real-time values updated between chat turns.
- */
 export interface LiveStreamOptions {
 
   keys?: string[];

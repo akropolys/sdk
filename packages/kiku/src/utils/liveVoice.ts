@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { chime } from './chime';
 
 export type LiveState = 'idle' | 'connecting' | 'listening' | 'thinking' | 'speaking' | 'ended';
 
@@ -31,6 +32,9 @@ export interface LiveVoiceOptions {
 }
 
 const INPUT_RATE = 16000;
+const OUTPUT_RATE = 24000;
+const PLAY_LEAD = 0.12;
+const FLUSH_FADE = 0.08;
 
 const WORKLET_SRC = `
 class KikuCapture extends AudioWorkletProcessor {
@@ -106,7 +110,7 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const outAnalyserRef = useRef<AnalyserNode | null>(null);
   const outGainRef = useRef<GainNode | null>(null);
-  const outRateRef = useRef(24000);
+  const outRateRef = useRef(OUTPUT_RATE);
 
   const optsRef = useRef(opts);
   useEffect(() => { optsRef.current = opts; }, [opts]);
@@ -165,33 +169,28 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
     [outbound]
   );
 
-  
   const flushPlayback = useCallback(() => {
-    playAtRef.current = 0;
     const g = outGainRef.current;
     const ctx = ctxRef.current;
-    if (g && ctx && ctx.state !== 'closed') {
-      const now = ctx.currentTime;
-      g.gain.cancelScheduledValues(now);
-      g.gain.setValueAtTime(g.gain.value, now);
-      // Smooth 80ms fade down to 0: zero Dirac delta voltage snap!
-      g.gain.linearRampToValueAtTime(0, now + 0.08);
-
-      setTimeout(() => {
-        for (const src of sourcesRef.current) {
-          try { src.onended = null; src.stop(); } catch { }
-        }
-        sourcesRef.current.clear();
-        if (g && ctxRef.current && ctxRef.current.state !== 'closed') {
-          g.gain.setValueAtTime(1, ctxRef.current.currentTime);
-        }
-      }, 100);
-    } else {
+    if (!g || !ctx || ctx.state === 'closed') {
+      playAtRef.current = 0;
       for (const src of sourcesRef.current) {
         try { src.onended = null; src.stop(); } catch { }
       }
       sourcesRef.current.clear();
+      return;
     }
+    const now = ctx.currentTime;
+    const fadeEnd = now + FLUSH_FADE;
+    g.gain.cancelScheduledValues(now);
+    g.gain.setValueAtTime(g.gain.value, now);
+    g.gain.linearRampToValueAtTime(0, fadeEnd);
+    g.gain.setValueAtTime(1, fadeEnd);
+    for (const src of sourcesRef.current) {
+      try { src.onended = null; src.stop(fadeEnd); } catch { }
+    }
+    sourcesRef.current.clear();
+    playAtRef.current = fadeEnd; // next turn must not open inside the fade
   }, []);
 
   const enqueue = useCallback((chunk: Float32Array) => {
@@ -211,8 +210,8 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
     src.connect(out);
 
     const now = ctx.currentTime;
-    // Direct sample-accurate continuous chain:
-    const at = playAtRef.current > now ? playAtRef.current : now + 0.03;
+    // Continuous chain; a fresh run opens a jitter buffer so a late packet cannot tear a gap.
+    const at = playAtRef.current > now ? playAtRef.current : now + PLAY_LEAD;
     src.start(at);
     playAtRef.current = at + buf.duration;
 
@@ -269,7 +268,12 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
       try { f = JSON.parse(ev.data); } catch { return; }
       switch (f.type) {
         case 'ready':
-          if (f.sampleRate) outRateRef.current = f.sampleRate;
+          if (f.sampleRate) {
+            outRateRef.current = f.sampleRate;
+            if (f.sampleRate !== OUTPUT_RATE) {
+              console.warn(`[kiku] live audio rate ${f.sampleRate} != context ${OUTPUT_RATE}; per-buffer resampling will click at every chunk seam`);
+            }
+          }
           if (typeof f.secondsLeft === 'number') setSecondsLeft(f.secondsLeft);
           readyRef.current = true;
           setState('listening');
@@ -296,6 +300,7 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
         case 'interrupted':
           stopHold();
           flushPlayback();
+          chime('interrupt');
           setHearing(false);
           setState('listening');
           break;
@@ -374,7 +379,7 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
     const AC: typeof AudioContext = (window as any).AudioContext || (window as any).webkitAudioContext;
     if (AC) {
       if (!ctxRef.current || ctxRef.current.state === 'closed') {
-        ctxRef.current = new AC({ latencyHint: 'interactive' });
+        ctxRef.current = new AC({ latencyHint: 'interactive', sampleRate: OUTPUT_RATE });
       }
       if (ctxRef.current.state === 'suspended') {
         ctxRef.current.resume().catch(() => {});
@@ -420,7 +425,9 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
       track.enabled = !optsRef.current.muted;
     }
 
-    const ctx = ctxRef.current && ctxRef.current.state !== 'closed' ? ctxRef.current : (AC ? new AC({ latencyHint: 'interactive' }) : null);
+    const ctx = ctxRef.current && ctxRef.current.state !== 'closed'
+      ? ctxRef.current
+      : (AC ? new AC({ latencyHint: 'interactive', sampleRate: OUTPUT_RATE }) : null);
     if (!ctx) return;
     ctxRef.current = ctx;
     if (ctx.state === 'suspended') {

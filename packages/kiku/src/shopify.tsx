@@ -79,9 +79,6 @@ declare global {
   }
 }
 
-/**
- * Normalizes a Shopify product object into Akropolys entity format.
- */
 export function normalizeShopifyProduct(p: ShopifyProduct): Record<string, any> {
   if (!p || typeof p !== 'object') return {};
 
@@ -153,9 +150,6 @@ export function normalizeShopifyProduct(p: ShopifyProduct): Record<string, any> 
   };
 }
 
-/**
- * Native Shopify Cart Integration.
- */
 export function shopifyAddToCart(items: ChatSource[]): Promise<any> {
   if (!items || items.length === 0) return Promise.resolve();
 
@@ -194,9 +188,6 @@ export function shopifyAddToCart(items: ChatSource[]): Promise<any> {
     });
 }
 
-/**
- * Native Shopify Get Cart.
- */
 export function shopifyGetCart(): Promise<any> {
   return fetch('/cart.js', {
     headers: { 'Accept': 'application/json' },
@@ -205,9 +196,6 @@ export function shopifyGetCart(): Promise<any> {
     .catch(() => null);
 }
 
-/**
- * Draggable and Dockable container for Kiku floating launcher button.
- */
 function DraggableDockWrapper({
   children,
   position = 'bottom-right',
@@ -429,9 +417,6 @@ function StandaloneKikuApp({ config, isInline }: { config: StandaloneConfig; isI
   );
 }
 
-/**
- * Attaches global click listeners for any element with [data-kiku-open] or [data-kiku-toggle]
- */
 function setupGlobalTriggers() {
   if (typeof document === 'undefined') return;
 

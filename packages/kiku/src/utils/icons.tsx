@@ -18,4 +18,3 @@ export const ArrowUpIcon = () => (
 );
 
 export const TelegramSendIcon = ArrowUpIcon;
-

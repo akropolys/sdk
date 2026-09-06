@@ -15,13 +15,39 @@ function plainText(node: React.ReactNode): string {
   return '';
 }
 
+function segmentText(text: string): string[] {
+  if (/^\s+$/.test(text)) return [text];
+  if (/\s/.test(text)) {
+    const chunks = text.split(/(\s+)/).filter(Boolean);
+    const out: string[] = [];
+    for (const chunk of chunks) {
+      if (/^\s+$/.test(chunk)) {
+        out.push(chunk);
+      } else {
+        out.push(...segmentText(chunk));
+      }
+    }
+    return out;
+  }
+  if (text.length > 3 && typeof Intl !== 'undefined' && (Intl as any).Segmenter) {
+    try {
+      const seg = new (Intl as any).Segmenter(undefined, { granularity: 'word' });
+      const segments = Array.from(seg.segment(text)).map((s: any) => s.segment);
+      if (segments.length > 1) {
+        return segments;
+      }
+    } catch {
+      // fallback
+    }
+  }
+  return [text];
+}
+
 function cascade(node: React.ReactNode, count: { i: number }, baseMs: number, keyPrefix: string): React.ReactNode {
   if (node === null || node === undefined || typeof node === 'boolean') return null;
 
   if (typeof node === 'string' || typeof node === 'number') {
-    return String(node)
-      .split(/(\s+)/)
-      .filter(Boolean)
+    return segmentText(String(node))
       .map((chunk, ci) => {
         if (/^\s+$/.test(chunk)) {
           return chunk;

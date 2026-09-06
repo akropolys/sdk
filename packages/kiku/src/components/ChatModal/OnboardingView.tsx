@@ -4,6 +4,7 @@ import type { KikuState } from '../KikuAvatar';
 import { ChromeLoading } from './components/ListeningWave';
 import { LANGUAGE_CHOICES, endonymFor, type UIStringKey } from './types';
 import { CascadeText } from './components/CascadeText';
+import { InkBloomSkeleton } from './components/InkBloomSkeleton';
 import { splitPlaceholder } from './components/AnimatedPlaceholder';
 import { ShieldIcon, KeyOutlineIcon, VaultIcon, GlobeIcon } from './icons';
 
@@ -100,6 +101,7 @@ export function OnboardingView({
   handleSend,
 }: OnboardingViewProps) {
   const currentStep = awaitingLang ? '1' : awaitingName ? '2' : awaitingEntityLang ? '3' : awaitingConsent ? '4' : null;
+  const displayShopperLang = endonymFor(shopperLanguage) || shopperLanguage;
   const [countdown, setCountdown] = React.useState(30);
 
   React.useEffect(() => {
@@ -131,9 +133,13 @@ export function OnboardingView({
         )}
         {awaitingLang ? (
           <div className="hsk-cb-hello-wrap" key="step-lang">
-            <h2 className="hsk-cb-hello hsk-cascade">
-              <CascadeText baseMs={0}>What language should we chat in?</CascadeText>
-            </h2>
+            {chromeReady ? (
+              <h2 className="hsk-cb-hello hsk-cascade">
+                <CascadeText baseMs={0}>What language should we chat in?</CascadeText>
+              </h2>
+            ) : (
+              <InkBloomSkeleton lines={1} />
+            )}
             <div className="hsk-cb-lang-chips">
               {LANGUAGE_CHOICES.map((l, i) => (
                 <button
@@ -171,23 +177,22 @@ export function OnboardingView({
                 </p>
               </>
             ) : (
-              <ChromeLoading
-                language={shopperLanguage}
-                onBack={() => chooseLanguage('')}
-              />
+              <ChromeLoading language={shopperLanguage} onBack={() => chooseLanguage('')} />
             )}
           </div>
         ) : awaitingEntityLang ? (
           <div className="hsk-cb-hello-wrap" key="step-entity-lang">
-            {chromeReady && (
+            {chromeReady ? (
               <>
                 <h2 className="hsk-cb-hello hsk-cascade">
                   <CascadeText baseMs={0}>{t('howShouldResultsLook')}</CascadeText>
                 </h2>
                 <p className="hsk-cb-hello-lead hsk-cascade">
-                  <CascadeText baseMs={30}>{tNode('entityLangIntro', { lang: shopperLanguage })}</CascadeText>
+                  <CascadeText baseMs={30}>{tNode('entityLangIntro', { lang: displayShopperLang })}</CascadeText>
                 </p>
               </>
+            ) : (
+              <InkBloomSkeleton lines={2} />
             )}
             {chromeReady && (
               <div className="hsk-cb-entlang-opts" role="radiogroup" aria-label={t('howShouldResultsLook')}>
@@ -209,7 +214,7 @@ export function OnboardingView({
                         <ShimmerText
                           text={
                             mode === 'translated'
-                              ? tNode('inLanguage', { lang: shopperLanguage })
+                              ? tNode('inLanguage', { lang: displayShopperLang })
                               : t('asWritten')
                           }
                           baseIdx={0}
@@ -309,8 +314,8 @@ export function OnboardingView({
                 <p className="hsk-cb-hello-lead hsk-cascade">
                   <CascadeText baseMs={30}>
                     {entityLangPref === 'translated'
-                      ? tNode('replyingTranslated', { lang: shopperLanguage })
-                      : tNode('replyingOriginal', { lang: shopperLanguage })}
+                      ? tNode('replyingTranslated', { lang: displayShopperLang })
+                      : tNode('replyingOriginal', { lang: displayShopperLang })}
                   </CascadeText>
                 </p>
               </>

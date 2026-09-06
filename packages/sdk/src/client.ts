@@ -163,6 +163,10 @@ export class AkropolysClient {
     pause: (id: string, kikuKey?: string, signal?: AbortSignal) => this.api.pauseScout(id, kikuKey, signal),
     resume: (id: string, kikuKey?: string, signal?: AbortSignal) => this.api.resumeScout(id, kikuKey, signal),
     cancel: (id: string, kikuKey?: string, signal?: AbortSignal) => this.api.cancelScout(id, kikuKey, signal),
+    quote: (minutes: number, signal?: AbortSignal) => this.api.scoutQuote(minutes, signal),
+    setAvatar: (id: string, avatar: string, kikuKey?: string, signal?: AbortSignal) => this.api.setScoutAvatar(id, avatar, kikuKey, signal),
+    balance: (siteId?: string, kikuKey?: string, signal?: AbortSignal) => this.api.scoutBalance(siteId, kikuKey, signal),
+    addMinutes: (id: string, minutes: number, kikuKey?: string, signal?: AbortSignal) => this.api.addScoutMinutes(id, minutes, kikuKey, signal),
   };
 
   private ingestQueue: Record<string, any>[] = [];
@@ -422,9 +426,6 @@ export class AkropolysClient {
     this.sessionId = generateUUID();
   }
 
-  /**
-   * Initializes or loads the persistent device identifier for the current origin.
-   */
   private initDevice() {
     if (typeof window === 'undefined') {
       this.deviceId = generateUUID();
@@ -446,9 +447,6 @@ export class AkropolysClient {
     return this.deviceId;
   }
 
-  /**
-   * Mints an anonymous, portable Kiku key pair for cross-device shopper memory.
-   */
   async mintKikuKey(): Promise<{ secret: string; publicId: string }> {
     const res = await this.api.mintKikuKey();
     if (res.secret) this.setKikuKey(res.secret);
@@ -567,10 +565,6 @@ export class AkropolysClient {
     } catch {  }
   }
 
-  /**
-   * Whether result cards are shown as the site wrote them ('original') or
-   * translated into the shopper's language ('translated').
-   */
   getEntityLanguageMode(): string | undefined {
     return this.entityLanguageMode ?? undefined;
   }
@@ -588,33 +582,18 @@ export class AkropolysClient {
     try { localStorage.removeItem('akropolys_entity_language'); } catch {  }
   }
 
-  /**
-   * A real entity from this site, as written and translated, so onboarding can
-   * show the choice instead of describing it.
-   */
   getEntityPreview(language: string) {
     return this.api.entityPreview(language);
   }
 
-  /**
-   * kiku's own Latin face, served from the API origin. Independent of language:
-   * it is the widget's default face, not a match for the shopper's script.
-   */
   baseFont() {
     return this.api.baseFont();
   }
 
-  /**
-   * Spoken audio for an assistant answer, synthesized server-side so no speech
-   * key ever reaches the page. Defaults to the shopper's chosen language.
-   */
   synthesizeSpeech(text: string, voice?: string, language?: string, signal?: AbortSignal) {
     return this.api.synthesizeSpeech(text, voice, language ?? this.getShopperLanguage(), signal);
   }
 
-  /**
-   * Loads localized UI strings, caching in localStorage by language and schema version.
-   */
   private static CHROME_STRINGS_CACHE_VERSION = 4;
 
   async getUIStrings(language: string, defaults: Record<string, string>): Promise<UIStrings> {

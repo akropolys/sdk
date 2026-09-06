@@ -522,8 +522,6 @@ export function KikuAvatar({
         const isEyeFacing = phase !== 'thinking' && phase !== 'visualizing' && phase !== 'speaking';
         lashesGRef.current.setAttribute('opacity', isEyeFacing ? clamp(at.lid * 1.3, 0, 1).toFixed(2) : '0');
 
-        // rooted on each eye's own top-outer curve, so they track blinks and gaze
-        // instead of floating at fixed coordinates
         const lashes = (A: { x: number; y: number; w: number; h: number }, side: number) => {
           const R = Math.max(1, Math.min(A.w, A.h) / 2);
           const cy = A.y - A.h / 2 + R;

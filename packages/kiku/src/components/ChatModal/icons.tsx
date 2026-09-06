@@ -237,8 +237,6 @@ export const ArrowUpIcon = () => (
     strokeLinecap="round"
     strokeLinejoin="round"
   >
-    {/* the silhouette is unchanged at rest; splitting it at the fold gives two
-        wings that can beat independently */}
     <polygon className="hsk-kite-wing hsk-kite-wing--far" points="22 2 11 13 2 9" />
     <polygon className="hsk-kite-wing hsk-kite-wing--near" points="22 2 15 22 11 13" />
     <line className="hsk-kite-spine" x1="22" y1="2" x2="11" y2="13" />
@@ -391,8 +389,3 @@ export const VisualSearchSparkleIcon = ({ className, size = 16 }: { className?: 
     />
   </svg>
 );
-
-
-
-
-

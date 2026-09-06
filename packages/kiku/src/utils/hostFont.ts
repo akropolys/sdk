@@ -3,6 +3,12 @@ import type { AkropolysTheme, ScriptFont } from '@akropolys/sdk';
 
 const MOUNTED = new Map<string, number>();
 
+function styleId(key: string, prefix = 'hsk-font'): string {
+  let h = 5381;
+  for (let i = 0; i < key.length; i++) h = ((h << 5) + h + key.charCodeAt(i)) >>> 0;
+  return `${prefix}-${h.toString(36)}`;
+}
+
 function formatFor(url: string): string {
   const ext = url.split('?')[0].split('#')[0].split('.').pop()?.toLowerCase();
   if (ext === 'woff2') return 'woff2';
@@ -33,9 +39,7 @@ const safeWeight = (w: string): string => (/^\d{3}( \d{3})?$/.test(w) ? w : '400
 function useMountedFaces(key: string, css: string): void {
   useEffect(() => {
     if (!key || !css || typeof document === 'undefined') return;
-    let h = 5381;
-    for (let i = 0; i < key.length; i++) h = ((h << 5) + h + key.charCodeAt(i)) >>> 0;
-    const id = `hsk-font-${h.toString(36)}`;
+    const id = styleId(key);
 
     MOUNTED.set(key, (MOUNTED.get(key) ?? 0) + 1);
     if (!document.getElementById(id)) {
@@ -78,9 +82,8 @@ export async function preloadScriptFont(font: ScriptFont, timeoutMs = 1200): Pro
   if (!css) return;
 
   const key = `script|${font.family}|${font.faces.map(f => f.url).join('|')}`;
-  let h = 5381;
-  for (let i = 0; i < key.length; i++) h = ((h << 5) + h + key.charCodeAt(i)) >>> 0;
-  const id = `hsk-font-${h.toString(36)}`;
+  MOUNTED.set(key, (MOUNTED.get(key) ?? 0) + 1);
+  const id = styleId(key);
   if (!document.getElementById(id)) {
     const el = document.createElement('style');
     el.id = id;
@@ -128,9 +131,7 @@ export function useHostFontFace(theme: 'light' | 'dark' | AkropolysTheme | undef
 
     const css = faces.join('');
     const key = `${family}|${normal}|${bold}|${variable}`;
-    let h = 5381;
-    for (let i = 0; i < key.length; i++) h = ((h << 5) + h + key.charCodeAt(i)) >>> 0;
-    const id = `hsk-host-font-${h.toString(36)}`;
+    const id = styleId(key, 'hsk-host-font');
 
     MOUNTED.set(key, (MOUNTED.get(key) ?? 0) + 1);
     if (!document.getElementById(id)) {

@@ -1,8 +1,13 @@
 import type { ScriptFont } from '@akropolys/sdk';
+import { preloadScriptFont } from './hostFont';
 
-// baseFont() is a bare fetch with no client-side cache, and every component running
-// useScriptFont calls it — six round trips per open. One promise per client instead.
 const BASE_FONT = new WeakMap<object, Promise<ScriptFont | null>>();
+const BASE_FONT_READY = new WeakMap<object, ScriptFont | null>();
+
+// Resolved base font for a client that already warmed, so a reopen mounts with it.
+export function readyBaseFont(client: any): ScriptFont | null {
+  return client ? BASE_FONT_READY.get(client) ?? null : null;
+}
 
 export function cachedBaseFont(client: any): Promise<ScriptFont | null> {
   if (!client) return Promise.resolve(null);
@@ -10,6 +15,11 @@ export function cachedBaseFont(client: any): Promise<ScriptFont | null> {
   if (hit) return hit;
   const p = Promise.resolve()
     .then(() => client.baseFont?.() ?? null)
+    .then(async (f: ScriptFont | null) => {
+      if (f) await preloadScriptFont(f, 1200); // resolve on bytes, not on the descriptor, or it swaps mid-paint
+      BASE_FONT_READY.set(client, f);
+      return f;
+    })
     .catch(() => null);
   BASE_FONT.set(client, p);
   return p;

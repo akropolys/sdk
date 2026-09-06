@@ -48,6 +48,10 @@
   min-width: 0;
 }
 
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cascade__w {
+  white-space: normal;
+}
+
 .hsk-cb-panel[data-nastaliq="true"] .hsk-cb-hello,
 .hsk-cb-panel[data-nastaliq="true"] .hsk-cb-hello-lead,
 .hsk-cb-panel[data-nastaliq="true"] .hsk-cb-hello-ask,
@@ -146,4 +150,22 @@
 }
 
 .hsk-cb-mic-btn--processing { color: var(--hsk-primary, #ff6a33); opacity: .7; }
-
+
+.hsk-cb-panel[data-script="nonlatin"] .hsk-animated-placeholder[data-fit="2"] { --hsk-ph-font-size: 13.5px; }
+.hsk-cb-panel[data-script="nonlatin"] .hsk-animated-placeholder[data-fit="3"] { --hsk-ph-font-size: 12px; }
+
+.hsk-cb-panel[data-nastaliq="true"] .hsk-animated-placeholder[data-fit="1"] { --hsk-ph-font-size: 15px; }
+.hsk-cb-panel[data-nastaliq="true"] .hsk-animated-placeholder[data-fit="2"] { --hsk-ph-font-size: 13px; }
+.hsk-cb-panel[data-nastaliq="true"] .hsk-animated-placeholder[data-fit="3"] { --hsk-ph-font-size: 11.5px; }
+
+.hsk-cb-panel[data-script="nonlatin"] .hsk-animated-placeholder__char {
+  line-height: 1.35;
+}
+
+/* The loading screen must not restyle itself as the font it is waiting for
+   arrives, so it is pinned to the one stack guaranteed to be present.
+   Specificity has to beat [data-script="nonlatin"] *. */
+.hsk-cb-panel[data-script] .hsk-cb-chrome-loading,
+.hsk-cb-panel[data-script] .hsk-cb-chrome-loading * {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
+}

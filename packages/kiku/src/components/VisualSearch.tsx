@@ -4,13 +4,9 @@ import { useAkropolysContext } from '@akropolys/sdk';
 import type { VisualSearchResponse } from '@akropolys/sdk';
 
 export interface VisualSearchProps {
-  /** Called with search results + the base64 preview when Gemini responds. */
+  /** Called with search results + the base64 preview when the model responds. */
   onResults: (res: VisualSearchResponse, previewBase64: string) => void;
   onError?: (err: Error) => void;
-  /**
-   * Category hint sent to Gemini to sharpen the match_query.
-   * e.g. "dress", "curtains", "sofa", "shoes"
-   */
   categoryHint?: string;
   className?: string;
   disabled?: boolean;
@@ -33,9 +29,6 @@ function fileToBase64(file: File): Promise<string> {
   return downscaleImage(file);
 }
 
-/**
- * VisualSearch — camera/image-upload button for style-match search.
- */
 export function VisualSearch({
   onResults,
   onError,

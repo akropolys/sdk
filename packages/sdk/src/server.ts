@@ -66,13 +66,6 @@ function generateNonce(): string {
   return base64UrlEncode(bytes.buffer);
 }
 
-/**
- * HSEP v1 signIngest — signs an ingestion entity using RSA-PSS SHA-256.
- * Zero-dependency Web Crypto API implementation suitable for Node 18+, Vercel Edge, Cloudflare Workers, Deno, and Bun.
- */
-/**
- * Normalises private key PEM string by unescaping newlines and stripping headers.
- */
 function normalisePem(pem: string): string {
   return (pem ?? '')
     .trim()
@@ -154,9 +147,6 @@ export interface SignedLivePayload {
   sig: string;
 }
 
-/**
- * Signs a batch of live records using RSA-PSS SHA-256 for authenticated server-side ingestion.
- */
 export async function signLiveRecords(
   records: LiveRecordInput[],
   privateKeyPem: string,

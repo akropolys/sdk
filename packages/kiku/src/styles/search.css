@@ -482,47 +482,67 @@
     display: none !important;
   }
 
-    .hsk-cb-hello-wrap {
+  .hsk-cb-hello-wrap {
     align-items: center !important;
     text-align: center !important;
-    gap: 3px !important;
-    max-width: 30ch;
-    margin-inline: auto;
+    gap: 4px !important;
+    width: 100% !important;
+    max-width: min(520px, 100%) !important;
+    padding-inline: 16px !important;
+    box-sizing: border-box !important;
+    margin-inline: auto !important;
+  }
+
+  .hsk-cb-ink-skeleton {
+    align-items: center !important;
   }
 
   .hsk-cb-hello {
-    font-size: 21px !important;
+    font-size: clamp(21px, 5.8vw, 30px) !important;
     font-weight: 600 !important;
-    letter-spacing: -.015em;
+    line-height: 1.25 !important;
+    letter-spacing: -0.02em !important;
     color: var(--hsk-chat-muted, #8b8b8f) !important;
     text-align: center !important;
+    text-wrap: balance;
+    max-width: 100% !important;
+    overflow-wrap: break-word;
   }
 
   .hsk-cb-hello-lead,
   .hsk-cb-hello-ask {
     font-size: 14px !important;
     font-weight: 400 !important;
+    line-height: 1.45 !important;
     text-align: center !important;
+    text-wrap: balance;
+    max-width: 100% !important;
+    overflow-wrap: break-word;
     color: color-mix(in srgb, var(--hsk-chat-muted, #8b8b8f) 78%, transparent) !important;
+  }
+
+  .hsk-cb-hello-lead {
+    font-size: 14px !important;
+    margin-top: 4px !important;
+  }
+
+  .hsk-cb-lang-chips {
+    justify-content: center !important;
+    width: 100% !important;
+    gap: 8px !important;
+    margin: 12px 0 6px !important;
+  }
+
+  .hsk-cb-lang-chips-hint {
+    width: 100% !important;
+    justify-content: center !important;
+    margin-top: 6px !important;
+    margin-inline-start: 0 !important;
   }
 
   .hsk-cb-onboarding-head {
     justify-content: flex-end !important;
     margin-bottom: 12px !important;
-  }
-
-  .hsk-cb-hello {
-    font-size: clamp(26px, 6.8vw, 36px) !important;
-    font-weight: 600 !important;
-    line-height: 1.22 !important;
-    letter-spacing: -0.025em !important;
-  }
-
-  .hsk-cb-hello-lead {
-    font-size: 15px !important;
-    line-height: 1.45 !important;
-    color: var(--hsk-chat-muted, #71717a) !important;
-    margin-top: 4px !important;
   }
 
   .hsk-cb-doodles {

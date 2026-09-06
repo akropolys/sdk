@@ -11,6 +11,8 @@ export interface UseScoutsOptions {
 export interface UseScoutsReturn {
   scouts: Scout[];
   activeScouts: Scout[];
+  // Minutes shared by every active scout. Two scouts burn it twice as fast.
+  balance: number;
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
@@ -18,11 +20,14 @@ export interface UseScoutsReturn {
   pauseScout: (id: string) => Promise<void>;
   resumeScout: (id: string) => Promise<void>;
   cancelScout: (id: string) => Promise<void>;
+  addScoutMinutes: (id: string, minutes: number) => Promise<void>;
+  setAvatar: (id: string, avatar: string) => Promise<void>;
 }
 
 export function useScouts(options: UseScoutsOptions = {}): UseScoutsReturn {
   const client = useAkropolysContext();
   const [scouts, setScouts] = useState<Scout[]>([]);
+  const [balance, setBalance] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,6 +40,7 @@ export function useScouts(options: UseScoutsOptions = {}): UseScoutsReturn {
       setError(null);
       const res = await client.scouts.list({ status });
       setScouts(res.scouts || []);
+      setBalance(res.balance ?? 0);
     } catch (err: any) {
       setError(err?.message || 'Failed to fetch scouts');
     } finally {
@@ -127,6 +133,27 @@ export function useScouts(options: UseScoutsOptions = {}): UseScoutsReturn {
     [client]
   );
 
+  const addScoutMinutes = useCallback(
+    async (id: string, minutes: number): Promise<void> => {
+      const total = await client.scouts.addMinutes(id, minutes);
+      setScouts(prev => prev.map(s => (s.id === id ? { ...s, dedicatedMinutes: total } : s)));
+    },
+    [client]
+  );
+
+  const setAvatar = useCallback(
+    async (id: string, avatar: string): Promise<void> => {
+      setScouts(prev => prev.map(s => (s.id === id ? { ...s, avatar } : s)));
+      try {
+        await client.scouts.setAvatar(id, avatar);
+      } catch (err) {
+        fetchScouts().catch(() => {});
+        throw err;
+      }
+    },
+    [client, fetchScouts]
+  );
+
   const pauseScout = useCallback(
     async (id: string): Promise<void> => {
       setScouts(prev => prev.map(s => (s.id === id ? { ...s, status: 'paused' } : s)));
@@ -171,6 +198,7 @@ export function useScouts(options: UseScoutsOptions = {}): UseScoutsReturn {
   return {
     scouts,
     activeScouts,
+    balance,
     loading,
     error,
     refetch: fetchScouts,
@@ -178,5 +206,7 @@ export function useScouts(options: UseScoutsOptions = {}): UseScoutsReturn {
     pauseScout,
     resumeScout,
     cancelScout,
+    addScoutMinutes,
+    setAvatar,
   };
 }

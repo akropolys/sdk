@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import type { ScriptFont, AkropolysTheme } from '@akropolys/sdk';
 import { useAkropolysContext } from '@akropolys/sdk';
 import { useScriptFontFace, preloadScriptFont } from '../../../utils/hostFont';
-import { cachedBaseFont } from '../../../utils/chromeWarm';
+import { cachedBaseFont, readyBaseFont } from '../../../utils/chromeWarm';
 import { DEFAULT_UI_STRINGS, getLoadingMeta, type UIStringKey } from '../types';
 import BUILTIN_LOCALES from '../locales.json';
 
@@ -101,7 +101,8 @@ export function useScriptFont({ shopperLanguage, theme }: UseScriptFontOptions) 
     return getBuiltinLocale(shopperLanguage)?.bcp47 || '';
   });
   const [scriptFont, setScriptFont] = useState<ScriptFont | null>(null);
-  const [baseFont, setBaseFont] = useState<ScriptFont | null>(null);
+  const [baseFont, setBaseFont] = useState<ScriptFont | null>(() => readyBaseFont(client));
+  const [baseFontReady, setBaseFontReady] = useState<boolean>(() => !!readyBaseFont(client));
 
   useEffect(() => {
     if (!shopperLanguage) {
@@ -114,11 +115,15 @@ export function useScriptFont({ shopperLanguage, theme }: UseScriptFontOptions) 
     }
     const builtin = getBuiltinLocale(shopperLanguage);
     const meta = getLoadingMeta(shopperLanguage);
+    const lLower = shopperLanguage.trim().toLowerCase();
+    const isUrdu = lLower === 'urdu' || lLower === 'ur' || shopperLanguage.trim() === 'اردو';
+    const needsWebFont = isUrdu || !builtin;
+
     if (builtin) {
       setChromeStrings(builtin.strings);
       setIsRTL(builtin.dir === 'rtl');
       setSpeechLang(builtin.bcp47);
-      setChromeReady(true);
+      setChromeReady(!needsWebFont);
     } else {
       if (meta?.rtl) setIsRTL(true);
       setChromeReady(false);
@@ -130,14 +135,14 @@ export function useScriptFont({ shopperLanguage, theme }: UseScriptFontOptions) 
         const res = await client.getUIStrings?.(shopperLanguage, DEFAULT_UI_STRINGS);
         if (!cancelled && res?.complete) {
           setChromeCurated(res.curated !== false);
-          setChromeStrings(prev => ({ ...(builtin?.strings || {}), ...res.strings }));
+          setChromeStrings(prev => ({ ...res.strings, ...(builtin?.strings || {}) }));
           setIsRTL(res.dir === 'rtl');
           setSpeechLang(res.bcp47 || builtin?.bcp47 || '');
           try { localStorage.setItem(dirKey, res.dir); } catch {  }
-          // fire-and-forget: the face declares font-display:swap, so blocking the
-          // chrome on a ~160KB woff2 only delays text that would render anyway
-          if (res.font) void preloadScriptFont(res.font, 250);
-          setScriptFont(res.font ?? null);
+          if (res.font) {
+            await preloadScriptFont(res.font, 1200);
+            if (!cancelled) setScriptFont(res.font);
+          }
         }
       } catch {
         /* Builtin or defaults */
@@ -156,6 +161,7 @@ export function useScriptFont({ shopperLanguage, theme }: UseScriptFontOptions) 
       } catch {
 
       }
+      if (!cancelled) setBaseFontReady(true);
     })();
     return () => { cancelled = true; };
   }, [client]);
@@ -279,6 +285,7 @@ export function useScriptFont({ shopperLanguage, theme }: UseScriptFontOptions) 
     fontStack,
     isNonLatin,
     hostFontCovers,
+    baseFontReady,
     t,
     tNode,
   };

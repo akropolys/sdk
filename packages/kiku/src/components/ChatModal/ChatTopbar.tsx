@@ -3,11 +3,13 @@ import { useT } from './types';
 import { ChevronLeftIcon, CloseIcon } from './icons';
 import { THEMES, type ThemeId } from './themes';
 import { KikuAvatar, type KikuState } from '../KikuAvatar';
-import { ScoutControlBar } from '../ScoutDock';
+import { ScoutRail } from '../Scouts';
+import { SoundToggle } from './components/SoundToggle';
 import { cn } from '../../utils/cn';
 
 export interface ChatTopbarProps {
   title: string;
+  logo?: string;
   hasMessages: boolean;
   avatarState?: KikuState;
   unread?: boolean;
@@ -16,14 +18,14 @@ export interface ChatTopbarProps {
   themeMenuClosing?: boolean;
   isNarrow?: boolean;
   currentTheme?: ThemeId;
-  activeScoutCount?: number;
-  scoutDockOpen?: boolean;
-  onToggleScoutDock?: () => void;
   onJumpToLatest?: () => void;
   onReset: () => void;
   onClose: () => void;
   onToggleThemeMenu?: () => void;
   onSelectTheme?: (theme: ThemeId) => void;
+  themeAttr?: string;
+  onScoutNew?: (avatar: string) => void;
+  onScoutAsk?: (scout: any) => void;
 }
 
 const RadarIcon = ({ size = 15 }: { size?: number }) => (
@@ -36,6 +38,7 @@ const RadarIcon = ({ size = 15 }: { size?: number }) => (
 
 export function ChatTopbar({
   title,
+  logo,
   hasMessages,
   avatarState = 'idle',
   unread = false,
@@ -44,14 +47,14 @@ export function ChatTopbar({
   themeMenuClosing = false,
   isNarrow = false,
   currentTheme = 'dark',
-  activeScoutCount = 0,
-  scoutDockOpen = false,
-  onToggleScoutDock,
   onJumpToLatest,
   onReset,
   onClose,
   onToggleThemeMenu,
   onSelectTheme,
+  themeAttr,
+  onScoutNew,
+  onScoutAsk,
 }: ChatTopbarProps) {
   const tr = useT();
   const [isImpacting, setIsImpacting] = React.useState(false);
@@ -61,8 +64,6 @@ export function ChatTopbar({
   const longPressTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const isLongPressRef = React.useRef(false);
   const touchStartTimeRef = React.useRef(0);
-
-
 
   const startPress = React.useCallback(() => {
     isLongPressRef.current = false;
@@ -148,7 +149,7 @@ export function ChatTopbar({
         onClick={handleClick}
         role="button"
         tabIndex={0}
-        aria-label={awayFromBottom ? tr('jumpToLatest') : 'kiku (tap for scouts and themes)'}
+        aria-label={awayFromBottom ? tr('jumpToLatest') : `${title} (tap for scouts and themes)`}
       >
         <KikuAvatar
           state={avatarState}
@@ -158,7 +159,11 @@ export function ChatTopbar({
           onImpact={handleImpact}
           triggerRef={triggerRef}
         />
-        <span className="hsk-cb-topbar-name">{title}</span>
+        {logo ? (
+          <img className="hsk-cb-topbar-logo" src={logo} alt={title} />
+        ) : (
+          <span className="hsk-cb-topbar-name">{title}</span>
+        )}
       </div>
 
       {/* Right Column: Actions (desktop exit button) */}
@@ -201,8 +206,19 @@ export function ChatTopbar({
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
         >
-          <ScoutControlBar />
-          <div className="hsk-cb-theme-2x2-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
+          <ScoutRail
+            className="hsk-cb-scout-tray"
+            compact
+            themeAttr={themeAttr}
+            onNew={onScoutNew}
+            onAsk={onScoutAsk}
+          />
+
+          <SoundToggle className="hsk-cb-sound-pill--tray" />
+
+          <div className="hsk-cb-theme-block">
+            <span className="hsk-cb-theme-vlabel" aria-hidden="true">Themes</span>
+            <div className="hsk-cb-theme-2x2-grid">
             {THEMES.map(({ id, label, Icon }) => (
               <button
                 key={id}
@@ -213,7 +229,8 @@ export function ChatTopbar({
                 <Icon />
                 <span>{label}</span>
               </button>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       )}

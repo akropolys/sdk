@@ -1,19 +1,14 @@
 
 export { SearchBar } from './components/SearchBar';
 export type { SearchBarProps } from './components/SearchBar';
-export { ChatWidget, ChatWidget as KikuChat } from './components/ChatWidget';
-export type { ChatWidgetProps, ChatWidgetProps as KikuChatProps } from './components/ChatWidget';
 export { KikuButton } from './components/KikuButton';
 export type { KikuButtonProps } from './components/KikuButton';
 export { Sparkle } from './components/Sparkle';
 
-
-export { VoiceButton } from './components/VoiceButton';
-export type { VoiceButtonProps } from './components/VoiceButton';
 export { VisualSearch } from './components/VisualSearch';
 export type { VisualSearchProps } from './components/VisualSearch';
-export { ScoutDock, ScoutControlBar } from './components/ScoutDock';
-export type { ScoutDockProps, ScoutControlBarProps } from './components/ScoutDock';
+export { ScoutRail, ScoutCharacter } from './components/Scouts';
+export type { ScoutRailProps, ScoutCharacterProps } from './components/Scouts';
 
 export {
   normalizeShopifyProduct,
@@ -22,4 +17,3 @@ export {
   initKiku,
 } from './shopify';
 export type { ShopifyProduct, StandaloneConfig } from './shopify';
-

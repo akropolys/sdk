@@ -21,8 +21,6 @@ export function ChromeLoading({
         </h2>
       </div>
 
-      {/* Indeterminate on purpose: the translation is all-or-nothing, so a
-          filling bar would be inventing progress it cannot know. */}
       <div className="hsk-cb-chrome-progress" role="progressbar" aria-label={meta.preparing}>
         <div className="hsk-cb-chrome-progress-track" />
       </div>
