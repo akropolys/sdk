@@ -5811,6 +5811,9 @@
   flex: 1 1 auto !important;
 }
 
+/* The context refused to start - the switch says so rather than staying silent. */
+.hsk-cb-sound-pill.is-blocked { color: #ef4444 !important; opacity: 1 !important; }
+
 .hsk-sp-btn {
   --hsk-primary: var(--chat-primary-color, #ff6a33);
   display: inline-flex;

@@ -20,6 +20,12 @@ export function setSoundsEnabled(on: boolean): void {
 
 export function primeChimes(): void {
   if (typeof window === 'undefined') return;
+  // Without this iOS routes Web Audio through the ambient session, which the
+  // hardware ring/silent switch mutes outright. Safari 16.4+ / iOS 17.
+  try {
+    const session = (navigator as any).audioSession;
+    if (session && session.type !== 'playback') session.type = 'playback';
+  } catch {  }
   if (ctx) {
     if (ctx.state === 'suspended') ctx.resume().catch(() => {});
     return;
@@ -29,7 +35,7 @@ export function primeChimes(): void {
   try {
     ctx = new AC({ latencyHint: 'interactive' });
     master = ctx.createGain();
-    master.gain.value = 0.11;
+    master.gain.value = 0.34;
     master.connect(ctx.destination);
     // A context built inside the gesture still starts suspended on iOS, and
     // resuming alone is not enough - it stays muted until something has
@@ -105,7 +111,43 @@ function pitchFor(seed: string): number {
   return ROOT * Math.pow(2, step / 12 + octave);
 }
 
-export type ChimeEvent = 'reply' | 'scout' | 'interrupt' | 'pin';
+function squelch(at: number, gain: number): void {
+  if (!ctx || !master) return;
+  const dur = 0.16;
+  const n = Math.floor(ctx.sampleRate * dur);
+  const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+
+  const bp = ctx.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.Q.value = 7;
+  bp.frequency.setValueAtTime(2200, at);
+  bp.frequency.exponentialRampToValueAtTime(320, at + dur);
+
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, at);
+  g.gain.exponentialRampToValueAtTime(gain, at + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+
+  src.connect(bp);
+  bp.connect(g);
+  g.connect(master);
+  src.start(at);
+  src.stop(at + dur + 0.02);
+}
+
+/** 'off' | 'unsupported' | AudioContext state - so a silent phone can say why. */
+export function chimeState(): string {
+  if (!soundsEnabled()) return 'off';
+  if (!ctx) return 'unsupported';
+  return ctx.state;
+}
+
+export type ChimeEvent = 'reply' | 'scout' | 'interrupt' | 'pin' | 'send';
 
 /** seed varies the pitch within an event - pass a scout's species id. */
 /** force plays even while muted - the toggle has to be able to demonstrate itself. */
@@ -129,6 +171,10 @@ export function chime(event: ChimeEvent, seed?: string, force = false): void {
     }
     case 'interrupt':
       droplet(t, 520, 0.62, 0.17, 0.4);
+      break;
+    case 'send':
+      squelch(t, 0.3);
+      droplet(t + 0.012, 300, 1.35, 0.11, 0.3);
       break;
     case 'pin':
       tick(t, 0.35);

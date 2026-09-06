@@ -5360,3 +5360,6 @@
 .hsk-cb-topbar-ooze-menu .hsk-cb-theme-2x2-grid {
   flex: 1 1 auto !important;
 }
+
+/* The context refused to start - the switch says so rather than staying silent. */
+.hsk-cb-sound-pill.is-blocked { color: #ef4444 !important; opacity: 1 !important; }

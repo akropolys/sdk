@@ -236,6 +236,8 @@ export function ChatModal({
     const toSend = extraAttachments ?? attachments;
     if ((!raw && toSend.length === 0) || !chromeReady || queuedMessage) return;
 
+    chime('send');
+
     if (awaitingName) {
       if (!raw) return;
       const name = extractName(raw) || raw.slice(0, 40);

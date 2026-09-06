@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { cn } from '../../../utils/cn';
-import { chime, soundsEnabled, setSoundsEnabled } from '../../../utils/chime';
+import { chime, chimeState, soundsEnabled, setSoundsEnabled } from '../../../utils/chime';
 
 export function SoundToggle({ className = '', compact = false }: { className?: string; compact?: boolean }) {
   const [on, setOn] = useState(() => soundsEnabled());
+  const [state, setState] = useState('');
 
   const toggle = () => {
     const next = !on;
@@ -11,17 +12,18 @@ export function SoundToggle({ className = '', compact = false }: { className?: s
     setOn(next);
     // Both directions answer, or the control gives no sign it did anything.
     chime(next ? 'scout' : 'interrupt', 'preview', true);
+    setState(chimeState());
   };
 
   return (
     <button
       type="button"
-      className={cn('hsk-cb-sound-pill', compact && 'is-compact', on && 'is-on', className)}
+      className={cn('hsk-cb-sound-pill', compact && 'is-compact', on && 'is-on', state && state !== 'running' && state !== 'off' && 'is-blocked', className)}
       onClick={toggle}
       role="switch"
       aria-checked={on}
       aria-label={on ? 'Mute notification sounds' : 'Unmute notification sounds'}
-      title={on ? 'Sounds on' : 'Sounds off'}
+      title={state && state !== 'running' && state !== 'off' ? `Sounds blocked (${state})` : on ? 'Sounds on' : 'Sounds off'}
     >
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M11 5 6 9H3v6h3l5 4V5Z" />
