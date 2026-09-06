@@ -5363,3 +5363,9 @@
 
 /* The context refused to start - the switch says so rather than staying silent. */
 .hsk-cb-sound-pill.is-blocked { color: #ef4444 !important; opacity: 1 !important; }
+
+/* vertical-rl plus a 180 flip reads bottom-to-top, which is right in LTR and
+   upside down once the panel is RTL. */
+.hsk-cb-panel[dir="rtl"] .hsk-cb-topbar-ooze-menu .hsk-cb-theme-vlabel {
+  transform: none;
+}

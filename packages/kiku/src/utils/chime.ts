@@ -35,7 +35,7 @@ export function primeChimes(): void {
   try {
     ctx = new AC({ latencyHint: 'interactive' });
     master = ctx.createGain();
-    master.gain.value = 0.34;
+    master.gain.value = 0.28;
     master.connect(ctx.destination);
     // A context built inside the gesture still starts suspended on iOS, and
     // resuming alone is not enough - it stays muted until something has
@@ -111,34 +111,6 @@ function pitchFor(seed: string): number {
   return ROOT * Math.pow(2, step / 12 + octave);
 }
 
-function squelch(at: number, gain: number): void {
-  if (!ctx || !master) return;
-  const dur = 0.16;
-  const n = Math.floor(ctx.sampleRate * dur);
-  const buf = ctx.createBuffer(1, n, ctx.sampleRate);
-  const d = buf.getChannelData(0);
-  for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
-
-  const src = ctx.createBufferSource();
-  src.buffer = buf;
-
-  const bp = ctx.createBiquadFilter();
-  bp.type = 'bandpass';
-  bp.Q.value = 7;
-  bp.frequency.setValueAtTime(2200, at);
-  bp.frequency.exponentialRampToValueAtTime(320, at + dur);
-
-  const g = ctx.createGain();
-  g.gain.setValueAtTime(0.0001, at);
-  g.gain.exponentialRampToValueAtTime(gain, at + 0.02);
-  g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
-
-  src.connect(bp);
-  bp.connect(g);
-  g.connect(master);
-  src.start(at);
-  src.stop(at + dur + 0.02);
-}
 
 /** 'off' | 'unsupported' | AudioContext state - so a silent phone can say why. */
 export function chimeState(): string {
@@ -173,8 +145,9 @@ export function chime(event: ChimeEvent, seed?: string, force = false): void {
       droplet(t, 520, 0.62, 0.17, 0.4);
       break;
     case 'send':
-      squelch(t, 0.3);
-      droplet(t + 0.012, 300, 1.35, 0.11, 0.3);
+      // Under everything else on purpose: a send is a confirmation you half
+      // notice, not an event that asks for you.
+      droplet(t, 300, 1.16, 0.1, 0.22);
       break;
     case 'pin':
       tick(t, 0.35);
