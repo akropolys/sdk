@@ -214,10 +214,12 @@ export function ChatTopbar({
             onAsk={onScoutAsk}
           />
 
-          <SoundToggle className="hsk-cb-sound-pill--tray" />
-
           <div className="hsk-cb-theme-block">
-            <span className="hsk-cb-theme-vlabel" aria-hidden="true">Themes</span>
+            <div className="hsk-cb-tray-aside">
+              <SoundToggle compact />
+              <span className="hsk-cb-tray-rule" aria-hidden="true" />
+              <span className="hsk-cb-theme-vlabel" aria-hidden="true">Themes</span>
+            </div>
             <div className="hsk-cb-theme-2x2-grid">
             {THEMES.map(({ id, label, Icon }) => (
               <button

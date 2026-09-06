@@ -31,6 +31,15 @@ export function primeChimes(): void {
     master = ctx.createGain();
     master.gain.value = 0.11;
     master.connect(ctx.destination);
+    // A context built inside the gesture still starts suspended on iOS, and
+    // resuming alone is not enough - it stays muted until something has
+    // actually played, so this pushes one silent frame through.
+    const b = ctx.createBuffer(1, 1, ctx.sampleRate);
+    const s = ctx.createBufferSource();
+    s.buffer = b;
+    s.connect(ctx.destination);
+    s.start(0);
+    ctx.resume().catch(() => {});
   } catch {
     ctx = null;
   }
@@ -99,8 +108,9 @@ function pitchFor(seed: string): number {
 export type ChimeEvent = 'reply' | 'scout' | 'interrupt' | 'pin';
 
 /** seed varies the pitch within an event - pass a scout's species id. */
-export function chime(event: ChimeEvent, seed?: string): void {
-  if (!soundsEnabled()) return;
+/** force plays even while muted - the toggle has to be able to demonstrate itself. */
+export function chime(event: ChimeEvent, seed?: string, force = false): void {
+  if (!force && !soundsEnabled()) return;
   primeChimes();
   if (!ctx || !master || ctx.state === 'closed') return;
   if (ctx.state === 'suspended') ctx.resume().catch(() => {});

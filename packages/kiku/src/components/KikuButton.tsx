@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { primeChimes } from '../utils/chime';
 import { getShadowContainer } from '../utils/shadowRoot';
 import type { AkropolysTheme, ChatSource } from '@akropolys/sdk';
 import { useAkropolysContext } from '@akropolys/sdk';
@@ -109,6 +110,9 @@ export function KikuButton({
       height: b.height,
       borderRadius: br,
     });
+    // The launcher tap is the first gesture in the widget, and iOS will not
+    // unlock an AudioContext outside one.
+    primeChimes();
     setOpen(true);
   }, [warmShadow]);
 

@@ -2,21 +2,21 @@ import React, { useState } from 'react';
 import { cn } from '../../../utils/cn';
 import { chime, soundsEnabled, setSoundsEnabled } from '../../../utils/chime';
 
-export function SoundToggle({ className = '' }: { className?: string }) {
+export function SoundToggle({ className = '', compact = false }: { className?: string; compact?: boolean }) {
   const [on, setOn] = useState(() => soundsEnabled());
 
   const toggle = () => {
     const next = !on;
     setSoundsEnabled(next);
     setOn(next);
-    // Turning it on should demonstrate what you just turned on.
-    if (next) chime('scout', 'preview');
+    // Both directions answer, or the control gives no sign it did anything.
+    chime(next ? 'scout' : 'interrupt', 'preview', true);
   };
 
   return (
     <button
       type="button"
-      className={cn('hsk-cb-sound-pill', on && 'is-on', className)}
+      className={cn('hsk-cb-sound-pill', compact && 'is-compact', on && 'is-on', className)}
       onClick={toggle}
       role="switch"
       aria-checked={on}
@@ -37,7 +37,7 @@ export function SoundToggle({ className = '' }: { className?: string }) {
           </>
         )}
       </svg>
-      <span>{on ? 'Sounds' : 'Muted'}</span>
+      {!compact && <span>{on ? 'Sounds' : 'Muted'}</span>}
     </button>
   );
 }

@@ -5309,3 +5309,54 @@
   align-self: flex-start;
   margin-bottom: 8px;
 }
+
+.hsk-cb-topbar-ooze-menu .hsk-cb-tray-aside {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.hsk-cb-topbar-ooze-menu .hsk-cb-tray-rule {
+  width: 13px;
+  height: 1px;
+  background: var(--hsk-chat-muted, #71717a);
+  opacity: 0.25;
+}
+
+.hsk-cb-sound-pill.is-compact {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  gap: 0;
+  justify-content: center;
+  border-radius: 9px;
+}
+
+/* The aside must cost no more width than the caption it joined, or the
+   content-sized theme pills lose a column and re-wrap. */
+.hsk-cb-topbar-ooze-menu .hsk-cb-tray-aside {
+  width: 14px;
+  flex: 0 0 14px;
+}
+
+.hsk-cb-topbar-ooze-menu .hsk-cb-tray-aside .hsk-cb-sound-pill {
+  width: 14px;
+  height: 14px;
+  border: none;
+  background: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-radius: 0;
+  opacity: 0.45;
+}
+
+.hsk-cb-topbar-ooze-menu .hsk-cb-tray-aside .hsk-cb-sound-pill.is-on { opacity: 0.75; }
+.hsk-cb-topbar-ooze-menu .hsk-cb-tray-aside .hsk-cb-sound-pill:hover { transform: none; }
+.hsk-cb-topbar-ooze-menu .hsk-cb-tray-aside .hsk-cb-sound-pill svg { width: 12px; height: 12px; }
+
+.hsk-cb-topbar-ooze-menu .hsk-cb-theme-2x2-grid {
+  flex: 1 1 auto !important;
+}
