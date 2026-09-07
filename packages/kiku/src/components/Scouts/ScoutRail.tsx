@@ -130,6 +130,7 @@ export function ScoutRail({
   const [typing, setTyping] = useState(false);
   const [draft, setDraft] = useState("");
   const [buying, setBuying] = useState(false);
+  const [buyErr, setBuyErr] = useState<string | null>(null);
 
   const gooId = `hsk-scout-goo-${useId().replace(/:/g, "")}`;
 
@@ -689,6 +690,7 @@ export function ScoutRail({
             }
             if (!client || !picked || buying) return;
             setBuying(true);
+            setBuyErr(null);
             client.scouts
               .checkout({
                 minutes,
@@ -698,7 +700,10 @@ export function ScoutRail({
               .then(({ url }) => {
                 window.location.assign(url);
               })
-              .catch(() => setBuying(false));
+              .catch((e: any) => {
+                setBuying(false);
+                setBuyErr(e?.message || "Checkout is unavailable right now.");
+              });
           }}
         >
           {buying
@@ -709,6 +714,8 @@ export function ScoutRail({
                 ? "Buy time"
                 : "Pick an avatar"}
         </button>
+
+        {buyErr && <div className="hsk-cb-error">{buyErr}</div>}
       </div>
     </div>
   );
