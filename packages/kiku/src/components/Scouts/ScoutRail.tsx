@@ -24,7 +24,7 @@ export interface ScoutRailProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-const MIN_MINUTES = 15;
+const MIN_MINUTES = 50;
 const BASE_MAX = 480;
 const EXTEND_BY = 480;
 const CEILING = 2880;
@@ -122,6 +122,7 @@ export function ScoutRail({
   const pointerDrag = useRef(false);
   const [ceiling, setCeiling] = useState(BASE_MAX);
   const [priceUSD, setPriceUSD] = useState(0);
+  const [floorMinutes, setFloorMinutes] = useState(MIN_MINUTES);
   const [picked, setPicked] = useState<string | null>(null);
   const [swapping, setSwapping] = useState<string | null>(null);
   const [roster, setRoster] = useState(false);
@@ -163,7 +164,7 @@ export function ScoutRail({
   const sharing =
     visible.filter((s) => s.status === "active" && s.dedicatedMinutes <= 0)
       .length > 1;
-  const pct = ((minutes - MIN_MINUTES) / (ceiling - MIN_MINUTES)) * 100;
+  const pct = ((minutes - floorMinutes) / (ceiling - floorMinutes)) * 100;
   const runway = activeCount > 0 ? Math.floor(balance / activeCount) : balance;
 
   const firedRef = useRef<Set<string>>(new Set());
@@ -211,7 +212,14 @@ export function ScoutRail({
       client.scouts
         .quote(minutes)
         .then((q) => {
-          if (!stale) setPriceUSD(q.priceUSD);
+          if (stale) return;
+          setPriceUSD(q.priceUSD);
+          const floor = q.minChargeableMinutes || MIN_MINUTES;
+          setFloorMinutes(floor);
+          if (minutesRef.current < floor) {
+            minutesRef.current = floor;
+            setMinutes(floor);
+          }
         })
         .catch(() => {});
     }, 90);
@@ -247,7 +255,7 @@ export function ScoutRail({
   const commitTyped = () => {
     const v = Number(draft);
     if (!Number.isNaN(v) && draft.trim() !== "") {
-      const next = Math.min(CEILING, Math.max(MIN_MINUTES, Math.round(v)));
+      const next = Math.min(CEILING, Math.max(floorMinutes, Math.round(v)));
       setMinutes(next);
       minutesRef.current = next;
       setCeiling(
@@ -621,7 +629,7 @@ export function ScoutRail({
             <input
               className="hsk-cb-dial-input"
               type="range"
-              min={MIN_MINUTES}
+              min={floorMinutes}
               max={ceiling}
               step={5}
               value={minutes}
@@ -644,7 +652,7 @@ export function ScoutRail({
               <input
                 className="hsk-cb-scout-mins-input"
                 type="number"
-                min={MIN_MINUTES}
+                min={floorMinutes}
                 max={CEILING}
                 value={draft}
                 autoFocus

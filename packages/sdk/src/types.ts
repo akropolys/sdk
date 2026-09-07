@@ -230,6 +230,9 @@ export interface ScoutQuote {
   minutes: number;
   priceUSD: number;
   unitPriceUSD: number;
+  // The gateway will not take less than minChargeUSD, whatever the quote says.
+  minChargeableMinutes: number;
+  minChargeUSD: number;
 }
 
 export interface ScoutCheckout {
