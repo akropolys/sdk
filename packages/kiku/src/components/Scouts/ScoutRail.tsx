@@ -103,7 +103,7 @@ export function ScoutRail({
   compact = false,
 }: ScoutRailProps) {
   const client = useAkropolysContext();
-  const { scouts, balance, setAvatar, cancelScout } = useScouts();
+  const { scouts, balance, setAvatar, cancelScout, refetch } = useScouts();
 
   const [openState, setOpenState] = useState(false);
   const open = openProp ?? openState;
@@ -129,8 +129,25 @@ export function ScoutRail({
   const [dragging, setDragging] = useState(false);
   const [typing, setTyping] = useState(false);
   const [draft, setDraft] = useState("");
+  const [buying, setBuying] = useState(false);
 
   const gooId = `hsk-scout-goo-${useId().replace(/:/g, "")}`;
+
+  // An idle avatar minted by the webhook never starts useScouts' own polling.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("scout_paid")) return;
+    url.searchParams.delete("scout_paid");
+    window.history.replaceState({}, "", url.toString());
+    let tries = 0;
+    const timer = setInterval(() => {
+      refetch().catch(() => {});
+      if (++tries >= 6) clearInterval(timer);
+    }, 2000);
+    refetch().catch(() => {});
+    return () => clearInterval(timer);
+  }, [refetch]);
 
   const idle = scouts.filter((s) => s.status === "idle");
   const paidAvatars = new Set(idle.map((s) => s.avatar).filter(Boolean));
@@ -661,16 +678,36 @@ export function ScoutRail({
         <button
           type="button"
           className="hsk-cb-scout-buy-go"
-          disabled={waiting ? false : !picked}
+          disabled={buying || (waiting ? false : !picked)}
           onClick={() => {
-            if (!waiting) return;
-            setRoster(false);
-            setPicked(null);
-            close();
-            onNew?.(picked ?? "");
+            if (waiting) {
+              setRoster(false);
+              setPicked(null);
+              close();
+              onNew?.(picked ?? "");
+              return;
+            }
+            if (!client || !picked || buying) return;
+            setBuying(true);
+            client.scouts
+              .checkout({
+                minutes,
+                avatar: picked,
+                returnUrl: window.location.href,
+              })
+              .then(({ url }) => {
+                window.location.assign(url);
+              })
+              .catch(() => setBuying(false));
           }}
         >
-          {waiting ? "Send it out" : picked ? "Buy time" : "Pick an avatar"}
+          {buying
+            ? "Opening checkout…"
+            : waiting
+              ? "Send it out"
+              : picked
+                ? "Buy time"
+                : "Pick an avatar"}
         </button>
       </div>
     </div>

@@ -164,6 +164,7 @@ export class AkropolysClient {
     resume: (id: string, kikuKey?: string, signal?: AbortSignal) => this.api.resumeScout(id, kikuKey, signal),
     cancel: (id: string, kikuKey?: string, signal?: AbortSignal) => this.api.cancelScout(id, kikuKey, signal),
     quote: (minutes: number, signal?: AbortSignal) => this.api.scoutQuote(minutes, signal),
+    checkout: (input: { minutes: number; avatar?: string; returnUrl?: string; siteId?: string }, signal?: AbortSignal) => this.api.scoutCheckout(input, signal),
     setAvatar: (id: string, avatar: string, kikuKey?: string, signal?: AbortSignal) => this.api.setScoutAvatar(id, avatar, kikuKey, signal),
     balance: (siteId?: string, kikuKey?: string, signal?: AbortSignal) => this.api.scoutBalance(siteId, kikuKey, signal),
     addMinutes: (id: string, minutes: number, kikuKey?: string, signal?: AbortSignal) => this.api.addScoutMinutes(id, minutes, kikuKey, signal),

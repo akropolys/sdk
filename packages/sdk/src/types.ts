@@ -232,6 +232,12 @@ export interface ScoutQuote {
   unitPriceUSD: number;
 }
 
+export interface ScoutCheckout {
+  url: string;
+  minutes: number;
+  priceUSD: number;
+}
+
 export interface ScoutEvent {
   id: string;
   scoutId: string;

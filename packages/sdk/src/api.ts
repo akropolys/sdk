@@ -9,6 +9,7 @@ import {
   CreateScoutInput,
   ListScoutsResponse,
   ScoutQuote,
+  ScoutCheckout,
   GetScoutResponse,
   ScoutActionResponse,
 } from './types';
@@ -533,6 +534,15 @@ export class AkropolysAPI {
 
   async scoutQuote(minutes: number, signal?: AbortSignal): Promise<ScoutQuote> {
     return this.get<ScoutQuote>(`/scouts/quote?minutes=${minutes}`, {}, signal);
+  }
+
+  async scoutCheckout(input: { minutes: number; avatar?: string; returnUrl?: string; siteId?: string }, signal?: AbortSignal): Promise<ScoutCheckout> {
+    return this.post<ScoutCheckout>('/scouts/checkout', {
+      siteId: input.siteId || this.siteId,
+      minutes: input.minutes,
+      avatar: input.avatar || '',
+      returnUrl: input.returnUrl || '',
+    }, 0, signal);
   }
 
   async setScoutAvatar(id: string, avatar: string, kikuKey?: string, signal?: AbortSignal): Promise<string> {
