@@ -691,23 +691,26 @@ export function ScoutRail({
             if (!client || !picked || buying) return;
             setBuying(true);
             setBuyErr(null);
-            client.scouts
-              .checkout({
-                minutes,
-                avatar: picked,
-                returnUrl: window.location.href,
-              })
-              .then(({ url }) => {
-                window.location.assign(url);
-              })
-              .catch((e: any) => {
-                setBuying(false);
-                setBuyErr(e?.message || "Checkout is unavailable right now.");
-              });
+            const fail = (e: any) => {
+              setBuying(false);
+              setBuyErr(e?.message || "Checkout is unavailable right now.");
+            };
+            try {
+              client.scouts
+                .checkout({
+                  minutes,
+                  avatar: picked,
+                  returnUrl: window.location.href,
+                })
+                .then(({ url }) => window.location.assign(url))
+                .catch(fail);
+            } catch (e) {
+              fail(e);
+            }
           }}
         >
           {buying
-            ? "Opening checkout…"
+            ? "Opening checkoutâ€¦"
             : waiting
               ? "Send it out"
               : picked
