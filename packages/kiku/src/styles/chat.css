@@ -1140,6 +1140,7 @@
 }
 
 .hsk-cb-msgs {
+  position: relative;
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
@@ -1156,6 +1157,12 @@
   -ms-overflow-style: none;
   mask-image: linear-gradient(to bottom, transparent 0px, #000000 8px, #000000 100%);
   -webkit-mask-image: linear-gradient(to bottom, transparent 0px, #000000 8px, #000000 100%);
+}
+
+.hsk-cb-msgs-spacer {
+  flex: none;
+  height: 1px;
+  pointer-events: none;
 }
 
 .hsk-cb-msgs > :first-child {

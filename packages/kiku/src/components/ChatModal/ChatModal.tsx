@@ -21,6 +21,7 @@ import {
 } from './types';
 import { useScriptFont } from './hooks/useScriptFont';
 import { useChatScroll } from './hooks/useChatScroll';
+import { usePacedText } from './hooks/usePacedText';
 import { useKikuKey } from './hooks/useKikuKey';
 import { useChatCommands } from './hooks/useChatCommands';
 import { useVoiceController } from './hooks/useVoiceController';
@@ -397,7 +398,6 @@ export function ChatModal({
   const mobileThemeRef = useRef<HTMLDivElement>(null);
 
   const messageRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const bottomRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const gooId = `hsk-goo-${useId()}`;
 
@@ -432,6 +432,7 @@ export function ChatModal({
 
   const {
     msgsContainerRef,
+    spacerRef,
     lastExternalScrollRef,
     showJumpToBottom,
     scrollProgress,
@@ -439,7 +440,7 @@ export function ChatModal({
     unreadBelow,
     jumpToMessage,
     jumpToBottom,
-  } = useChatScroll({ messages, loading, messageRefs });
+  } = useChatScroll({ messages, loading, streaming, messageRefs });
 
   useDragToDismiss({
     panel: useCallback(() => panelRef.current, []),
@@ -634,9 +635,15 @@ export function ChatModal({
 
   const halted = (stopped || interrupted) && !loading && !streaming;
 
+  const tail = messages[messages.length - 1];
+  const pacedContent = usePacedText(
+    tail?.role === 'assistant' ? tail.content ?? '' : '',
+    loading || streaming,
+  );
+
   const displayMessages = React.useMemo(() => {
     const inFlight = loading || streaming;
-    return messages.filter((m, i) => {
+    const kept = messages.filter((m, i) => {
       if (m.role !== 'assistant') return true;
       const isLastMsg = i === messages.length - 1;
       if (isLastMsg && inFlight) return true;
@@ -644,7 +651,11 @@ export function ChatModal({
         (m.knowledgeImages?.length ?? 0) > 0 || (m.referencedIds?.length ?? 0) > 0;
       return hasBody;
     });
-  }, [messages, loading, streaming]);
+    const last = kept.length - 1;
+    if (!inFlight || last < 0 || kept[last].role !== 'assistant') return kept;
+    if (kept[last] !== messages[messages.length - 1]) return kept;
+    return kept.map((m, i) => (i === last ? { ...m, content: pacedContent } : m));
+  }, [messages, loading, streaming, pacedContent]);
 
   const timelineItems = React.useMemo(
     () => displayMessages
@@ -829,7 +840,7 @@ export function ChatModal({
                   retrying={retrying}
                   continueGenerating={continueGenerating}
                   t={t}
-                  bottomRef={bottomRef}
+                  spacerRef={spacerRef}
                   vizState={vizState}
                   setVizState={setVizState}
                   messages={messages}

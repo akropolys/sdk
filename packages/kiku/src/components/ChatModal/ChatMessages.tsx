@@ -49,7 +49,7 @@ export interface ChatMessagesProps {
   retrying?: boolean;
   continueGenerating: () => void;
   t: (key: UIStringKey, vars?: Record<string, string>) => string;
-  bottomRef: React.RefObject<HTMLDivElement | null>;
+  spacerRef: React.RefObject<HTMLDivElement | null>;
   vizState: Record<string, 'ok' | 'err'>;
   setVizState: React.Dispatch<React.SetStateAction<Record<string, 'ok' | 'err'>>>;
   messages: ChatMessage[];
@@ -98,7 +98,7 @@ export function ChatMessages({
   retrying,
   continueGenerating,
   t,
-  bottomRef,
+  spacerRef,
   vizState,
   setVizState,
   messages,
@@ -224,7 +224,7 @@ export function ChatMessages({
         </div>
       )}
 
-      <div ref={bottomRef as any} style={{ height: 1 }} />
+      <div ref={spacerRef as any} className="hsk-cb-msgs-spacer" />
     </>
   );
 }

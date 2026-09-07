@@ -1,13 +1,14 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import type { ChatMessage } from '@akropolys/sdk';
 
 interface UseChatScrollOptions {
   messages: ChatMessage[];
   loading: boolean;
+  streaming: boolean;
   messageRefs: React.MutableRefObject<(HTMLDivElement | null)[]>;
 }
 
-export function useChatScroll({ messages, loading, messageRefs }: UseChatScrollOptions) {
+export function useChatScroll({ messages, loading, streaming, messageRefs }: UseChatScrollOptions) {
   const msgsContainerRef = useRef<HTMLDivElement>(null);
   const lastExternalScrollRef = useRef(0);
   const [showJumpToBottom, setShowJumpToBottom] = useState(false);
@@ -17,6 +18,14 @@ export function useChatScroll({ messages, loading, messageRefs }: UseChatScrollO
   const glideScrollRef = useRef<((to: number) => void) | null>(null);
   const touchScrollingRef = useRef(false);
   const stickToBottomRef = useRef(true);
+  const spacerRef = useRef<HTMLDivElement>(null);
+  const anchorNodeRef = useRef<HTMLElement | null>(null);
+  const prevLenRef = useRef(messages.length);
+  const pendingAnchorRef = useRef(false);
+  const layoutAnchorRef = useRef<(mode: 'glide' | 'sync') => void>(() => {});
+  const followBottomRef = useRef<() => void>(() => {});
+  const syncScrollRef = useRef<((to: number) => void) | null>(null);
+  const releaseAnchorRef = useRef<() => void>(() => {});
   const [alertTick, setAlertTick] = useState(0);
   const awayEpochRef = useRef(0);
   const lastAlertKeyRef = useRef('');
@@ -59,7 +68,8 @@ export function useChatScroll({ messages, loading, messageRefs }: UseChatScrollO
 
     const measure = () => {
       queued = 0;
-      const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+      const spacerH = spacerRef.current?.offsetHeight ?? 0;
+      const distance = el.scrollHeight - spacerH - el.scrollTop - el.clientHeight;
       if (distance <= STICK_ON) {
         if (!stickToBottomRef.current) resetAlertArmingRef.current();
         stickToBottomRef.current = true;
@@ -75,7 +85,7 @@ export function useChatScroll({ messages, loading, messageRefs }: UseChatScrollO
       let active = 0;
       for (let i = 0; i < messageRefs.current.length; i++) {
         const node = messageRefs.current[i];
-        if (node && node.offsetTop - el.offsetTop <= line) active = i;
+        if (node && node.offsetTop <= line) active = i;
       }
       setActiveMsgIdx(active);
     };
@@ -87,8 +97,13 @@ export function useChatScroll({ messages, loading, messageRefs }: UseChatScrollO
 
     measure();
     el.addEventListener('scroll', onScroll, { passive: true });
-    const ro = new ResizeObserver(onScroll);
+    const ro = new ResizeObserver(() => { // rows resize after the commit (tables, images, fonts)
+      if (anchorNodeRef.current) layoutAnchorRef.current('sync');
+      else if (stickToBottomRef.current && !touchScrollingRef.current) followBottomRef.current();
+      onScroll();
+    });
     ro.observe(el);
+    for (const node of messageRefs.current) if (node) ro.observe(node);
     return () => {
       if (queued) cancelAnimationFrame(queued);
       el.removeEventListener('scroll', onScroll);
@@ -147,11 +162,60 @@ export function useChatScroll({ messages, loading, messageRefs }: UseChatScrollO
     return () => clearTimeout(t);
   }, [alertTick, clearAlert]);
 
+  const releaseAnchor = useCallback(() => {
+    pendingAnchorRef.current = false;
+    if (!anchorNodeRef.current) return;
+    anchorNodeRef.current = null;
+    if (spacerRef.current) spacerRef.current.style.height = '';
+  }, []);
+  releaseAnchorRef.current = releaseAnchor;
+
+  followBottomRef.current = () => {
+    const el = msgsContainerRef.current;
+    if (!el) return;
+    const bottom = el.scrollHeight - el.clientHeight;
+    if (syncScrollRef.current) syncScrollRef.current(bottom);
+    else el.scrollTop = bottom;
+  };
+
+  layoutAnchorRef.current = (mode) => {
+    const el = msgsContainerRef.current;
+    const spacer = spacerRef.current;
+    const node = anchorNodeRef.current;
+    const move = (to: number) => {
+      const fn = mode === 'sync' ? syncScrollRef.current : glideScrollRef.current;
+      if (fn) fn(to);
+      else if (el) el.scrollTop = to;
+    };
+    const followBottom = followBottomRef.current;
+
+    if (!el || !spacer || !node || !node.isConnected) {
+      releaseAnchor();
+      if (stickToBottomRef.current) followBottom();
+      return;
+    }
+
+    const padTop = parseFloat(getComputedStyle(el).paddingTop) || 0;
+    if (spacer.offsetHeight < el.clientHeight) spacer.style.height = `${el.clientHeight}px`; // defeat margin-top:auto before measuring
+    const top = Math.max(0, node.offsetTop - padTop);
+    const need = top + el.clientHeight - (el.scrollHeight - spacer.offsetHeight);
+
+    if (need <= 0) {
+      releaseAnchor();
+      stickToBottomRef.current = true;
+      followBottom();
+      return;
+    }
+
+    if (need !== spacer.offsetHeight) spacer.style.height = `${need}px`; // exact: integer scrollHeight flickers +-1 per token
+    move(top);
+  };
+
   const jumpToMessage = useCallback((idx: number) => {
     const el = msgsContainerRef.current;
     const node = messageRefs.current[idx];
     if (!el || !node) return;
-    const targetCenter = node.offsetTop - el.offsetTop - Math.max(0, (el.clientHeight - node.clientHeight) / 2);
+    const targetCenter = node.offsetTop - Math.max(0, (el.clientHeight - node.clientHeight) / 2);
     const to = Math.max(0, Math.min(el.scrollHeight - el.clientHeight, targetCenter));
     if (glideScrollRef.current) glideScrollRef.current(to);
     else el.scrollTo({ top: to, behavior: 'smooth' });
@@ -161,31 +225,46 @@ export function useChatScroll({ messages, loading, messageRefs }: UseChatScrollO
     const el = msgsContainerRef.current;
     if (!el) return;
     stickToBottomRef.current = true;
+    releaseAnchorRef.current();
     resetAlertArmingRef.current();
     const bottom = el.scrollHeight - el.clientHeight;
     if (glideScrollRef.current) glideScrollRef.current(bottom);
     else el.scrollTo({ top: bottom, behavior: 'smooth' });
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const container = msgsContainerRef.current;
     if (!container) return;
-    const raf = requestAnimationFrame(() => {
-      const before = container.scrollTop;
-      if (!stickToBottomRef.current) {
-        markUnread();
-        notifyNewBelow(messages.length);
-      } else {
-        if (!touchScrollingRef.current) {
-          const bottom = container.scrollHeight - container.clientHeight;
-          if (glideScrollRef.current) { glideScrollRef.current(bottom); return; }
-          container.scrollTop = container.scrollHeight;
-        }
+
+    const added = messages.slice(prevLenRef.current);
+    prevLenRef.current = messages.length;
+    if (added.some(m => m.role === 'user')) {
+      stickToBottomRef.current = true;
+      resetAlertArmingRef.current();
+      anchorNodeRef.current = null;
+      pendingAnchorRef.current = true;
+    }
+
+    if (pendingAnchorRef.current) {
+      pendingAnchorRef.current = false;
+      for (let i = messageRefs.current.length - 1; i >= 0; i--) {
+        const node = messageRefs.current[i];
+        if (node?.dataset.hskRole === 'user') { anchorNodeRef.current = node; break; }
       }
-      if (container.scrollTop !== before) resyncScrollRef.current();
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [messages, loading, messageRefs, notifyNewBelow, markUnread]);
+      if (anchorNodeRef.current) { layoutAnchorRef.current('glide'); return; }
+    }
+    if (anchorNodeRef.current) { layoutAnchorRef.current('glide'); return; }
+
+    const before = container.scrollTop;
+    if (!stickToBottomRef.current) {
+      markUnread();
+      notifyNewBelow(messages.length);
+    } else if (!touchScrollingRef.current) {
+      followBottomRef.current(); // exact, not eased: easing lags growth and bobs the last line
+      return;
+    }
+    if (container.scrollTop !== before) resyncScrollRef.current();
+  }, [messages, loading, streaming, messageRefs, notifyNewBelow, markUnread]);
 
   useEffect(() => {
     const el = msgsContainerRef.current;
@@ -228,6 +307,13 @@ export function useChatScroll({ messages, loading, messageRefs }: UseChatScrollO
       }
     };
 
+    syncScrollRef.current = (to: number) => {
+      const next = Math.round(Math.max(0, Math.min(el.scrollHeight - el.clientHeight, to)));
+      if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; el.classList.remove('hsk-scrolling'); }
+      el.scrollTop = next;
+      target = current = written = el.scrollTop;
+    };
+
     const update = (now: number) => {
       const dt = Math.min((now - lastTime) / 1000, 0.05);
       lastTime = now;
@@ -250,6 +336,7 @@ export function useChatScroll({ messages, loading, messageRefs }: UseChatScrollO
       if (e.deltaY < 0) {
         if (stickToBottomRef.current) awayEpochRef.current += 1;
         stickToBottomRef.current = false;
+        releaseAnchorRef.current();
       }
 
       dismissJumpAlertRef.current();
@@ -277,6 +364,7 @@ export function useChatScroll({ messages, loading, messageRefs }: UseChatScrollO
         if (el.scrollTop < lastTop - 1 && stickToBottomRef.current) {
           awayEpochRef.current += 1;
           stickToBottomRef.current = false;
+          releaseAnchorRef.current();
         }
       }
       lastTop = el.scrollTop;
@@ -297,11 +385,13 @@ export function useChatScroll({ messages, loading, messageRefs }: UseChatScrollO
       el.classList.remove('hsk-scrolling');
       resyncScrollRef.current = () => {};
       glideScrollRef.current = null;
+      syncScrollRef.current = null;
     };
   }, []);
 
   return {
     msgsContainerRef,
+    spacerRef,
     lastExternalScrollRef,
     showJumpToBottom,
     scrollProgress,

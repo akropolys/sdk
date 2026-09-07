@@ -178,6 +178,7 @@ export function MessageItem({
         runMid && 'hsk-cb-msg-group--run-mid',
         runCont && 'hsk-cb-msg-group--run-cont',
       )}
+      data-hsk-role={isUser ? 'user' : 'assistant'}
       ref={messageRef}
     >
       {isUser ? (
