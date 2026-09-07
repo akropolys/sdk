@@ -581,7 +581,7 @@ export function ScoutRail({
         ) : (
           <div className="hsk-cb-scout-hatch">
             <div className="hsk-cb-scout-hatch-row">
-              {SPECIES_IDS.map((id, i) => (
+              {SPECIES_IDS.map((id) => (
                 <button
                   key={id}
                   type="button"
@@ -590,7 +590,6 @@ export function ScoutRail({
                     picked === id && "is-on",
                     !paidAvatars.has(id) && picked !== id && "is-unpaid",
                   )}
-                  style={{ animationDelay: `${i * 34}ms` }}
                   onClick={() => setPicked(picked === id ? null : id)}
                   aria-label={
                     paidAvatars.has(id)
