@@ -86,6 +86,8 @@ const parseInline = (text: string, keyPrefix: string): React.ReactNode => {
   });
 };
 
+const TABLE_SEPARATOR_REGEX = /^\s*\|?[\s:|-]*-[\s:|-]*\|?\s*$/;
+
 function isTableLine(line: string, inTable: boolean): boolean {
   const t = line.trim();
   if (inTable) return t.includes('|');
@@ -179,9 +181,16 @@ export function renderMarkdown(content: string, streaming = false): React.ReactN
 function buildMarkdown(content: string, streaming: boolean): React.ReactNode {
   const lines = content.split('\n');
   if (streaming && lines.length > 0) {
-    const last = lines[lines.length - 1];
-    if (last.trim().startsWith('|') && !last.trim().endsWith('|')) {
+    // A table renders only once it can render whole: a row still being typed,
+    // or a header whose separator has not landed, is held back a beat.
+    if (!content.endsWith('\n') && lines[lines.length - 1].trim().startsWith('|')) {
       lines.pop();
+    }
+    let start = lines.length - 1;
+    while (start >= 0 && lines[start].trim().startsWith('|')) start--;
+    start++;
+    if (start < lines.length && !lines.slice(start).some(l => TABLE_SEPARATOR_REGEX.test(l))) {
+      lines.length = start;
     }
   }
 
