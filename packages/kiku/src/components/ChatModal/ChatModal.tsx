@@ -652,8 +652,12 @@ export function ChatModal({
       return hasBody;
     });
     const last = kept.length - 1;
-    if (!inFlight || last < 0 || kept[last].role !== 'assistant') return kept;
+    if (last < 0 || kept[last].role !== 'assistant') return kept;
     if (kept[last] !== messages[messages.length - 1]) return kept;
+    // The stream ending is not the reveal ending: dropping the paced content
+    // here printed the whole remaining reply in one frame.
+    const draining = pacedContent.length < (kept[last].content?.length ?? 0);
+    if (!inFlight && !draining) return kept;
     return kept.map((m, i) => (i === last ? { ...m, content: pacedContent } : m));
   }, [messages, loading, streaming, pacedContent]);
 
