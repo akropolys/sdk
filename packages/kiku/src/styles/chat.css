@@ -2674,6 +2674,106 @@
   font-weight: 500;
 }
 
+/* Replay Wave Controls & Header */
+.hsk-cb-tl-ctrl-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-left: 4px;
+}
+
+.hsk-cb-tl-play-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid var(--hsk-chat-divide, rgba(0,0,0,0.12));
+  background: var(--hsk-chat-surface, rgba(255,255,255,0.85));
+  backdrop-filter: blur(8px);
+  color: var(--hsk-chat-text, #1f1f1f);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+  transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.hsk-cb-tl-play-btn:hover {
+  transform: scale(1.08);
+  border-color: var(--hsk-primary, #ff6a33);
+  color: var(--hsk-primary, #ff6a33);
+  box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+}
+
+.hsk-cb-tl-play-btn.is-playing {
+  background: var(--hsk-primary, #ff6a33);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--hsk-primary, #ff6a33) 24%, transparent);
+  animation: hsk-pulse-glow 2s infinite ease-in-out;
+}
+
+@keyframes hsk-pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--hsk-primary, #ff6a33) 20%, transparent); }
+  50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--hsk-primary, #ff6a33) 36%, transparent); }
+}
+
+.hsk-cb-tl-mute-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--hsk-chat-text, #1f1f1f) 8%, transparent);
+  color: var(--hsk-chat-muted, #8a8f98);
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+}
+
+/* Playing wave pulse */
+.hsk-cb-tl-wave--playing {
+  stroke: var(--hsk-primary, #ff6a33) !important;
+  stroke-dasharray: 4 2;
+  animation: hsk-wave-dash 1.2s linear infinite;
+}
+
+@keyframes hsk-wave-dash {
+  to { stroke-dashoffset: -18; }
+}
+
+/* Animated Equalizer for active playing turn */
+.hsk-cb-tl-equalizer {
+  position: absolute;
+  left: calc(var(--hsk-tl-x, 14px) - 5px) !important;
+  right: auto !important;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: flex-end;
+  gap: 1.5px;
+  height: 10px;
+  width: 10px;
+}
+
+.hsk-cb-eq-bar {
+  width: 2px;
+  background: var(--hsk-primary, #ff6a33);
+  border-radius: 1px;
+  animation: hsk-eq-bounce 0.8s ease-in-out infinite alternate;
+}
+
+.hsk-cb-eq-bar.bar-1 { height: 40%; animation-delay: 0s; }
+.hsk-cb-eq-bar.bar-2 { height: 90%; animation-delay: 0.25s; }
+.hsk-cb-eq-bar.bar-3 { height: 60%; animation-delay: 0.45s; }
+
+@keyframes hsk-eq-bounce {
+  from { height: 25%; }
+  to { height: 100%; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hsk-cb-timeline-track { animation: none; }
   .hsk-cb-timeline-track::after,

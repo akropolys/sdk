@@ -30,7 +30,7 @@ interface UseKikuReturn {
 
   sendQueuedNow: () => void;
 
-  appendSpokenExchange: (heard: string, said: string, duration?: number) => void;
+  appendSpokenExchange: (heard: string, said: string, duration?: number, userAudioUrl?: string, assistantAudioUrl?: string) => void;
   stop: () => void;
   stopped: boolean;
 
@@ -51,16 +51,19 @@ interface SpokenExchange {
   heard: string;
   said: string;
   duration?: number;
+  userAudioUrl?: string;
+  assistantAudioUrl?: string;
 }
 
-function appendSpoken(prev: ChatMessage[], heard: string, said: string, duration?: number): ChatMessage[] {
+function appendSpoken(prev: ChatMessage[], heard: string, said: string, duration?: number, userAudioUrl?: string, assistantAudioUrl?: string): ChatMessage[] {
   const next = [...prev];
-  if (heard) next.push({ role: 'user', content: heard, spoken: true });
+  if (heard) next.push({ role: 'user', content: heard, spoken: true, audioUrl: userAudioUrl });
   if (said) next.push({
     role: 'assistant',
     content: said,
     spoken: true,
     thoughtForSeconds: duration && duration > 0 ? Math.round(duration * 10) / 10 : undefined,
+    audioUrl: assistantAudioUrl,
   });
   return next;
 }
@@ -532,10 +535,10 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     if (spokenQueueRef.current.length > 0) {
       const spoken = spokenQueueRef.current;
       spokenQueueRef.current = [];
-      for (const ex of spoken) settled = appendSpoken(settled, ex.heard, ex.said, ex.duration);
+      for (const ex of spoken) settled = appendSpoken(settled, ex.heard, ex.said, ex.duration, ex.userAudioUrl, ex.assistantAudioUrl);
       setMessages(prev => {
         let next = prev;
-        for (const ex of spoken) next = appendSpoken(next, ex.heard, ex.said, ex.duration);
+        for (const ex of spoken) next = appendSpoken(next, ex.heard, ex.said, ex.duration, ex.userAudioUrl, ex.assistantAudioUrl);
         return next;
       });
     }
@@ -635,15 +638,15 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     stop();
   }, [stop]);
 
-  const appendSpokenExchange = useCallback((heard: string, said: string, duration?: number) => {
+  const appendSpokenExchange = useCallback((heard: string, said: string, duration?: number, userAudioUrl?: string, assistantAudioUrl?: string) => {
     const h = heard.trim();
     const s = said.trim();
     if (!h && !s) return;
     if (loadingRef.current || streamingRef.current) {
-      spokenQueueRef.current.push({ heard: h, said: s, duration });
+      spokenQueueRef.current.push({ heard: h, said: s, duration, userAudioUrl, assistantAudioUrl });
       return;
     }
-    setMessages(prev => appendSpoken(prev, h, s, duration));
+    setMessages(prev => appendSpoken(prev, h, s, duration, userAudioUrl, assistantAudioUrl));
   }, []);
 
   const resolvedSources = useMemo(

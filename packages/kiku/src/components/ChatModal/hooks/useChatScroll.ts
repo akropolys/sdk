@@ -336,7 +336,7 @@ export function useChatScroll({ messages, loading, streaming, messageRefs }: Use
       if (e.deltaY < 0) {
         if (stickToBottomRef.current) awayEpochRef.current += 1;
         stickToBottomRef.current = false;
-        releaseAnchorRef.current();
+        anchorNodeRef.current = null; // spacer keeps its height: collapsing it mid-scroll clamps and jumps
       }
 
       dismissJumpAlertRef.current();
@@ -364,7 +364,7 @@ export function useChatScroll({ messages, loading, streaming, messageRefs }: Use
         if (el.scrollTop < lastTop - 1 && stickToBottomRef.current) {
           awayEpochRef.current += 1;
           stickToBottomRef.current = false;
-          releaseAnchorRef.current();
+          anchorNodeRef.current = null; // spacer keeps its height: collapsing it under a moving finger clamps and jumps
         }
       }
       lastTop = el.scrollTop;

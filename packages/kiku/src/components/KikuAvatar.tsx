@@ -46,6 +46,9 @@ const HOP: [number, number, number][] = [
   [1,    0,     0],
 ];
 
+const HOP_APEX = 0.42;
+const DROP_DELAY_MS = 170; // waits for the chat shape to open past the mark
+
 function hopAt(f: number): [number, number] {
   let i = 1;
   while (i < HOP.length - 1 && HOP[i][0] < f) i++;
@@ -162,6 +165,8 @@ export interface KikuAvatarProps {
   };
   onImpact?: (splat: number, color: string, glow: string) => void;
   triggerRef?: React.MutableRefObject<(() => void) | undefined>;
+  // Starts at the top of a hop and lands, for an entrance onto whatever it sits on.
+  dropIn?: boolean;
 }
 
 export function KikuAvatar({
@@ -173,7 +178,9 @@ export function KikuAvatar({
   accessories,
   onImpact,
   triggerRef,
+  dropIn = false,
 }: KikuAvatarProps) {
+  const dropInRef = useRef(dropIn);
   const stateRef = useRef<KikuState>(state);
   stateRef.current = state;
   const alertRef = useRef(alert);
@@ -217,7 +224,8 @@ export function KikuAvatar({
     const slotVel = Array.from({ length: SLOTS }, () => ({ x: 0, y: 0, w: 0, h: 0, rx: 0, a: 0 }));
 
     let blinkAt = 1800, blinkPhase = -1, wander = 0, wanderAt = 2600, raf = 0, gooOn = false;
-    let hopDue = 9000 + Math.random() * 8000, hopPhase = -1;
+    let hopDue = 9000 + Math.random() * 8000, hopPhase = -1, dropAt = 0;
+    if (dropInRef.current && !reduced) { hopPhase = HOP_APEX; dropAt = performance.now() + DROP_DELAY_MS; }
 
     let lean = 0, leanVel = 0, leanWant = 0, leanAt = 4200;
     let peek = 0, peekVel = 0, peekWant = 0, peekAt = 12000;
@@ -367,7 +375,7 @@ export function KikuAvatar({
       }
 
       if (hopPhase >= 0) {
-        hopPhase += 1 / 96;
+        if (t >= dropAt) hopPhase += 1 / 96;
         [squash, lift] = hopAt(hopPhase);
         if (hopPhase >= 1) {
           hopPhase = -1; squash = 0; lift = 0;

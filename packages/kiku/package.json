@@ -30,23 +30,20 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
     },
-    "./styles.css": "./dist/styles.css",
-    "./shopify": "./dist/shopify.js",
-    "./kiku.iife.js": "./dist/kiku.iife.js"
+    "./styles.css": "./dist/styles.css"
   },
   "files": [
     "dist",
-    "shopify",
     "README.md"
   ],
   "scripts": {
-    "build": "node scripts/gen-css.mjs && tsup && node scripts/postbuild.mjs",
+    "build": "node scripts/gen-css.mjs && tsup",
     "dev": "node scripts/gen-css.mjs && tsup --watch"
   },
   "peerDependencies": {
+    "@akropolys/sdk": "^1.10.0",
     "react": ">=17",
-    "react-dom": ">=17",
-    "@akropolys/sdk": "^1.9.0"
+    "react-dom": ">=17"
   },
   "peerDependenciesMeta": {
     "react": {

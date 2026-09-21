@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Scout, ScoutStatus, CreateScoutInput } from '../types';
 import { useAkropolysContext } from '../Provider';
 
@@ -9,6 +9,9 @@ export interface UseScoutsOptions {
 }
 
 export interface UseScoutsReturn {
+  // False on a site that has not turned scouts on: no dock, no rail, nothing.
+  enabled: boolean;
+  justTriggered: Scout[];
   scouts: Scout[];
   activeScouts: Scout[];
   // Minutes shared by every active scout. Two scouts burn it twice as fast.
@@ -16,6 +19,7 @@ export interface UseScoutsReturn {
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
+  dispatchScout: (id: string) => Promise<any>;
   createScout: (input: CreateScoutInput) => Promise<Scout>;
   pauseScout: (id: string) => Promise<void>;
   resumeScout: (id: string) => Promise<void>;
@@ -28,8 +32,11 @@ export function useScouts(options: UseScoutsOptions = {}): UseScoutsReturn {
   const client = useAkropolysContext();
   const [scouts, setScouts] = useState<Scout[]>([]);
   const [balance, setBalance] = useState(0);
+  const [enabled, setEnabled] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [justTriggered, setJustTriggered] = useState<Scout[]>([]);
+  const seenTriggered = useRef<Set<string> | null>(null);
 
   const { status, autoRefresh = true, refreshIntervalMs = 15000 } = options;
 
@@ -39,7 +46,18 @@ export function useScouts(options: UseScoutsOptions = {}): UseScoutsReturn {
       setLoading(true);
       setError(null);
       const res = await client.scouts.list({ status });
-      setScouts(res.scouts || []);
+      const fresh = res.scouts || [];
+      // The first look only learns what already happened; anything after it is
+      // news, and news is what the shopper is waiting to hear.
+      const triggered = fresh.filter(s => s.status === 'triggered');
+      if (seenTriggered.current === null) {
+        seenTriggered.current = new Set(triggered.map(s => s.id));
+      } else {
+        const news = triggered.filter(s => !seenTriggered.current!.has(s.id));
+        news.forEach(s => seenTriggered.current!.add(s.id));
+        if (news.length > 0) setJustTriggered(news);
+      }
+      setScouts(fresh);
       setBalance(res.balance ?? 0);
     } catch (err: any) {
       setError(err?.message || 'Failed to fetch scouts');
@@ -49,21 +67,26 @@ export function useScouts(options: UseScoutsOptions = {}): UseScoutsReturn {
   }, [client, status]);
 
   useEffect(() => {
-    fetchScouts();
-  }, [fetchScouts]);
+    if (!client) return;
+    let live = true;
+    client.api.widgetSettings().then((w) => { if (live) setEnabled(w.scouts.enabled); });
+    return () => { live = false; };
+  }, [client]);
 
-  // Periodic refresh when active scouts exist
   useEffect(() => {
-    if (!autoRefresh) return;
-    const hasActive = scouts.some(s => s.status === 'active');
-    if (!hasActive) return;
+    if (enabled) fetchScouts();
+  }, [enabled, fetchScouts]);
 
+  // Refresh for as long as the hook is mounted. Polling only while a scout was
+  // active meant that the moment the last one fired, nothing looked again — so
+  // the trigger that had just happened was never seen.
+  useEffect(() => {
+    if (!autoRefresh || !enabled) return;
     const timer = setInterval(() => {
       fetchScouts().catch(() => {});
     }, refreshIntervalMs);
-
     return () => clearInterval(timer);
-  }, [autoRefresh, scouts, refreshIntervalMs, fetchScouts]);
+  }, [autoRefresh, enabled, refreshIntervalMs, fetchScouts]);
 
   // Window events listener for real-time synchronization
   useEffect(() => {
@@ -123,6 +146,15 @@ export function useScouts(options: UseScoutsOptions = {}): UseScoutsReturn {
       window.removeEventListener('akropolys:scout', handleScoutEvent);
     };
   }, []);
+
+  const dispatchScout = useCallback(
+    async (id: string) => {
+      const event = await client.scouts.dispatch(id);
+      fetchScouts().catch(() => {});
+      return event;
+    },
+    [client, fetchScouts]
+  );
 
   const createScout = useCallback(
     async (input: CreateScoutInput): Promise<Scout> => {
@@ -196,6 +228,9 @@ export function useScouts(options: UseScoutsOptions = {}): UseScoutsReturn {
   const activeScouts = scouts.filter(s => s.status === 'active' || s.status === 'paused');
 
   return {
+    enabled,
+    justTriggered,
+    dispatchScout,
     scouts,
     activeScouts,
     balance,

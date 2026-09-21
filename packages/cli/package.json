@@ -1,7 +1,7 @@
 {
   "name": "@akropolys/cli",
-  "version": "1.6.2",
-  "description": "Akropolys CLI — diagnostic, workspace setup, and payload inspection utility.",
+  "version": "2.0.1",
+  "description": "Akropolys CLI \u2014 project setup, diagnostics, and payload inspection.",
   "license": "MIT",
   "publishConfig": {
     "access": "public"
@@ -19,6 +19,7 @@
     "dev": "tsup --watch"
   },
   "dependencies": {
+    "@clack/prompts": "^0.7.0",
     "commander": "^12.0.0",
     "picocolors": "^1.0.0"
   },

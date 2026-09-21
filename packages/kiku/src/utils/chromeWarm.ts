@@ -15,9 +15,11 @@ export function cachedBaseFont(client: any): Promise<ScriptFont | null> {
   if (hit) return hit;
   const p = Promise.resolve()
     .then(() => client.baseFont?.() ?? null)
-    .then(async (f: ScriptFont | null) => {
-      if (f) await preloadScriptFont(f, 1200); // resolve on bytes, not on the descriptor, or it swaps mid-paint
-      BASE_FONT_READY.set(client, f);
+    .then((f: ScriptFont | null) => {
+      if (f) {
+        BASE_FONT_READY.set(client, f);
+        preloadScriptFont(f, 0).catch(() => {});
+      }
       return f;
     })
     .catch(() => null);
@@ -30,6 +32,18 @@ export function warmChrome(client: any, shopperLanguage: string, defaults: Recor
   if (!client) return;
   cachedBaseFont(client);
   if (shopperLanguage) {
-    try { client.getUIStrings?.(shopperLanguage, defaults)?.catch?.(() => {}); } catch {  }
+    warmLanguage(client, shopperLanguage, defaults);
   }
+}
+
+// Speculatively prefetches UI strings and preloads the target script font into document cache.
+export function warmLanguage(client: any, language: string, defaults: Record<string, string>): void {
+  if (!client || !language) return;
+  try {
+    client.getUIStrings?.(language, defaults)?.then?.((res: any) => {
+      if (res?.font) {
+        preloadScriptFont(res.font, 1200).catch(() => {});
+      }
+    })?.catch?.(() => {});
+  } catch {  }
 }

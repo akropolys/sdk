@@ -19,6 +19,56 @@ type Species = {
   extras?: (bw: number, bh: number) => React.ReactNode;
 };
 
+// An ear drawn as three straight joins reads as a shard beside a body made of
+// curves, and one that stops at the outline reads as a shape parked behind a
+// head. Every corner gets an arc, and the base sinks into the skull.
+const EAR_SINK = 6;
+
+function roundedTri(
+  a: [number, number],
+  t: [number, number],
+  b: [number, number],
+  rTip: number,
+  rBase: number,
+) {
+  const pts = [a, t, b];
+  const rad = [rBase, rTip, rBase];
+  let d = '';
+  for (let i = 0; i < 3; i++) {
+    const p = pts[i];
+    const prev = pts[(i + 2) % 3];
+    const next = pts[(i + 1) % 3];
+    const v1 = [prev[0] - p[0], prev[1] - p[1]];
+    const v2 = [next[0] - p[0], next[1] - p[1]];
+    const l1 = Math.hypot(v1[0], v1[1]) || 1;
+    const l2 = Math.hypot(v2[0], v2[1]) || 1;
+    const r = Math.min(rad[i], l1 / 2.2, l2 / 2.2);
+    const sx = p[0] + (v1[0] / l1) * r;
+    const sy = p[1] + (v1[1] / l1) * r;
+    const ex = p[0] + (v2[0] / l2) * r;
+    const ey = p[1] + (v2[1] / l2) * r;
+    d += (i === 0 ? 'M' : 'L') + `${sx.toFixed(2)} ${sy.toFixed(2)} `;
+    d += `Q${p[0].toFixed(2)} ${p[1].toFixed(2)} ${ex.toFixed(2)} ${ey.toFixed(2)} `;
+  }
+  return d + 'Z';
+}
+
+function earPair(
+  base: [number, number],
+  tip: [number, number],
+  back: [number, number],
+  rTip: number,
+  rBase: number,
+) {
+  const side = (m: number) => {
+    const a: [number, number] = [base[0] * m, base[1] + EAR_SINK];
+    const t: [number, number] = [a[0] + tip[0] * m, a[1] + tip[1] - EAR_SINK];
+    const b: [number, number] = [t[0] + back[0] * m, t[1] + back[1] + EAR_SINK];
+    return roundedTri(a, t, b, rTip, rBase);
+  };
+  return `${side(-1)} ${side(1)}`;
+}
+
 const SPECIES: Species[] = [
   {
     id: 'pig',
@@ -57,7 +107,7 @@ const SPECIES: Species[] = [
     nick: 'Hoot',
     bw: 33, bh: 32, coat: '#C3B9A6', shade: '#9C917E', snout: '#E8A94E',
     eyeGap: 17, eyeY: 3,
-    ears: (bw, bh) => `M${-bw * 0.62} ${-bh * 0.74} l${-4} ${-21} l${17} ${11} Z M${bw * 0.62} ${-bh * 0.74} l${4} ${-21} l${-17} ${11} Z`,
+    ears: (bw, bh) => earPair([-bw * 0.62, -bh * 0.74], [-4, -21], [17, 11], 5, 7),
     extras: (_bw, bh) => (
       <path d={`M0 ${bh * 0.06} l4.5 7 l-4.5 5 l-4.5 -5 Z`} fill="#E8A94E" />
     ),
@@ -68,7 +118,7 @@ const SPECIES: Species[] = [
     nick: 'Kitty',
     bw: 31, bh: 30, coat: '#AEB7C4', shade: '#8B94A2', snout: '#7C8592',
     eyeGap: 15, eyeY: 3,
-    ears: (bw, bh) => `M${-bw * 0.74} ${-bh * 0.58} l${-3} ${-26} l${21} ${12} Z M${bw * 0.74} ${-bh * 0.58} l${3} ${-26} l${-21} ${12} Z`,
+    ears: (bw, bh) => earPair([-bw * 0.74, -bh * 0.58], [-3, -26], [21, 12], 5.5, 7),
     extras: (bw, bh) => (
       <g stroke="#7C8592" strokeWidth="1.6" strokeLinecap="round" opacity="0.8">
         <path d={`M${-bw * 0.3} ${bh * 0.4} l${-14} ${-3}`} />
@@ -95,7 +145,7 @@ const SPECIES: Species[] = [
     nick: 'Bram',
     bw: 32, bh: 30, coat: '#E2D6C0', shade: '#B9AC96', snout: '#A79A84',
     eyeGap: 15, eyeY: 3,
-    ears: (bw, bh) => `M${-bw * 0.86} ${-bh * 0.24} l${-17} ${5} l${14} ${9} Z M${bw * 0.86} ${-bh * 0.24} l${17} ${5} l${-14} ${9} Z`,
+    ears: (bw, bh) => earPair([-bw * 0.86, -bh * 0.24], [-17, 5], [14, 9], 4.5, 6),
     extras: (bw, bh) => (
       <g fill="none" stroke="#A79A84" strokeWidth="4.5" strokeLinecap="round">
         <path d={`M${-bw * 0.66} ${-bh * 0.6} q${-13} ${4} ${-9} ${13} q${3} ${7} ${9} ${2}`} />
@@ -147,16 +197,21 @@ export interface ScoutCharacterProps {
   mood?: ScoutMood;
   size?: number;
   layer?: 'all' | 'body';
+  paused?: boolean;
 }
 
-export function ScoutCharacter({ scoutId, avatar, mood = 'watching', size = 44, layer = 'all' }: ScoutCharacterProps) {
+export function ScoutCharacter({ scoutId, avatar, mood = 'watching', size = 44, layer = 'all', paused = false }: ScoutCharacterProps) {
   const sp = speciesFor(scoutId, avatar);
+  const uid = React.useId().replace(/:/g, '');
   const moodRef = useRef(mood);
   moodRef.current = mood;
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
 
   const figRef = useRef<SVGGElement>(null);
   const bodyRef = useRef<SVGPathElement>(null);
-  const earRef = useRef<SVGPathElement>(null);
+  const earRef = useRef<SVGGElement>(null);
+  const shadowRef = useRef<SVGEllipseElement>(null);
   const eyeLRef = useRef<SVGRectElement>(null);
   const eyeRRef = useRef<SVGRectElement>(null);
   const shineLRef = useRef<SVGCircleElement>(null);
@@ -186,6 +241,7 @@ export function ScoutCharacter({ scoutId, avatar, mood = 'watching', size = 44, 
     };
 
     const frame = (t: number) => {
+      if (pausedRef.current) { raf = requestAnimationFrame(frame); return; }
       const m = MOOD[moodRef.current];
       const awake = moodRef.current === 'watching' || moodRef.current === 'struck';
       const alive = awake || moodRef.current === 'resting';
@@ -241,7 +297,7 @@ export function ScoutCharacter({ scoutId, avatar, mood = 'watching', size = 44, 
       const bh = sp.bh * (1 - breath);
 
       bodyRef.current?.setAttribute('d', squircle(bw, bh));
-      earRef.current?.setAttribute('d', sp.ears(bw, bh));
+      earRef.current?.querySelectorAll('path').forEach(el => el.setAttribute('d', sp.ears(bw, bh)));
       earRef.current?.setAttribute(
         'transform',
         `translate(0 ${((1 - at.perk) * 7).toFixed(2)}) scale(1 ${Math.max(0.2, at.perk).toFixed(3)})`,
@@ -277,6 +333,12 @@ export function ScoutCharacter({ scoutId, avatar, mood = 'watching', size = 44, 
       );
       figRef.current?.setAttribute('opacity', at.dim.toFixed(3));
 
+      // A shadow that rides the hop looks pasted on. It stays on the ground and
+      // tightens as the body leaves it.
+      const away = Math.min(0.45, Math.abs(lift) * 0.05);
+      shadowRef.current?.setAttribute('opacity', (0.26 * at.dim * (1 - away)).toFixed(3));
+      shadowRef.current?.setAttribute('rx', (sp.bw * 0.74 * (1 - away * 0.5)).toFixed(2));
+
       raf = requestAnimationFrame(frame);
     };
 
@@ -293,16 +355,65 @@ export function ScoutCharacter({ scoutId, avatar, mood = 'watching', size = 44, 
       role="img"
       aria-label={sp.name}
     >
+      <defs>
+        <linearGradient
+          id={`hsk-coat-${uid}`}
+          gradientUnits="userSpaceOnUse"
+          x1={-sp.bw * 0.9}
+          y1={-sp.bh * 1.7}
+          x2={sp.bw * 0.7}
+          y2={sp.bh}
+        >
+          <stop offset="0" stopColor={sp.coat} />
+          <stop offset="0.55" stopColor={sp.coat} />
+          <stop offset="1" stopColor={sp.shade} />
+        </linearGradient>
+        <linearGradient id={`hsk-iris-${uid}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#1C1814" />
+          <stop offset="0.45" stopColor="#3A322C" />
+          <stop offset="1" stopColor="#4A4038" />
+        </linearGradient>
+        <radialGradient id={`hsk-blush-${uid}`} cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0" stopColor="#F08898" stopOpacity="0.62" />
+          <stop offset="1" stopColor="#F08898" stopOpacity="0" />
+        </radialGradient>
+        <filter id={`hsk-soft-${uid}`} x="-40%" y="-40%" width="180%" height="180%">
+          <feGaussianBlur stdDeviation="2.6" />
+        </filter>
+      </defs>
+
+      <ellipse
+        ref={shadowRef}
+        cx="0"
+        cy={sp.bh + 7}
+        rx={sp.bw * 0.74}
+        ry="4.4"
+        fill="#000"
+        opacity="0.26"
+        filter={`url(#hsk-soft-${uid})`}
+      />
+
       <g ref={figRef}>
-        <path ref={earRef} d={sp.ears(sp.bw, sp.bh)} fill={sp.shade} />
-        <path ref={bodyRef} d={squircle(sp.bw, sp.bh)} fill={sp.coat} />
+        <g ref={earRef}>
+          <path d={sp.ears(sp.bw, sp.bh)} fill={`url(#hsk-coat-${uid})`} />
+          <path d={sp.ears(sp.bw, sp.bh)} fill="#000" opacity="0.14" />
+        </g>
+        <path ref={bodyRef} d={squircle(sp.bw, sp.bh)} fill={`url(#hsk-coat-${uid})`} />
+        <path
+          d={`M${-sp.bw * 0.86} ${-sp.bh * 0.18} C${-sp.bw * 0.9} ${-sp.bh * 0.66} ${-sp.bw * 0.52} ${-sp.bh * 0.96} ${-sp.bw * 0.06} ${-sp.bh * 0.99}`}
+          fill="none"
+          stroke="#fff"
+          strokeOpacity="0.34"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+        />
         {layer === 'all' && sp.extras?.(sp.bw, sp.bh)}
 {layer === 'all' && (
           <>
-        <ellipse cx={-sp.eyeGap - 7} cy={sp.eyeY + 9} rx="6" ry="3.6" fill="#F08898" opacity="0.5" />
-        <ellipse cx={sp.eyeGap + 7} cy={sp.eyeY + 9} rx="6" ry="3.6" fill="#F08898" opacity="0.5" />
-        <rect ref={eyeLRef} x={-sp.eyeGap - 6} y={sp.eyeY - 8.5} width="12" height="17" rx="6" fill="#3A322C" />
-        <rect ref={eyeRRef} x={sp.eyeGap - 6} y={sp.eyeY - 8.5} width="12" height="17" rx="6" fill="#3A322C" />
+        <ellipse cx={-sp.eyeGap - 7} cy={sp.eyeY + 9} rx="7" ry="4.4" fill={`url(#hsk-blush-${uid})`} />
+        <ellipse cx={sp.eyeGap + 7} cy={sp.eyeY + 9} rx="7" ry="4.4" fill={`url(#hsk-blush-${uid})`} />
+        <rect ref={eyeLRef} x={-sp.eyeGap - 6} y={sp.eyeY - 8.5} width="12" height="17" rx="6" fill={`url(#hsk-iris-${uid})`} />
+        <rect ref={eyeRRef} x={sp.eyeGap - 6} y={sp.eyeY - 8.5} width="12" height="17" rx="6" fill={`url(#hsk-iris-${uid})`} />
         <circle ref={shineLRef} cx={-sp.eyeGap - 1.8} cy={sp.eyeY - 5} r="2.5" fill="#FFFFFF" />
         <circle ref={shineRRef} cx={sp.eyeGap - 1.8} cy={sp.eyeY - 5} r="2.5" fill="#FFFFFF" />
         <path ref={mouthRef} d={`M-3.6 ${sp.eyeY + 13} q3.6 3.6 7.2 0`} fill="none" stroke="#3A322C" strokeWidth="1.8" strokeLinecap="round" opacity="0.75" />
@@ -320,4 +431,15 @@ export function speciesName(id: string, avatar?: string): string {
 // What a shopper would call it out loud.
 export function speciesNick(id: string, avatar?: string): string {
   return speciesFor(id, avatar).nick;
+}
+
+// Ten hours of runtime read as "600 min", which is a number nobody holds in
+// their head. Past ninety minutes it becomes hours.
+// Durations are machine-translated at runtime, and "9 hr 59 min" came back as
+// "Saa 9 59 min" — longer than the rail it has to sit in. Digits need no
+// translation and cannot grow.
+export function humanMinutes(mins: number, _t?: unknown): string {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${h}:${String(m).padStart(2, '0')}`;
 }

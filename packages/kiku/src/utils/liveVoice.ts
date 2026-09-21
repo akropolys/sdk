@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { chime } from './chime';
 import { AdpcmEncoder, decodeAdpcm } from './adpcm';
+import { float32ToWav, int16ToWav } from './wav';
 
 export type LiveState = 'idle' | 'connecting' | 'listening' | 'thinking' | 'speaking' | 'ended';
 
@@ -15,6 +16,14 @@ export interface LiveSource {
   availability?: string;
 }
 
+export interface LiveVoiceExchange {
+  heard: string;
+  said: string;
+  duration?: number;
+  userAudioUrl?: string;
+  audioUrl?: string;
+}
+
 export interface LiveVoiceOptions {
   apiUrl: string;
   siteId: string;
@@ -26,7 +35,7 @@ export interface LiveVoiceOptions {
   language?: string;
   voice?: string;
 
-  onExchange?: (exchange: { heard: string; said: string; duration?: number }) => void;
+  onExchange?: (exchange: LiveVoiceExchange) => void;
   onRefused?: (code: string) => void;
   onError?: (code: string) => void;
 
@@ -102,7 +111,15 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
   const outRateRef = useRef(OUTPUT_RATE);
 
   const optsRef = useRef(opts);
-  useEffect(() => { optsRef.current = opts; }, [opts]);
+  useEffect(() => {
+    optsRef.current = opts;
+    const stream = streamRef.current;
+    if (stream) {
+      for (const track of stream.getAudioTracks()) {
+        track.enabled = !opts.muted;
+      }
+    }
+  }, [opts]);
 
   const readyRef = useRef(false);
   const pendingRef = useRef<ArrayBuffer[]>([]);
@@ -112,16 +129,42 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
   const turnHeardRef = useRef('');
   const turnSaidRef = useRef('');
   const turnStartRef = useRef<number | null>(null);
+  const turnBotAudioChunksRef = useRef<Float32Array[]>([]);
+  const turnUserAudioChunksRef = useRef<Int16Array[]>([]);
 
   const flushExchange = useCallback(() => {
     const heard = turnHeardRef.current.trim();
     const said = turnSaidRef.current.trim();
     const duration = turnStartRef.current ? Math.max(0.1, (Date.now() - turnStartRef.current) / 1000) : undefined;
+
+    let audioUrl: string | undefined;
+    if (turnBotAudioChunksRef.current.length > 0) {
+      try {
+        const blob = float32ToWav(turnBotAudioChunksRef.current, outRateRef.current);
+        audioUrl = URL.createObjectURL(blob);
+      } catch (e) {
+        console.error('[kiku] failed to encode bot audio wav:', e);
+      }
+    }
+
+    let userAudioUrl: string | undefined;
+    if (turnUserAudioChunksRef.current.length > 0) {
+      try {
+        const blob = int16ToWav(turnUserAudioChunksRef.current, INPUT_RATE);
+        userAudioUrl = URL.createObjectURL(blob);
+      } catch (e) {
+        console.error('[kiku] failed to encode user audio wav:', e);
+      }
+    }
+
     turnHeardRef.current = '';
     turnSaidRef.current = '';
     turnStartRef.current = null;
+    turnBotAudioChunksRef.current = [];
+    turnUserAudioChunksRef.current = [];
+
     if (!heard && !said) return;
-    optsRef.current.onExchange?.({ heard, said, duration });
+    optsRef.current.onExchange?.({ heard, said, duration, userAudioUrl, audioUrl });
   }, []);
 
   const chirp = useCallback(() => {
@@ -129,6 +172,8 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
   }, []);
 
   const sendAudio = useCallback((buf: ArrayBuffer) => {
+    if (optsRef.current.muted) return;
+    turnUserAudioChunksRef.current.push(new Int16Array(buf.slice(0)));
     const ws = wsRef.current;
     if (!readyRef.current || !ws || ws.readyState !== WebSocket.OPEN) {
       const q = pendingRef.current;
@@ -380,7 +425,9 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
     ws.onmessage = ev => {
       if (ev.data instanceof ArrayBuffer) {
         stopHold();
-        enqueue(decodeAdpcm(ev.data));
+        const pcm = decodeAdpcm(ev.data);
+        turnBotAudioChunksRef.current.push(pcm.slice());
+        enqueue(pcm);
         return;
       }
       let f: any;

@@ -1,16 +1,17 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { speciesFor, speciesNick } from './Scouts';
 import { createPortal } from 'react-dom';
 import { primeChimes } from '../utils/chime';
 import { getShadowContainer } from '../utils/shadowRoot';
 import type { AkropolysTheme, ChatSource } from '@akropolys/sdk';
-import { useAkropolysContext } from '@akropolys/sdk';
+import { useAkropolysContext, useScouts, Scout } from '@akropolys/sdk';
 import { cn } from '../utils/cn';
 import { resolveTheme } from '../utils/theme';
-import { warmChrome } from '../utils/chromeWarm';
+import { warmChrome, warmLanguage } from '../utils/chromeWarm';
 import { useHostFontFace } from '../utils/hostFont';
-import { DEFAULT_CHIPS, DEFAULT_UI_STRINGS } from './ChatModal/types';
+import { DEFAULT_CHIPS, DEFAULT_UI_STRINGS, type ModalOrigin } from './ChatModal/types';
 import { ChatModal } from './ChatModal';
 
 export interface KikuButtonProps {
@@ -43,14 +44,7 @@ export interface KikuButtonProps {
 
   enableVision?: boolean;
 
-  visionCategoryHint?: string;
-
-  /** Enable 🔊 TTS voice audio responses from AI */
-  enableAudioResponse?: boolean;
-
   ttsVoice?: string;
-
-  autoSpeakResponses?: boolean;
 }
 
 export function KikuButton({
@@ -70,50 +64,41 @@ export function KikuButton({
   classNames = {},
   enableVoice = false,
   voiceLang,
-  enableVision = false,
-  visionCategoryHint,
-  enableAudioResponse,
   ttsVoice,
-  autoSpeakResponses,
+  enableVision = false,
 }: KikuButtonProps) {
   const client = useAkropolysContext();
   const [open, setOpen] = useState(false);
+  const { justTriggered } = useScouts();
+  const [arrivals, setArrivals] = useState<Scout[]>([]);
+  useEffect(() => {
+    if (open || !justTriggered.length) return;
+    setArrivals((prev) => [...prev, ...justTriggered.filter((s) => !prev.some((p) => p.id === s.id))]);
+  }, [justTriggered]);
+  const latest = arrivals[arrivals.length - 1];
   const [mounted, setMounted] = useState(false);
-  const [origin, setOrigin] = useState<import('./ChatModal/types').ModalOrigin | null>(null);
+  const [origin, setOrigin] = useState<ModalOrigin | null>(null);
 
   const warmShadow = useCallback(() => {
     getShadowContainer();
     try {
       warmChrome(client, client?.getShopperLanguage?.() ?? '', DEFAULT_UI_STRINGS);
+      client?.api?.widgetSettings?.().then((settings: any) => {
+        if (settings?.detectedLanguage && settings.detectedLanguage.toLowerCase() !== 'english') {
+          warmLanguage(client, settings.detectedLanguage, DEFAULT_UI_STRINGS);
+        }
+      }).catch(() => {});
     } catch {  }
   }, [client]);
 
-  const openFrom = useCallback((el: HTMLElement) => {
-    warmShadow();
-    const b = el.getBoundingClientRect();
-    const style = window.getComputedStyle(el);
-    const br = parseFloat(style.borderRadius) || 12;
-    const x = b.left + b.width / 2;
-    const y = b.top + b.height / 2;
-    const w = window.innerWidth, h = window.innerHeight;
-    const r = Math.max(
-      Math.hypot(x, y), Math.hypot(w - x, y),
-      Math.hypot(x, h - y), Math.hypot(w - x, h - y),
-    );
-    setOrigin({
-      x,
-      y,
-      r,
-      top: b.top,
-      left: b.left,
-      width: b.width,
-      height: b.height,
-      borderRadius: br,
-    });
-    // The launcher tap is the first gesture in the widget, and iOS will not
-    // unlock an AudioContext outside one.
-    primeChimes();
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  const openFrom = useCallback(() => {
+    const b = btnRef.current?.getBoundingClientRect();
+    setOrigin(b ? { x: b.left + b.width / 2, y: b.top + b.height / 2 } : null);
     setOpen(true);
+    warmShadow();
+    try { primeChimes(); } catch {}
   }, [warmShadow]);
 
   useEffect(() => {
@@ -168,13 +153,15 @@ export function KikuButton({
   return (
     <>
       <button
+        ref={btnRef}
         className={cn("hsk-cb-btn", classNames.button, className)}
-        onClick={e => openFrom(e.currentTarget)}
+        onClick={openFrom}
         onPointerEnter={warmShadow}
         onPointerDown={warmShadow}
-        style={customStyles}
+        style={latest ? { ...customStyles, ['--hsk-glow' as any]: speciesFor(latest.id, latest.avatar).shade } : customStyles}
         data-hsk-theme={hskThemeAttr}
-        aria-label="Open AI chat"
+        data-scout-arrived={latest && !open ? '' : undefined}
+        aria-label={latest && !open ? `Open AI chat, ${speciesNick(latest.id, latest.avatar)} came back` : 'Open AI chat'}
       >
         {children !== undefined ? (
           children
@@ -197,7 +184,8 @@ export function KikuButton({
           backdropColor={backdropColor}
           backdropBlur={backdropBlur}
           origin={origin}
-          onClose={() => setOpen(false)}
+          arrivals={arrivals}
+          onClose={() => { setOpen(false); setArrivals([]); }}
           onSelectSource={onSelectSource}
           defaultCurrency={defaultCurrency}
           chips={chips}
@@ -206,10 +194,7 @@ export function KikuButton({
           enableVoice={enableVoice}
           voiceLang={voiceLang}
           enableVision={enableVision}
-          visionCategoryHint={visionCategoryHint}
-          enableAudioResponse={enableAudioResponse}
           ttsVoice={ttsVoice}
-          autoSpeakResponses={autoSpeakResponses}
         />,
         getShadowContainer() ?? document.body
       )}

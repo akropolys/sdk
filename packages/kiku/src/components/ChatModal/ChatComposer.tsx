@@ -38,6 +38,7 @@ export interface ChatComposerProps {
   attachments: ChatAttachment[];
   removeAttachment: (idx: number) => void;
   chromeLoading: boolean;
+  inputLocked: boolean;
   imageInputRef: React.RefObject<HTMLInputElement | null>;
   handleImageFiles: (files: FileList | null) => void;
   enableVision: boolean;
@@ -66,6 +67,7 @@ export interface ChatComposerProps {
   voiceError: string;
   setVoiceError?: (err: string) => void;
   shopperLanguage: string;
+  langSwitching?: boolean;
   t: (key: UIStringKey, vars?: Record<string, string>) => string;
   rail?: React.ReactNode;
 }
@@ -89,6 +91,8 @@ export function ChatComposer({
   attachments,
   removeAttachment,
   chromeLoading,
+  inputLocked,
+  langSwitching = false,
   imageInputRef,
   handleImageFiles,
   enableVision,
@@ -331,7 +335,6 @@ export function ChatComposer({
                   onClick={() => imageInputRef.current?.click()}
                   disabled={loading}
                   aria-label="Attach image"
-                  title="Attach image"
                 >
                   <PaperclipIcon />
                 </button>
@@ -342,13 +345,12 @@ export function ChatComposer({
                   onClick={() => voiceBlocked ? setVoiceError?.(t('errAccountRequired')) : startVoice('converse')}
                   disabled={loading || chromeLoading}
                   aria-label="Voice conversation"
-                  title="Voice conversation"
                 >
                   <WaveformIcon />
                 </button>
               )}
             </>
-            <div className="hsk-cb-field">
+            <div className="hsk-cb-field" data-ph-lines={!input && placeholderText.length > 26 ? '2' : undefined}>
               <textarea
                 ref={textareaRef as any}
                 value={input}
@@ -358,7 +360,7 @@ export function ChatComposer({
                 placeholder=""
                 className={cn("hsk-cb-textarea", classNames.input)}
                 aria-label={activePlaceholder}
-                disabled={loading && !streaming}
+                disabled={inputLocked || (loading && !streaming) || langSwitching}
               />
               <AnimatedPlaceholder
                 placeholder={activePlaceholder}
@@ -381,9 +383,8 @@ export function ChatComposer({
                     startVoice('dictate');
                   }
                 }}
-                disabled={loading || chromeLoading}
+                disabled={loading || chromeLoading || langSwitching}
                 aria-label={voiceMode === 'off' ? 'Start voice mode' : 'Stop voice'}
-                title={voiceMode === 'off' ? (canConverse ? 'Voice conversation' : 'Voice input') : 'Stop'}
               >
                 {voiceMode === 'off' ? <MicIcon /> : <MicOffIcon />}
               </button>
@@ -393,16 +394,24 @@ export function ChatComposer({
                 className={cn("hsk-cb-send", "hsk-cb-send--stop", classNames.sendButton)}
                 onClick={stop}
                 aria-label="Stop generating"
-                title="Stop generating"
               >
                 <StopIcon />
               </button>
             ) : (
               <button
-                className={cn("hsk-cb-send", launching && "is-launching", classNames.sendButton)}
-                onClick={() => { launch(); handleSend(); }}
-                disabled={chromeLoading || (!input.trim() && attachments.length === 0)}
-                aria-label="Send message"
+                className={cn(
+                  "hsk-cb-send",
+                  launching && "is-launching",
+                  langSwitching && "is-morph-spinning",
+                  classNames.sendButton
+                )}
+                onClick={() => {
+                  if (langSwitching) return;
+                  launch();
+                  handleSend();
+                }}
+                disabled={!langSwitching && (inputLocked || chromeLoading || (!input.trim() && attachments.length === 0))}
+                aria-label={langSwitching ? "Preparing language…" : "Send message"}
               >
                 <svg width="0" height="0" aria-hidden="true" focusable="false" style={{ position: 'absolute' }}>
                   <defs>
@@ -418,7 +427,15 @@ export function ChatComposer({
                 <span className="hsk-cb-send-stage" style={{ filter: `url(#${gooId})` }}>
                   <span className="hsk-cb-send-seam" aria-hidden="true" />
                   <span className="hsk-cb-send-kite">
-                    <ArrowUpIcon />
+                    {langSwitching ? (
+                      <span className="hsk-cb-send-spinner-dots" aria-hidden="true">
+                        <span className="hsk-goo-orb hsk-goo-orb--1" />
+                        <span className="hsk-goo-orb hsk-goo-orb--2" />
+                        <span className="hsk-goo-orb hsk-goo-orb--3" />
+                      </span>
+                    ) : (
+                      <ArrowUpIcon />
+                    )}
                   </span>
                 </span>
               </button>

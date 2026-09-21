@@ -14,7 +14,7 @@ export interface UseVoiceControllerOptions {
   shopperLanguage: string;
   ttsVoice?: string;
   handleSendUtterance: (text: string) => void;
-  appendSpokenExchange: (heard: string, said: string, duration?: number) => void;
+  appendSpokenExchange: (heard: string, said: string, duration?: number, userAudioUrl?: string, assistantAudioUrl?: string) => void;
 }
 
 export function useVoiceController({
@@ -80,7 +80,7 @@ export function useVoiceController({
     voice: liveVoiceName,
     muted: voiceMuted,
     onExchange: (exchange) => {
-      appendSpokenExchange(exchange.heard, exchange.said, exchange.duration);
+      appendSpokenExchange(exchange.heard, exchange.said, exchange.duration, exchange.userAudioUrl, exchange.audioUrl);
     },
     onError: (err) => {
       if (err === 'shopper_reply_limit' || err === 'access_revoked' || err === 'account_required') {

@@ -29,13 +29,22 @@ export async function runDoctor(options: { verbose?: boolean }) {
 
   loadEnv();
 
-  const siteId = process.env.NEXT_PUBLIC_AKROPOLYS_SITE_ID || process.env.VITE_AKROPOLYS_SITE_ID || '';
-  const apiToken = process.env.NEXT_PUBLIC_AKROPOLYS_API_TOKEN || process.env.VITE_AKROPOLYS_API_TOKEN || '';
-  const apiUrl = process.env.NEXT_PUBLIC_AKROPOLYS_API_URL || process.env.VITE_AKROPOLYS_API_URL || 'https://api.akropolys.cloud/v1';
+  const PREFIXES = ['NEXT_PUBLIC_', 'VITE_', 'PUBLIC_', ''];
+  const resolve = (name: string) => {
+    for (const prefix of PREFIXES) {
+      const value = process.env[`${prefix}AKROPOLYS_${name}`];
+      if (value) return value;
+    }
+    return '';
+  };
+
+  const siteId = resolve('SITE_ID');
+  const apiToken = resolve('API_KEY');
+  const apiUrl = resolve('API_URL') || 'https://api.akropolys.cloud/v1';
 
   if (options.verbose) {
     console.log(pc.dim(`[Verbose] Site ID: ${siteId || '<not set>'}`));
-    console.log(pc.dim(`[Verbose] API Token: ${apiToken ? '********' : '<not set>'}`));
+    console.log(pc.dim(`[Verbose] API key: ${apiToken ? '********' : '<not set>'}`));
     console.log(pc.dim(`[Verbose] API URL: ${apiUrl}`));
   }
 
@@ -47,10 +56,10 @@ export async function runDoctor(options: { verbose?: boolean }) {
   console.log(pc.green(`✓ Configuration: Site ID detected (${siteId})`));
 
   if (!apiToken) {
-    console.log(pc.red('❌ Environment: API Token is missing. Set NEXT_PUBLIC_AKROPOLYS_API_TOKEN in your env.'));
+    console.log(pc.red('❌ Environment: API key is missing. Set NEXT_PUBLIC_AKROPOLYS_API_KEY in your env.'));
     process.exit(1);
   }
-  console.log(pc.green('✓ Environment: API Token detected'));
+  console.log(pc.green('✓ Environment: API key detected'));
 
   // 2. Connectivity check
   const start = Date.now();

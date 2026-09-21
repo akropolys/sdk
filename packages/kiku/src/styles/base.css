@@ -21,6 +21,49 @@
 @property --hsk-price-text { syntax: '<color>'; inherits: true; initial-value: #ff7a45; }
 @property --hsk-sheet-bg { syntax: '<color>'; inherits: true; initial-value: #1f1f22; }
 @property --hsk-primary { syntax: '<color>'; inherits: true; initial-value: #ff6a33; }
+@property --hsk-pill-bg { syntax: '<color>'; inherits: true; initial-value: rgba(255, 255, 255, 0.06); }
+@property --hsk-glass-bg { syntax: '<color>'; inherits: true; initial-value: rgba(255, 255, 255, 0.07); }
+
+/* One curve for every colour: the theme tokens move, and everything drawn from them follows. */
+[data-hsk-theme] {
+  transition:
+    --hsk-chat-bg 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+    --hsk-chat-text 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+    --hsk-chat-muted 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+    --hsk-chat-divide 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+    --hsk-chat-input-bg 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+    --hsk-chat-source-bg 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+    --hsk-fade-bg 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+    --hsk-surface-1 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+    --hsk-surface-2 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+    --hsk-bubble-bg 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+    --hsk-think-text 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+    --hsk-placeholder 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+    --hsk-grid-bg 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+    --hsk-active-bg 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+    --hsk-on-active 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+    --hsk-src-title 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+    --hsk-src-desc 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+    --hsk-price-bg 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+    --hsk-price-text 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+    --hsk-sheet-bg 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+    --hsk-primary 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+    --hsk-pill-bg 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+    --hsk-glass-bg 0.36s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* While a theme changes, controls drop their own colour easing and ride the tokens instead of chasing them. */
+[data-hsk-theming] *,
+[data-hsk-theming] *::before,
+[data-hsk-theming] *::after {
+  transition-property: transform, opacity !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-hsk-theme] {
+    transition: none;
+  }
+}
 
 :host, :root {
   --hsk-border-radius: 0px;

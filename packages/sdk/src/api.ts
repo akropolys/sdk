@@ -26,6 +26,13 @@ export interface UIStrings {
   font: ScriptFont | null;
 }
 
+export interface WidgetSettings {
+  identityUrl: string;
+  scouts: { enabled: boolean; canAct: boolean };
+  detectedLanguage?: string;
+  font?: ScriptFont | null;
+}
+
 export type VoiceRefusal = 'guest' | 'shopper' | 'site' | 'credits' | 'unavailable';
 
 export type SpeechResult =
@@ -90,6 +97,47 @@ export class AkropolysAPI {
     private getKikuKey?: () => string | undefined
   ) {}
 
+  private widget?: Promise<WidgetSettings>;
+
+  // One boot call: the site's identity address and whether it wants scouts.
+  widgetSettings(): Promise<WidgetSettings> {
+    if (!this.widget) {
+      this.widget = (async () => {
+        try {
+          const res = await fetch(`${this.apiUrl}/site-widget?siteId=${encodeURIComponent(this.siteId)}`);
+          const data = res.ok ? await res.json() : null;
+          return {
+            identityUrl: data?.identityUrl || '',
+            scouts: { enabled: !!data?.scouts?.enabled, canAct: !!data?.scouts?.canAct },
+            detectedLanguage: typeof data?.detectedLanguage === 'string' ? data.detectedLanguage : undefined,
+            font: data?.font ? this.parseFont(data.font) : null,
+          };
+        } catch {
+          return { identityUrl: '', scouts: { enabled: false, canAct: false } };
+        }
+      })();
+    }
+    return this.widget;
+  }
+
+  private async shopperAuth(): Promise<string | undefined> {
+    const { identityUrl } = await this.widgetSettings();
+    if (!identityUrl) return undefined;
+    try {
+      const res = await fetch(identityUrl, {
+        credentials: 'include',
+        headers: { Accept: 'application/json' },
+      });
+      if (!res.ok) return undefined;
+      const data = await res.json();
+      const value = data?.authorization || data?.token;
+      if (typeof value !== 'string' || !value) return undefined;
+      return data?.authorization ? value : `Bearer ${value}`;
+    } catch {
+      return undefined;
+    }
+  }
+
   async entityPreview(language: string): Promise<{ original?: any; translated?: any } | null> {
     try {
       const res = await fetch(`${this.apiUrl}/entity-preview`, {
@@ -146,12 +194,14 @@ export class AkropolysAPI {
     }
   }
 
-  async uiStrings(language: string): Promise<UIStrings | null> {
+  // defaults travel with the request: the widget owns its own dictionary, so a
+  // string added here is translated without a server release.
+  async uiStrings(language: string, defaults?: Record<string, string>): Promise<UIStrings | null> {
     try {
       const res = await fetch(`${this.apiUrl}/ui-strings`, {
         method: 'POST',
         headers: this.buildHeaders(),
-        body: JSON.stringify({ siteId: this.siteId, language }),
+        body: JSON.stringify({ siteId: this.siteId, language, defaults }),
       });
       if (!res.ok) return null;
       const data = await res.json();
@@ -182,7 +232,10 @@ export class AkropolysAPI {
     }
   }
 
-  private buildHeaders(includeKikuPub = false, extraHeaders?: Record<string, string>): Record<string, string> {
+  // The kiku pub is the shopper's own identity and outranks the host page's
+  // shopperId prop, which the server only falls back to. Withholding it let a
+  // shopper hold minutes under one id and be read under another.
+  private buildHeaders(_legacy?: boolean, extraHeaders?: Record<string, string>): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'X-Akropolys-Token': this.apiToken,
@@ -195,10 +248,8 @@ export class AkropolysAPI {
     if (sessionId) headers['X-Akropolys-Session-Id'] = sessionId;
     const deviceId = this.getDeviceId?.();
     if (deviceId) headers['X-Akropolys-Device-Id'] = deviceId;
-    if (includeKikuPub) {
-      const kikuPub = this.getKikuPub?.();
-      if (kikuPub) headers['X-Akropolys-Kiku-Pub'] = kikuPub;
-    }
+    const kikuPub = this.getKikuPub?.();
+    if (kikuPub) headers['X-Akropolys-Kiku-Pub'] = kikuPub;
     const kikuKey = this.getKikuKey?.();
     if (kikuKey) {
       headers['X-Akropolys-Kiku-Key'] = kikuKey;
@@ -397,6 +448,8 @@ export class AkropolysAPI {
     }
     if (forcedIntent)                          body.forcedIntent = forcedIntent;
     if (captureTargets && captureTargets.length > 0) body.captureTargets = captureTargets;
+    const shopperAuth = await this.shopperAuth();
+    if (shopperAuth) headers['X-Akropolys-Shopper-Auth'] = shopperAuth;
     const res = await fetch(`${this.apiUrl}/chat/stream`, {
       method: 'POST',
       headers,
@@ -478,8 +531,19 @@ export class AkropolysAPI {
     }, 0, signal);
   }
 
+  // dispatchScout sends what a triggered scout held back, under the login the
+  // shopper's own browser hands us. Without them here there is nothing to send.
+  async dispatchScout(id: string, kikuKey?: string, signal?: AbortSignal): Promise<any> {
+    const auth = await this.shopperAuth();
+    if (!auth) throw new Error('sign in to the site first');
+    const headers: Record<string, string> = { 'X-Akropolys-Shopper-Auth': auth };
+    if (kikuKey) headers['X-Akropolys-Kiku-Key'] = kikuKey;
+    const res = await this.post<{ event: any }>(`/scouts/${id}/dispatch`, {}, 0, signal, false, headers);
+    return res.event;
+  }
+
   async createScout(input: CreateScoutInput, signal?: AbortSignal): Promise<Scout> {
-    log('info', 'createScout', input.instrument);
+    log('info', 'createScout', input.subject);
     const siteId = input.siteId || this.siteId;
     const extraHeaders: Record<string, string> = {};
     if (input.kikuKey) {
@@ -488,10 +552,9 @@ export class AkropolysAPI {
     const body: Record<string, any> = {
       siteId,
       name: input.name,
-      instrument: input.instrument,
-      conditionField: input.conditionField || 'price',
-      operator: input.operator || '<=',
-      targetValue: input.targetValue,
+      brief: input.brief,
+      subject: input.subject,
+      rules: input.rules,
       actionType: input.actionType || 'alert',
       dedicatedMinutes: input.dedicatedMinutes ?? 0,
       initialValue: input.initialValue,
@@ -523,6 +586,13 @@ export class AkropolysAPI {
     const qs = params.toString() ? `?${params.toString()}` : '';
     const res = await this.get<{ balance: number }>(`/scouts/balance${qs}`, extraHeaders, signal);
     return res.balance ?? 0;
+  }
+
+  async allowance(siteId?: string, signal?: AbortSignal): Promise<{ images: number; videos: number; voiceSeconds: number; replies: number }> {
+    const params = new URLSearchParams();
+    if (siteId || this.siteId) params.set('siteId', siteId || this.siteId);
+    const res = await this.get<{ images: number; videos: number; voiceSeconds: number; replies: number }>(`/visualize/allowance?${params.toString()}`, {}, signal);
+    return { images: res.images ?? -1, videos: res.videos ?? -1, voiceSeconds: res.voiceSeconds ?? -1, replies: res.replies ?? -1 };
   }
 
   async addScoutMinutes(id: string, minutes: number, kikuKey?: string, signal?: AbortSignal): Promise<number> {

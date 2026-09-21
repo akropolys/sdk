@@ -1,7 +1,6 @@
 import React from 'react';
-import type { ChatSource } from '@akropolys/sdk';
 import { cn } from '../../utils/cn';
-import { SparkleIcon, CloseIcon, MicIcon, MicOffIcon } from './icons';
+import { CloseIcon, MicIcon, MicOffIcon } from './icons';
 import { LIVE_VOICES, type UIStringKey, type VoicePhase } from './types';
 import { VoiceCanvas } from '../VoiceCanvas';
 import KikuDoodles from '../KikuDoodles';
@@ -22,9 +21,6 @@ export interface VoiceOverlayProps {
   };
   voiceMuted: boolean;
   setVoiceMuted: React.Dispatch<React.SetStateAction<boolean>>;
-  shownSources: ChatSource[];
-  onSelectSource?: (src: ChatSource) => void;
-  defaultCurrency: string;
   voiceError: string;
   t: (key: UIStringKey, vars?: Record<string, string>) => string;
 }
@@ -41,9 +37,6 @@ export function VoiceOverlay({
   live,
   voiceMuted,
   setVoiceMuted,
-  shownSources,
-  onSelectSource,
-  defaultCurrency,
   voiceError,
   t,
 }: VoiceOverlayProps) {
@@ -55,7 +48,6 @@ export function VoiceOverlay({
         className="hsk-voice-exit"
         onClick={stopVoice}
         aria-label={t('voiceModeExit')}
-        title={t('voiceModeExit')}
       >
         <CloseIcon />
       </button>
@@ -76,16 +68,6 @@ export function VoiceOverlay({
           </button>
         ))}
       </div>
-
-      {voiceSecondsLeft !== null && (
-        <div
-          className={cn('hsk-voice-allowance', voiceSecondsLeft <= 5 && 'hsk-voice-allowance--low')}
-          role="timer"
-          aria-live="off"
-        >
-          {Math.max(0, Math.ceil(voiceSecondsLeft))}s
-        </div>
-      )}
 
       <div className={cn('hsk-voice-stage', voiceConnecting && 'hsk-voice-stage--connecting')}>
         <VoiceCanvas
@@ -117,31 +99,6 @@ export function VoiceOverlay({
         </div>
       )}
 
-      {shownSources.length > 0 && (
-        <div className="hsk-voice-items">
-          {shownSources.slice(0, 4).map((src, i) => (
-            <button
-              key={src.id ?? i}
-              type="button"
-              className="hsk-voice-item"
-              style={{ animationDelay: `${i * 70}ms` }}
-              onClick={() => onSelectSource?.(src)}
-            >
-              {src.image
-                ? <img src={src.image} alt="" className="hsk-voice-item-img" loading="lazy" />
-                : <span className="hsk-voice-item-img hsk-voice-item-img--empty"><SparkleIcon /></span>}
-              <span className="hsk-voice-item-name">{src.name}</span>
-              {src.price && (
-                <span className="hsk-voice-item-price">
-                  {src.currency ?? defaultCurrency}{' '}
-                  {parseFloat(String(src.price).replace(/[^0-9.]/g, '') || '0').toLocaleString()}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-
       {voiceError && <div className="hsk-voice-error">{t(voiceError as UIStringKey)}</div>}
 
       <div className="hsk-voice-controls">
@@ -149,7 +106,6 @@ export function VoiceOverlay({
           className={cn('hsk-voice-control', voiceMuted && 'hsk-voice-control--muted')}
           onClick={() => setVoiceMuted(m => !m)}
           aria-label={voiceMuted ? t('voicePhaseListening') : t('voiceModeExit')}
-          title={voiceMuted ? t('voicePhaseListening') : t('voiceModeExit')}
         >
           <span key={voiceMuted ? 'off' : 'on'} className="hsk-voice-control-icon">
             {voiceMuted ? <MicOffIcon /> : <MicIcon />}

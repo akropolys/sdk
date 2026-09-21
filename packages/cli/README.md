@@ -1,6 +1,6 @@
 # @akropolys/cli
 
-Command-line utilities for [Akropolys](https://akropolys.cloud): scaffold local config, check connectivity, and lint catalog payloads before you ingest them.
+Command-line utilities for [Akropolys](https://akropolys.cloud): set up a project in one command, check connectivity, and lint catalog payloads before you ingest them.
 
 ## Install
 
@@ -14,16 +14,42 @@ npx @akropolys/cli <command>
 
 ### `akropolys init`
 
-Interactively writes an `.env` with your site credentials:
+The setup wizard. It detects your framework and package manager, installs
+`@akropolys/sdk` and `@akropolys/kiku`, signs you in through the browser, lets
+you pick or create a site, mints an API key for it, and writes everything to
+`.env.local` (or `.env`) — then prints the snippet that mounts the widget.
+
+```bash
+npx @akropolys/cli init
+npx @akropolys/cli init --skip-install
+npx @akropolys/cli init --no-login    # paste a Site ID and key instead
+npx @akropolys/cli init --api-url https://...
+```
+
+Sign-in opens `shell.akropolys.cloud/cli-login`, which shows a code to match
+against your terminal. Approving it posts a short-lived dashboard token back to
+a loopback server the CLI opened; the token is held in memory for the run and is
+never written to disk.
+
+Written variables, prefixed for the detected framework (`NEXT_PUBLIC_`, `VITE_`,
+`PUBLIC_`):
 
 ```
 NEXT_PUBLIC_AKROPOLYS_SITE_ID=...
-NEXT_PUBLIC_AKROPOLYS_API_TOKEN=...
+NEXT_PUBLIC_AKROPOLYS_API_KEY=...
+NEXT_PUBLIC_AKROPOLYS_API_URL=...
 ```
+
+A freshly minted key also carries the ASEP signing pair, which is shown only
+once. If you accept it, `AKROPOLYS_KID` and `AKROPOLYS_PRIVATE_KEY` are written
+alongside — unprefixed, because only your server may read them.
+
+Existing values are updated in place; nothing else in the file is touched, and
+the env file is added to `.gitignore` if it is not already covered.
 
 ### `akropolys doctor`
 
-Verifies your local config and that the API is reachable. Reads `NEXT_PUBLIC_AKROPOLYS_*` or `VITE_AKROPOLYS_*` from `.env` / `.env.local`.
+Verifies your local config and that the API is reachable. Reads `AKROPOLYS_*` under any of the `NEXT_PUBLIC_`, `VITE_`, `PUBLIC_` prefixes (or none) from `.env` / `.env.local`.
 
 ```bash
 akropolys doctor        # health check

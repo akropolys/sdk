@@ -25,7 +25,6 @@
 }
 
 [data-hsk-theme] .hsk-cb-chip,
-[data-hsk-theme] .hsk-cb-lang-chip,
 [data-hsk-theme] .hsk-action-pill {
   border: var(--hsk-chip-border, none) !important;
   background: var(--hsk-surface-1) !important;
@@ -33,7 +32,6 @@
 }
 
 [data-hsk-theme] .hsk-cb-chip:hover,
-[data-hsk-theme] .hsk-cb-lang-chip:hover,
 [data-hsk-theme] .hsk-action-pill:hover {
   background: rgba(var(--hsk-primary-rgb), 0.12) !important;
   color: var(--hsk-primary) !important;
@@ -91,13 +89,6 @@
   border-bottom: 1px solid var(--hsk-chat-divide) !important;
 }
 
-[data-hsk-theme] .hsk-cb-kiku-id-pill {
-  background: var(--hsk-surface-1) !important;
-  border: none !important;
-  box-shadow: none !important;
-  color: var(--hsk-chat-muted) !important;
-}
-
 [data-hsk-theme] .hsk-cb-kiku-id-pill:hover {
   color: var(--hsk-primary) !important;
 }
@@ -105,6 +96,7 @@
 /* Glass panels: 2x2 theme grid, scout card, mobile ooze menu */
 [data-hsk-theme] .hsk-cb-theme-2x2-grid,
 [data-hsk-theme] .hsk-cb-topbar-ooze-menu,
+[data-hsk-theme] .hsk-cb-scout-receipt,
 [data-hsk-theme] .hsk-cb-scout-rail-card {
   background: var(--hsk-glass-bg) !important;
   border: var(--hsk-glass-border) !important;
@@ -112,6 +104,29 @@
   box-shadow: var(--hsk-glass-shadow) !important;
   backdrop-filter: blur(28px) saturate(var(--hsk-glass-saturate, 180%)) !important;
   -webkit-backdrop-filter: blur(28px) saturate(var(--hsk-glass-saturate, 180%)) !important;
+}
+
+/* One hairline all round, so the name pill threads onto a single edge; the shadow is its own layer. */
+[data-hsk-theme] .hsk-cb-topbar-ooze-menu {
+  border-top: var(--hsk-glass-border) !important;
+  box-shadow: none !important;
+}
+
+/* The dock stands over the thread rather than beside it, so its frost is
+   heavier than the other glass panels': thickest at the top-left corner, where
+   the greeting and the last reply run behind it, and thinning on the way down. */
+[data-hsk-theme] .hsk-cb-scout-rail-card,
+[data-hsk-theme] .hsk-cb-scout-receipt {
+  background:
+    linear-gradient(
+      155deg,
+      color-mix(in srgb, var(--hsk-chat-bg, #ffffff) 92%, transparent) 0%,
+      color-mix(in srgb, var(--hsk-chat-bg, #ffffff) 82%, transparent) 45%,
+      color-mix(in srgb, var(--hsk-chat-bg, #ffffff) 66%, transparent) 100%
+    ),
+    var(--hsk-glass-bg) !important;
+  backdrop-filter: blur(34px) saturate(var(--hsk-glass-saturate, 180%)) !important;
+  -webkit-backdrop-filter: blur(34px) saturate(var(--hsk-glass-saturate, 180%)) !important;
 }
 
 /* Inside the mobile tray these are not panels — the tray is the panel. Left
@@ -128,7 +143,9 @@
 
 /* Trigger pills: theme squircle + scout rail */
 [data-hsk-theme] .hsk-cb-theme-squircle-trigger,
-[data-hsk-theme] .hsk-cb-scout-rail-trigger {
+[data-hsk-theme] .hsk-cb-scout-rail-trigger,
+[data-hsk-theme] .hsk-cb-kiku-id-pill,
+[data-hsk-theme] .hsk-cb-squircle-btn {
   background: var(--hsk-pill-bg) !important;
   color: var(--hsk-chat-text) !important;
   border: var(--hsk-glass-border) !important;
@@ -136,6 +153,19 @@
   box-shadow: var(--hsk-glass-shadow) !important;
   backdrop-filter: blur(20px) saturate(var(--hsk-glass-saturate, 160%)) !important;
   -webkit-backdrop-filter: blur(20px) saturate(var(--hsk-glass-saturate, 160%)) !important;
+}
+
+/* Same glass as their neighbours; only the text stays quiet. */
+[data-hsk-theme] .hsk-cb-kiku-id-pill,
+[data-hsk-theme] .hsk-cb-squircle-btn {
+  color: var(--hsk-chat-muted) !important;
+}
+
+[data-hsk-theme] .hsk-cb-exit-btn:hover {
+  background:
+    radial-gradient(120% 90% at 30% 0%, rgba(255, 255, 255, 0.4), transparent 65%),
+    var(--hsk-pill-bg) !important;
+  color: #ef4444 !important;
 }
 
 [data-hsk-theme] .hsk-cb-theme-grid-item {
@@ -416,3 +446,5 @@
   --hsk-pill-bg: rgba(180, 190, 255, 0.06) !important;
 }
 
+
+[data-hsk-theme] .hsk-cb-scout-receipt { box-shadow: none !important; }

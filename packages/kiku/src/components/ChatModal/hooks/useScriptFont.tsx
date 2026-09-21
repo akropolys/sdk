@@ -3,68 +3,37 @@ import type { ScriptFont, AkropolysTheme } from '@akropolys/sdk';
 import { useAkropolysContext } from '@akropolys/sdk';
 import { useScriptFontFace, preloadScriptFont } from '../../../utils/hostFont';
 import { cachedBaseFont, readyBaseFont } from '../../../utils/chromeWarm';
-import { DEFAULT_UI_STRINGS, getLoadingMeta, type UIStringKey } from '../types';
-import BUILTIN_LOCALES from '../locales.json';
+import { DEFAULT_UI_STRINGS, ONBOARDING_UI_STRINGS, getLoadingMeta, type UIStringKey } from '../types';
 
 export interface UseScriptFontOptions {
   shopperLanguage: string;
   theme?: 'light' | 'dark' | AkropolysTheme;
+  preloadedStrings?: Record<string, string> | null;
 }
 
-function getBuiltinLocale(lang: string): { strings: Record<string, string>; dir: string; bcp47: string } | null {
-  if (!lang) return null;
-  const l = lang.trim().toLowerCase();
-  const map: Record<string, string> = {
-    english: 'english',
-    en: 'english',
-    swahili: 'swahili',
-    kiswahili: 'swahili',
-    sw: 'swahili',
-    french: 'french',
-    français: 'french',
-    francais: 'french',
-    fr: 'french',
-    spanish: 'spanish',
-    español: 'spanish',
-    espanol: 'spanish',
-    es: 'spanish',
-    arabic: 'arabic',
-    'العربية': 'arabic',
-    ar: 'arabic',
-    portuguese: 'portuguese',
-    português: 'portuguese',
-    pt: 'portuguese',
-    hindi: 'hindi',
-    'हिन्दी': 'hindi',
-    hi: 'hindi',
-    chinese: 'chinese',
-    '中文': 'chinese',
-    zh: 'chinese',
-    japanese: 'japanese',
-    '日本語': 'japanese',
-    ja: 'japanese',
-    urdu: 'urdu',
-    'اردو': 'urdu',
-    ur: 'urdu',
-  };
-  const key = map[l];
-  if (!key || !(key in BUILTIN_LOCALES)) return null;
-  const raw = (BUILTIN_LOCALES as Record<string, Record<string, string>>)[key];
-  const isRtl = key === 'arabic' || key === 'urdu';
-  const bcp = key === 'arabic' ? 'ar' :
-              key === 'hindi' ? 'hi' :
-              key === 'chinese' ? 'zh' :
-              key === 'japanese' ? 'ja' :
-              key === 'urdu' ? 'ur' :
-              key === 'swahili' ? 'sw' :
-              key === 'french' ? 'fr' :
-              key === 'spanish' ? 'es' :
-              key === 'portuguese' ? 'pt' : 'en';
-  return {
-    strings: raw,
-    dir: isRtl ? 'rtl' : 'ltr',
-    bcp47: bcp,
-  };
+const LANGUAGE_CODES: Record<string, string> = {
+  english: 'en', en: 'en',
+  swahili: 'sw', kiswahili: 'sw', sw: 'sw',
+  french: 'fr', français: 'fr', francais: 'fr', fr: 'fr',
+  spanish: 'es', español: 'es', espanol: 'es', es: 'es',
+  arabic: 'ar', 'العربية': 'ar', ar: 'ar',
+  portuguese: 'pt', português: 'pt', pt: 'pt',
+  hindi: 'hi', 'हिन्दी': 'hi', hi: 'hi',
+  chinese: 'zh', '中文': 'zh', zh: 'zh',
+  japanese: 'ja', '日本語': 'ja', ja: 'ja',
+  urdu: 'ur', 'اردو': 'ur', ur: 'ur',
+  burmese: 'my', burma: 'my', myanmar: 'my', 'မြန်မာ': 'my', 'မြန်မာဘာသာ': 'my', my: 'my',
+  khmer: 'km', cambodian: 'km', 'ភាសាខ្មែរ': 'km', 'ខ្មែរ': 'km', km: 'km',
+  persian: 'fa', farsi: 'fa', 'فارسی': 'fa', fa: 'fa', fas: 'fa',
+  malay: 'ms', bahasa: 'ms', indonesian: 'id', 'bahasa melayu': 'ms', 'bahasa indonesia': 'id', ms: 'ms', id: 'id',
+  amharic: 'am', 'አማርኛ': 'am', am: 'am',
+};
+
+// Direction and speech language only; the words come from /ui-strings (cached per language by the sdk).
+function knownLanguage(lang: string): { dir: 'ltr' | 'rtl'; bcp47: string } | null {
+  const bcp47 = lang ? LANGUAGE_CODES[lang.trim().toLowerCase()] : undefined;
+  if (!bcp47) return null;
+  return { dir: bcp47 === 'ar' || bcp47 === 'ur' || bcp47 === 'fa' ? 'rtl' : 'ltr', bcp47 };
 }
 
 function resolveFirstFamily(varRef: string): string {
@@ -77,80 +46,170 @@ function resolveFirstFamily(varRef: string): string {
   return '';
 }
 
-export function useScriptFont({ shopperLanguage, theme }: UseScriptFontOptions) {
+export function useScriptFont({ shopperLanguage, theme, preloadedStrings }: UseScriptFontOptions) {
   const client = useAkropolysContext();
-  const [chromeStrings, setChromeStrings] = useState<Record<string, string>>(() => {
-    const builtin = getBuiltinLocale(shopperLanguage);
-    return builtin?.strings || {};
+  const cachedInitial = shopperLanguage ? (
+    client?.getCachedUIStrings?.(shopperLanguage, DEFAULT_UI_STRINGS) ??
+    client?.getCachedUIStrings?.(shopperLanguage, ONBOARDING_UI_STRINGS)
+  ) : null;
+  const initialStrings = (preloadedStrings && Object.keys(preloadedStrings).length > 0)
+    ? preloadedStrings
+    : (cachedInitial?.strings ?? {});
+  const [chromeStrings, setChromeStrings] = useState<Record<string, string>>(() => initialStrings);
+  const [chromeCurated, setChromeCurated] = useState<boolean>(() => cachedInitial?.curated !== false);
+  const [chromeReady, setChromeReady] = useState<boolean>(() => !shopperLanguage || (preloadedStrings && Object.keys(preloadedStrings).length > 0) || !!cachedInitial?.complete);
+  const [loadedLang, setLoadedLang] = useState<string>(() => {
+    if (preloadedStrings && Object.keys(preloadedStrings).length > 0) return shopperLanguage;
+    if (cachedInitial?.complete) return shopperLanguage;
+    const isEn = !shopperLanguage || knownLanguage(shopperLanguage)?.bcp47 === 'en';
+    return isEn ? (shopperLanguage || 'en') : '';
   });
-  const [chromeCurated, setChromeCurated] = useState<boolean>(true);
-  const [chromeReady, setChromeReady] = useState<boolean>(() => {
-    return !shopperLanguage || !!getBuiltinLocale(shopperLanguage);
-  });
+
+  const isEn = !shopperLanguage || knownLanguage(shopperLanguage)?.bcp47 === 'en';
+  let effectiveStrings = chromeStrings;
+  if (preloadedStrings && Object.keys(preloadedStrings).length > 0) {
+    effectiveStrings = { ...chromeStrings, ...preloadedStrings };
+  }
 
   const dirKey = shopperLanguage ? `akropolys_ui_dir_${shopperLanguage.toLowerCase()}` : '';
   const [isRTL, setIsRTL] = useState<boolean>(() => {
-    const builtin = getBuiltinLocale(shopperLanguage);
-    if (builtin) return builtin.dir === 'rtl';
+    if (cachedInitial?.dir) return cachedInitial.dir === 'rtl';
+    const known = knownLanguage(shopperLanguage);
+    if (known) return known.dir === 'rtl';
     const meta = getLoadingMeta(shopperLanguage);
     if (meta?.rtl) return true;
     if (typeof window === 'undefined' || !dirKey) return false;
     try { return localStorage.getItem(dirKey) === 'rtl'; } catch { return false; }
   });
   const [speechLang, setSpeechLang] = useState(() => {
-    return getBuiltinLocale(shopperLanguage)?.bcp47 || '';
+    return cachedInitial?.bcp47 || knownLanguage(shopperLanguage)?.bcp47 || '';
   });
-  const [scriptFont, setScriptFont] = useState<ScriptFont | null>(null);
+  const [scriptFont, setScriptFont] = useState<ScriptFont | null>(() => cachedInitial?.font ?? null);
   const [baseFont, setBaseFont] = useState<ScriptFont | null>(() => readyBaseFont(client));
-  const [baseFontReady, setBaseFontReady] = useState<boolean>(() => !!readyBaseFont(client));
+  const [baseFontReady, setBaseFontReady] = useState<boolean>(true);
+
+  // Sync synchronously during render if shopperLanguage changes, preventing any 1-frame flash of old strings
+  const [prevShopperLanguage, setPrevShopperLanguage] = useState(shopperLanguage);
+  if (shopperLanguage !== prevShopperLanguage) {
+    setPrevShopperLanguage(shopperLanguage);
+    const knownNow = knownLanguage(shopperLanguage);
+    if (knownNow) {
+      setIsRTL(knownNow.dir === 'rtl');
+      setSpeechLang(knownNow.bcp47);
+    }
+    const cached = shopperLanguage ? (
+      client?.getCachedUIStrings?.(shopperLanguage, DEFAULT_UI_STRINGS) ??
+      client?.getCachedUIStrings?.(shopperLanguage, ONBOARDING_UI_STRINGS)
+    ) : null;
+    const sourceStrings = (preloadedStrings && Object.keys(preloadedStrings).length > 0)
+      ? preloadedStrings
+      : cached?.strings;
+    if (sourceStrings && Object.keys(sourceStrings).length > 0) {
+      setChromeStrings(sourceStrings);
+      effectiveStrings = sourceStrings;
+      if (cached) {
+        setChromeCurated(cached.curated !== false);
+        if (cached.font) setScriptFont(cached.font);
+        if (cached.dir) setIsRTL(cached.dir === 'rtl');
+        if (cached.bcp47) setSpeechLang(cached.bcp47);
+      }
+      setLoadedLang(shopperLanguage);
+      setChromeReady(true);
+    }
+  }
+
+  const effectiveChromeReady = isEn || (loadedLang.toLowerCase() === shopperLanguage.toLowerCase() && chromeReady) || (effectiveStrings && Object.keys(effectiveStrings).length > 0);
 
   useEffect(() => {
     if (!shopperLanguage) {
       setSpeechLang('');
       setScriptFont(null);
       setChromeStrings({});
+      setLoadedLang('');
       setChromeReady(true);
       setIsRTL(false);
       return;
     }
-    const builtin = getBuiltinLocale(shopperLanguage);
+    const known = knownLanguage(shopperLanguage);
     const meta = getLoadingMeta(shopperLanguage);
-    const lLower = shopperLanguage.trim().toLowerCase();
-    const isUrdu = lLower === 'urdu' || lLower === 'ur' || shopperLanguage.trim() === 'اردو';
-    const needsWebFont = isUrdu || !builtin;
+    const isLangEn = known?.bcp47 === 'en';
 
-    if (builtin) {
-      setChromeStrings(builtin.strings);
-      setIsRTL(builtin.dir === 'rtl');
-      setSpeechLang(builtin.bcp47);
-      setChromeReady(!needsWebFont);
+    const cachedFull = client?.getCachedUIStrings?.(shopperLanguage, DEFAULT_UI_STRINGS);
+    if (cachedFull?.strings && Object.keys(cachedFull.strings).length > 0) {
+      setChromeCurated(cachedFull.curated !== false);
+      setChromeStrings(cachedFull.strings);
+      setIsRTL(cachedFull.dir === 'rtl');
+      setSpeechLang(cachedFull.bcp47 || known?.bcp47 || '');
+      if (cachedFull.font) setScriptFont(cachedFull.font);
+      setLoadedLang(shopperLanguage);
+      setChromeReady(true);
+      return;
+    }
+
+    const cachedOnboarding = client?.getCachedUIStrings?.(shopperLanguage, ONBOARDING_UI_STRINGS);
+    if (cachedOnboarding?.strings && Object.keys(cachedOnboarding.strings).length > 0) {
+      setChromeCurated(cachedOnboarding.curated !== false);
+      setChromeStrings(cachedOnboarding.strings);
+      setIsRTL(cachedOnboarding.dir === 'rtl');
+      setSpeechLang(cachedOnboarding.bcp47 || known?.bcp47 || '');
+      if (cachedOnboarding.font) setScriptFont(cachedOnboarding.font);
+      setLoadedLang(shopperLanguage);
+      setChromeReady(true);
     } else {
-      if (meta?.rtl) setIsRTL(true);
-      setChromeReady(false);
+      setChromeStrings({});
+      if (known) {
+        setIsRTL(known.dir === 'rtl');
+        setSpeechLang(known.bcp47);
+      } else {
+        if (meta?.rtl) setIsRTL(true);
+      }
+      if (!isLangEn) {
+        setChromeReady(false);
+      }
     }
 
     let cancelled = false;
     (async () => {
       try {
-        const res = await client.getUIStrings?.(shopperLanguage, DEFAULT_UI_STRINGS);
-        if (!cancelled && res?.complete) {
-          setChromeCurated(res.curated !== false);
-          setChromeStrings(prev => ({ ...res.strings, ...(builtin?.strings || {}) }));
-          setIsRTL(res.dir === 'rtl');
-          setSpeechLang(res.bcp47 || builtin?.bcp47 || '');
-          try { localStorage.setItem(dirKey, res.dir); } catch {  }
-          if (res.font) {
-            await preloadScriptFont(res.font, 1200);
-            if (!cancelled) setScriptFont(res.font);
+        if (!cachedOnboarding?.strings) {
+          const resFast = await client.getUIStrings?.(shopperLanguage, ONBOARDING_UI_STRINGS);
+          if (!cancelled && resFast?.complete) {
+            setChromeCurated(resFast.curated !== false);
+            setChromeStrings(prev => ({ ...prev, ...resFast.strings }));
+            setIsRTL(resFast.dir === 'rtl');
+            setSpeechLang(resFast.bcp47 || known?.bcp47 || '');
+            try { localStorage.setItem(dirKey, resFast.dir); } catch {  }
+            if (resFast.font) {
+              await preloadScriptFont(resFast.font, 1200);
+              if (!cancelled) setScriptFont(resFast.font);
+            }
+            if (!cancelled) {
+              setLoadedLang(shopperLanguage);
+              setChromeReady(true);
+            }
+          }
+        }
+
+        const resFull = await client.getUIStrings?.(shopperLanguage, DEFAULT_UI_STRINGS);
+        if (!cancelled && resFull?.complete) {
+          setChromeStrings(prev => ({ ...prev, ...resFull.strings }));
+          if (resFull.font) {
+            await preloadScriptFont(resFull.font, 1200);
+            if (!cancelled) setScriptFont(resFull.font);
           }
         }
       } catch {
         /* Builtin or defaults */
+        if (!cancelled) {
+          setLoadedLang(shopperLanguage);
+          setChromeReady(true);
+        }
       }
-      if (!cancelled) setChromeReady(true);
     })();
-    return () => { cancelled = true; };
-  }, [shopperLanguage, dirKey, client]);
+    return () => {
+      cancelled = true;
+    };
+  }, [shopperLanguage, client, dirKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -259,25 +318,25 @@ export function useScriptFont({ shopperLanguage, theme }: UseScriptFontOptions) 
   }, [isNonLatin, chromeStrings, typeof theme === 'object' && theme ? theme.fontFamily : undefined, fontEpoch]);
 
   const t = useCallback((key: UIStringKey, vars?: Record<string, string>): string => {
-    let s: string = chromeStrings[key] || DEFAULT_UI_STRINGS[key] || key;
+    let s: string = effectiveStrings[key] || chromeStrings[key] || DEFAULT_UI_STRINGS[key] || key;
     if (vars) {
       for (const [k, v] of Object.entries(vars)) s = s.split(`{${k}}`).join(v);
     }
     return s;
-  }, [chromeStrings]);
+  }, [effectiveStrings, chromeStrings]);
 
   const tNode = useCallback((key: UIStringKey, vars: Record<string, string>) => {
-    const s = chromeStrings[key] || DEFAULT_UI_STRINGS[key] || key;
+    let s = effectiveStrings[key] || chromeStrings[key] || DEFAULT_UI_STRINGS[key] || key;
     return s.split(/(\{[a-zA-Z]+\})/g).map((part, i) => {
       const m = part.match(/^\{([a-zA-Z]+)\}$/);
       if (m && vars[m[1]] !== undefined) return <bdi key={i}>{vars[m[1]]}</bdi>;
       return <React.Fragment key={i}>{part}</React.Fragment>;
     });
-  }, [chromeStrings]);
+  }, [effectiveStrings, chromeStrings]);
 
   return {
     chromeStrings,
-    chromeReady,
+    chromeReady: effectiveChromeReady,
     chromeCurated,
     isRTL,
     speechLang,

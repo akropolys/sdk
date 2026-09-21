@@ -1,48 +1,59 @@
 import { useState, useRef, useEffect } from 'react';
 
-const ACTIVE_WINDOW_MS = 400;
-const DRAIN_WINDOW_MS = 120;
-const MIN_CHARS_PER_MS = 0.012;
-// Without a ceiling the rate is proportional to the backlog, so a long reply
-// arrives as a dump: 2000 chars queued is 80 characters in a single frame.
-const MAX_CHARS_PER_MS = 0.3;
-const DRAIN_MAX_CHARS_PER_MS = 1.2;
+const WINDOW_MS = 450;
+const MIN_CPS = 45;
+const MAX_CPS = 900;
+const RATE_EASE_MS = 180;
 
-export function usePacedText(content: string, active: boolean) {
+export function usePacedText(content: string) {
   const [shown, setShown] = useState(content);
   const shownRef = useRef(content);
+  const targetRef = useRef(content);
+  const rateRef = useRef(0);
+  const carryRef = useRef(0);
+  const lastRef = useRef(0);
   const rafRef = useRef<number | null>(null);
 
+  useEffect(() => () => { if (rafRef.current !== null) cancelAnimationFrame(rafRef.current); }, []);
+
   useEffect(() => {
+    targetRef.current = content;
     const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     // a rewritten message (retry, edit, new turn) is no longer a prefix -- show it whole
     if (reduced || !content.startsWith(shownRef.current)) {
+      if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
       shownRef.current = content;
+      rateRef.current = 0;
+      carryRef.current = 0;
       setShown(content);
       return;
     }
-    if (shownRef.current.length >= content.length) return;
+    if (rafRef.current !== null || shownRef.current.length >= content.length) return;
 
-    let last = performance.now();
+    lastRef.current = performance.now();
     const step = (now: number) => {
-      const dt = Math.min(now - last, 50);
-      last = now;
-      const backlog = content.length - shownRef.current.length;
-      const rate = Math.min(
-        active ? MAX_CHARS_PER_MS : DRAIN_MAX_CHARS_PER_MS,
-        Math.max(MIN_CHARS_PER_MS, backlog / (active ? ACTIVE_WINDOW_MS : DRAIN_WINDOW_MS)),
-      );
-      const next = Math.min(content.length, shownRef.current.length + Math.max(1, Math.round(rate * dt)));
-      shownRef.current = content.slice(0, next);
-      setShown(shownRef.current);
-      rafRef.current = next < content.length ? requestAnimationFrame(step) : null;
+      const dt = Math.min(now - lastRef.current, 50);
+      lastRef.current = now;
+      const target = targetRef.current;
+      const backlog = target.length - shownRef.current.length;
+      const want = Math.min(MAX_CPS, Math.max(MIN_CPS, (backlog * 1000) / WINDOW_MS));
+      rateRef.current += (want - rateRef.current) * (1 - Math.exp(-dt / RATE_EASE_MS));
+      carryRef.current += (rateRef.current * dt) / 1000;
+      const whole = Math.floor(carryRef.current);
+      if (whole > 0) {
+        carryRef.current -= whole;
+        shownRef.current = target.slice(0, Math.min(target.length, shownRef.current.length + whole));
+        setShown(shownRef.current);
+      }
+      if (shownRef.current.length < targetRef.current.length) {
+        rafRef.current = requestAnimationFrame(step);
+      } else {
+        rafRef.current = null;
+        carryRef.current = 0;
+      }
     };
     rafRef.current = requestAnimationFrame(step);
-
-    return () => {
-      if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
-    };
-  }, [content, active]);
+  }, [content]);
 
   return shown;
 }

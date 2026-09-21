@@ -21,7 +21,7 @@ pnpm add @akropolys/kiku @akropolys/sdk
 ```tsx
 import { AkropolysProvider } from '@akropolys/sdk';
 import { KikuButton } from '@akropolys/kiku';
-import '@akropolys/kiku/styles.css';
+import '@akropolys/kiku/styles.css'; // required: the chat window copies its rules from this sheet (serve it same-origin, or with crossorigin="anonymous")
 
 export default function App() {
   return (
@@ -51,10 +51,10 @@ export default function App() {
 
 | Component | Description |
 |---|---|
-| `<KikuButton />` | Floating trigger button and full-screen modal with multi-modal voice & vision. |
-| `<KikuChat />` | Embedded inline conversational chat container. |
-| `<VoiceOverlay />` | Duplex live spoken voice assistant with Apple Siri chromatic animation and real-time audio visualization. |
-| `<LiveTable />` | High-precision comparative financial and sports odds table. |
+| `<KikuButton />` | Launcher pill that opens the full-screen chat, with live voice and vision. |
+| `<SearchBar />` | Inline catalogue search with streamed results. |
+| `<ScoutRail />` | Dock for the shopper's scouts: send one out, check on it, buy time. |
+| `<ScoutCharacter />` | A single animated scout avatar. |
 
 
 ---

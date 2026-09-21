@@ -1,50 +1,9 @@
-import type { SpeechResult, VoiceRefusal } from '@akropolys/sdk';
-
-export interface SpeakOptions {
-
-  client: { synthesizeSpeech: (text: string, voice?: string, language?: string, signal?: AbortSignal) => Promise<SpeechResult | null> };
-  text: string;
-  voice?: string;
-
-  language?: string;
-
-  bcp47?: string;
-  onStart?: () => void;
-  onEnd?: () => void;
-  onError?: (err: any) => void;
-
-  onRefused?: (reason: VoiceRefusal) => void;
-
-  onSecondsLeft?: (seconds: number) => void;
-}
-
 let ctx: AudioContext | null = null;
 let analyser: AnalyserNode | null = null;
 let duckGain: GainNode | null = null;
 let timeData: Uint8Array | null = null;
-let generation = 0;
 let speaking = false;
 let smoothed = 0;
-let usingFallback = false;
-
-function audio(): { ctx: AudioContext; analyser: AnalyserNode } | null {
-  if (typeof window === 'undefined') return null;
-  const AC = (window as any).AudioContext || (window as any).webkitAudioContext;
-  if (!AC) return null;
-  if (!ctx) {
-    ctx = new AC();
-    analyser = ctx!.createAnalyser();
-    analyser.fftSize = 1024;
-    analyser.smoothingTimeConstant = 0.25;
-    duckGain = ctx!.createGain();
-    duckGain.gain.value = 1;
-    analyser.connect(duckGain);
-    duckGain.connect(ctx!.destination);
-    timeData = new Uint8Array(analyser.fftSize);
-  }
-  return { ctx: ctx!, analyser: analyser! };
-}
-
 export function duckSpeech(level: number, fadeMs = 130): void {
   const g = duckGain;
   if (!g || !ctx) return;
@@ -59,10 +18,7 @@ export function speechLevel(): number {
     smoothed *= 0.85;
     return smoothed;
   }
-  if (usingFallback || !analyser || !timeData) {
-    const t = Date.now() / 1000;
-    return 0.35 + 0.18 * Math.sin(t * 7.1) + 0.1 * Math.sin(t * 3.3);
-  }
+  if (!analyser || !timeData) return smoothed;
   analyser.getByteTimeDomainData(timeData as any);
   let sum = 0;
   for (let i = 0; i < timeData.length; i++) {
@@ -75,23 +31,7 @@ export function speechLevel(): number {
   return smoothed;
 }
 
-export function speechSpectrum(out: Uint8Array): boolean {
-  if (!speaking || usingFallback || !analyser) return false;
-  if (out.length !== analyser.frequencyBinCount) return false;
-  analyser.getByteFrequencyData(out as any);
-  return true;
-}
-
-export function spectrumBins(): number {
-  return analyser ? analyser.frequencyBinCount : 0;
-}
-
-export function isSpeaking(): boolean {
-  return speaking;
-}
-
 export function stopSpeech() {
-  generation++;
   speaking = false;
   if (duckGain && ctx) {
     duckGain.gain.cancelScheduledValues(ctx.currentTime);
@@ -99,188 +39,5 @@ export function stopSpeech() {
   }
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
     try { window.speechSynthesis.cancel(); } catch {  }
-  }
-}
-
-export function cleanTextForSpeech(text: string): string {
-  return text
-    .replace(/```[\s\S]*?```/g, ' ')
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    .replace(/https?:\/\/\S+/g, ' ')
-    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
-    .replace(/^\s*[-*+]\s+/gm, '')
-    .replace(/[*_~>|]/g, '')
-    .replace(/\s*\n\s*\n\s*/g, '. ')
-    .replace(/\s*\n\s*/g, ' ')
-    .replace(/\s+/g, ' ')
-    .replace(/\s+([.,!?;:])/g, '$1')
-    .trim();
-}
-
-const SENTENCE_END = /([.!?…。！？؟۔।]+["'”’)\]]*\s+)/;
-const CHUNK_TARGET = 240;
-
-export function chunkForSpeech(text: string, target = CHUNK_TARGET): string[] {
-  const pieces = text.split(SENTENCE_END).filter(Boolean);
-  const chunks: string[] = [];
-  let buf = '';
-  for (const piece of pieces) {
-    if (buf && (buf + piece).length > target) {
-      chunks.push(buf.trim());
-      buf = '';
-    }
-    buf += piece;
-    while (buf.length > target * 2) {
-      const cut = buf.lastIndexOf(' ', target * 2);
-      chunks.push(buf.slice(0, cut > target ? cut : target * 2).trim());
-      buf = buf.slice(cut > target ? cut : target * 2);
-    }
-  }
-  if (buf.trim()) chunks.push(buf.trim());
-  return chunks.filter(c => /\S/.test(c));
-}
-
-function playBuffer(a: { ctx: AudioContext; analyser: AnalyserNode }, buf: AudioBuffer, gen: number): Promise<void> {
-  return new Promise(resolve => {
-    if (gen !== generation) return resolve();
-    const src = a.ctx.createBufferSource();
-    src.buffer = buf;
-    src.connect(a.analyser);
-    src.onended = () => resolve();
-    src.start();
-    const watchdog = setInterval(() => {
-      if (gen !== generation) {
-        clearInterval(watchdog);
-        try { src.stop(); } catch {  }
-        resolve();
-      }
-    }, 100);
-    src.onended = () => { clearInterval(watchdog); resolve(); };
-  });
-}
-
-export async function speak({
-  client,
-  text,
-  voice,
-  language,
-  bcp47,
-  onStart,
-  onEnd,
-  onError,
-  onRefused,
-  onSecondsLeft,
-}: SpeakOptions): Promise<void> {
-  stopSpeech();
-  const gen = ++generation;
-  usingFallback = false;
-
-  const clean = cleanTextForSpeech(text);
-  if (!clean) { onEnd?.(); return; }
-
-  const a = audio();
-  if (!a) { fallbackWebSpeech(clean, bcp47, onStart, onEnd, onError); return; }
-  if (a.ctx.state === 'suspended') { try { await a.ctx.resume(); } catch {  } }
-
-  const chunks = chunkForSpeech(clean);
-  const synth = (t: string) => client.synthesizeSpeech(t, voice, language).catch(() => null);
-
-  let started = false;
-  let pending = synth(chunks[0]);
-
-  for (let i = 0; i < chunks.length; i++) {
-    if (gen !== generation) break;
-    const result = await pending;
-    pending = i + 1 < chunks.length ? synth(chunks[i + 1]) : Promise.resolve(null);
-
-    if (result && 'refused' in result && result.refused) {
-      onRefused?.(result.refused);
-      onEnd?.();
-      return;
-    }
-    if (!result) {
-      if (!started) {
-        fallbackWebSpeech(chunks.slice(i).join(' '), bcp47, onStart, onEnd, onError);
-        return;
-      }
-      continue;
-    }
-    if (result.secondsLeft !== undefined) onSecondsLeft?.(result.secondsLeft);
-    if (gen !== generation) break;
-
-    let decoded: AudioBuffer;
-    try {
-      decoded = await a.ctx.decodeAudioData(result.audio.slice(0));
-    } catch (e) {
-      onError?.(e);
-      continue;
-    }
-    if (gen !== generation) break;
-
-    if (!started) { started = true; speaking = true; onStart?.(); }
-    await playBuffer(a, decoded, gen);
-  }
-
-  if (gen === generation) {
-    speaking = false;
-    onEnd?.();
-  }
-}
-
-function pickVoice(tag: string): SpeechSynthesisVoice | undefined {
-  const voices = window.speechSynthesis.getVoices?.() ?? [];
-  if (!voices.length || !tag) return undefined;
-  const want = tag.toLowerCase();
-  const base = want.split('-')[0];
-  const candidates = voices.filter(v => v.lang?.toLowerCase().replace('_', '-') === want);
-  const loose = candidates.length
-    ? candidates
-    : voices.filter(v => v.lang?.toLowerCase().split(/[-_]/)[0] === base);
-  if (!loose.length) return undefined;
-  return loose.find(v => v.localService === false) ?? loose[0];
-}
-
-function fallbackWebSpeech(
-  text: string,
-  bcp47?: string,
-  onStart?: () => void,
-  onEnd?: () => void,
-  onError?: (err: any) => void
-) {
-  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-    onError?.('speech-unavailable');
-    onEnd?.();
-    return;
-  }
-  const gen = generation;
-  usingFallback = true;
-  try {
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    const tag = bcp47 || document.documentElement.lang || navigator.language || '';
-    if (tag) utterance.lang = tag;
-    const v = pickVoice(tag);
-    if (v) utterance.voice = v;
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
-
-    utterance.onstart = () => { speaking = true; onStart?.(); };
-    utterance.onend = () => {
-      if (gen !== generation) return;
-      speaking = false;
-      onEnd?.();
-    };
-    utterance.onerror = (e) => {
-      speaking = false;
-      onError?.(e);
-      onEnd?.();
-    };
-    window.speechSynthesis.speak(utterance);
-  } catch (e) {
-    speaking = false;
-    onError?.(e);
-    onEnd?.();
   }
 }

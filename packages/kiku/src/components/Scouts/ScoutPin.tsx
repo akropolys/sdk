@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Scout } from '@akropolys/sdk';
-import cssText from '../../generated/cssText';
+import { kikuCss } from '../../utils/shadowRoot';
 import { ScoutCharacter, ScoutMood, speciesNick } from './ScoutCharacter';
 
 export function pinSupported(): boolean {
@@ -24,7 +24,7 @@ function progress(scout: Scout): number | null {
     return Number.isNaN(n) ? null : n;
   };
   const start = num(scout.initialValue);
-  const target = num(scout.targetValue);
+  const target = num(scout.rules?.[0]?.value);
   if (start === null || target === null || start === target) return null;
   const now = num(scout.triggerValue) ?? start;
   const pct = ((now - start) / (target - start)) * 100;
@@ -56,10 +56,10 @@ function paint(win: Window, sourceEl?: HTMLElement | null) {
 }
 
 function furnish(win: Window, themeAttr?: string) {
-  if (!win.document.querySelector('style[data-hsk]')) {
+  if (!win.document.querySelector('style[data-hsk]') && kikuCss()) {
     const style = win.document.createElement('style');
     style.setAttribute('data-hsk', '');
-    style.textContent = cssText;
+    style.textContent = kikuCss();
     win.document.head.appendChild(style);
   }
   win.document.body.className = 'hsk-cb-pin-body';
@@ -164,7 +164,7 @@ export function ScoutPin({ scouts, themeAttr, balance, sourceEl, onClose }: Scou
 
               <span className="hsk-cb-pin-text">
                 <span className="hsk-cb-pin-watch">
-                  {scout.instrument} {scout.operator} {scout.targetValue}
+                  {scout.brief || scout.subject}
                 </span>
                 {pct !== null && (
                   <span className="hsk-cb-pin-bar">

@@ -64,6 +64,7 @@ export interface AkropolysConfig {
   siteId?: string;
 
   apiUrl?: string;
+  voiceUrl?: string;
 
   apiToken?: string;
 
@@ -205,20 +206,32 @@ export interface SignedPayload<T = Record<string, any>> {
 // 'idle' is a paid avatar that has not been told what to watch yet.
 export type ScoutStatus = 'idle' | 'active' | 'paused' | 'triggered' | 'expired' | 'canceled';
 
+// One check a scout makes against a record. Compiled from the shopper's
+// words when the scout is briefed, and never shown to them.
+export interface ScoutRule {
+  field: string;
+  op: string;
+  value: string;
+}
+
 export interface Scout {
   id: string;
   siteId: string;
   shopperId: string;
   name: string;
-  instrument: string;
-  conditionField: string;
-  operator: string;
-  targetValue: string;
+  // What the shopper asked for, in their words. The fields below are what it
+  // compiled to.
+  brief: string;
+  // The entity being watched. Empty for a watch over a set.
+  subject: string;
+  rules: ScoutRule[];
   actionType: string;
   status: ScoutStatus;
   // Which animal the shopper put on this scout. Empty means "derive one".
   avatar: string;
   dedicatedMinutes: number;
+  // Minutes this scout has burned, written in the same tick that spends them.
+  minutesUsed: number;
   initialValue?: string;
   triggerValue?: string;
   createdAt: string;
@@ -252,10 +265,9 @@ export interface ScoutEvent {
 
 export interface CreateScoutInput {
   name?: string;
-  instrument: string;
-  conditionField?: string;
-  operator?: string;
-  targetValue: string;
+  brief: string;
+  subject: string;
+  rules: ScoutRule[];
   actionType?: string;
   dedicatedMinutes?: number;
   initialValue?: string;

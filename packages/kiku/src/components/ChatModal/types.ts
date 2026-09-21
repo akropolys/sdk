@@ -17,7 +17,7 @@ export const LANGUAGE_CHOICES = [
   { value: 'Urdu', native: 'اردو', tag: 'ur', rtl: true },
 ];
 
-export function endonymFor(lang: string | null | undefined): string | undefined {
+export function endonymFor(lang: string | null | undefined, bcp47?: string | null): string | undefined {
   if (!lang) return undefined;
   const typed = lang.trim();
   if (!typed) return undefined;
@@ -25,7 +25,24 @@ export function endonymFor(lang: string | null | undefined): string | undefined 
   const hit = LANGUAGE_CHOICES.find(
     x => x.value.toLowerCase() === l || x.native.toLowerCase() === l || x.tag === l
   );
-  return hit ? hit.native : typed;
+  if (hit) return hit.native;
+  if (LANGUAGE_METAS[l]?.endonym) return LANGUAGE_METAS[l].endonym;
+  const byEndonym = Object.values(LANGUAGE_METAS).find(m => m.endonym?.toLowerCase() === l);
+  if (byEndonym?.endonym) return byEndonym.endonym;
+
+  // Browser-native localization via Intl.DisplayNames
+  const tag = bcp47 || (l.length <= 3 ? l : undefined);
+  if (tag && typeof Intl !== 'undefined' && Intl.DisplayNames) {
+    try {
+      const dn = new Intl.DisplayNames([tag], { type: 'language' });
+      const name = dn.of(tag);
+      if (name && name.toLowerCase() !== tag.toLowerCase()) {
+        return name;
+      }
+    } catch {  }
+  }
+
+  return typed;
 }
 
 export function isRTLText(s: string): boolean {
@@ -60,6 +77,8 @@ export const LANGUAGE_METAS: Record<string, { preparing: string; changeLang: str
   turkish: { preparing: 'Türkçe olarak hazırlanıyor…', changeLang: 'Dili değiştir', endonym: 'Türkçe' },
   vietnamese: { preparing: 'Đang thiết lập bằng Tiếng Việt…', changeLang: 'Đổi ngôn ngữ', endonym: 'Tiếng Việt' },
   indonesian: { preparing: 'Menyiapkan dalam Bahasa Indonesia…', changeLang: 'Ubah bahasa', endonym: 'Bahasa Indonesia' },
+  malay: { preparing: 'Menyediakan dalam Bahasa Melayu…', changeLang: 'Tukar bahasa', endonym: 'Bahasa Melayu' },
+  bahasa: { preparing: 'Menyediakan dalam Bahasa Melayu…', changeLang: 'Tukar bahasa', endonym: 'Bahasa Melayu' },
   polish: { preparing: 'Przygotowywanie w języku polskim…', changeLang: 'Zmień język', endonym: 'Polski' },
   dutch: { preparing: 'Instellen in het Nederlands…', changeLang: 'Taal wijzigen', endonym: 'Nederlands' },
   thai: { preparing: 'กำลังตั้งค่าเป็นภาษาไทย…', changeLang: 'เปลี่ยนภาษา', endonym: 'ไทย' },
@@ -70,7 +89,14 @@ export const LANGUAGE_METAS: Record<string, { preparing: string; changeLang: str
   farsi: { preparing: 'در حال آماده‌سازی به زبان فارسی…', changeLang: 'تغییر زبان', rtl: true, endonym: 'فارسی' },
   greek: { preparing: 'Ρύθμιση στα ελληνικά…', changeLang: 'Αλλαγή γλώσσας', endonym: 'Ελληνικά' },
   hebrew: { preparing: 'מגדיר בעברית…', changeLang: 'שנה שפה', rtl: true, endonym: 'עברית' },
+  burmese: { preparing: 'မြန်မာဘာသာဖြင့် ပြင်ဆင်နေသည်…', changeLang: 'ဘာသာစကားပြောင်းရန်', endonym: 'မြန်မာဘာသာ' },
+  burma: { preparing: 'မြန်မာဘာသာဖြင့် ပြင်ဆင်နေသည်…', changeLang: 'ဘာသာစကားပြောင်းရန်', endonym: 'မြန်မာဘာသာ' },
+  myanmar: { preparing: 'မြန်မာဘာသာဖြင့် ပြင်ဆင်နေသည်…', changeLang: 'ဘာသာစကားပြောင်းရန်', endonym: 'မြန်မာဘာသာ' },
+  khmer: { preparing: 'កំពុងរៀបចំជាភាសាខ្មែរ…', changeLang: 'ប្តូរភាសា', endonym: 'ភាសាខ្មែរ' },
+  cambodian: { preparing: 'កំពុងរៀបចំជាភាសាខ្មែរ…', changeLang: 'ប្តូរភាសា', endonym: 'ភាសាខ្មែរ' },
   swedish: { preparing: 'Ställer in på svenska…', changeLang: 'Byt språk', endonym: 'Svenska' },
+  svenska: { preparing: 'Ställer in på svenska…', changeLang: 'Byt språk', endonym: 'Svenska' },
+  sv: { preparing: 'Ställer in på svenska…', changeLang: 'Byt språk', endonym: 'Svenska' },
   kikuyu: { preparing: 'Gĩkũyũ gĩgĩthondekwo…', changeLang: 'Cenjia rũthiomi', endonym: 'Gĩkũyũ' },
   gikuyu: { preparing: 'Gĩkũyũ gĩgĩthondekwo…', changeLang: 'Cenjia rũthiomi', endonym: 'Gĩkũyũ' },
   akan: { preparing: 'Yɛresiesie wɔ Akan mu…', changeLang: 'Sesa kasa', endonym: 'Akan' },
@@ -78,10 +104,21 @@ export const LANGUAGE_METAS: Record<string, { preparing: string; changeLang: str
   yoruba: { preparing: 'Ngbaradi ni Èdè Yorùbá…', changeLang: 'Yi ede pada', endonym: 'Èdè Yorùbá' },
   amharic: { preparing: 'በአማርኛ በመዘጋጀት ላይ…', changeLang: 'ቋንቋ ቀይር', endonym: 'አማርኛ' },
   somali: { preparing: 'Diyaarinta af Soomaali…', changeLang: 'Beddel luqadda', endonym: 'Af-Soomaali' },
+  soomaali: { preparing: 'Diyaarinta af Soomaali…', changeLang: 'Beddel luqadda', endonym: 'Af-Soomaali' },
+  'af-soomaali': { preparing: 'Diyaarinta af Soomaali…', changeLang: 'Beddel luqadda', endonym: 'Af-Soomaali' },
+  so: { preparing: 'Diyaarinta af Soomaali…', changeLang: 'Beddel luqadda', endonym: 'Af-Soomaali' },
   hausa: { preparing: 'Shirya cikin Hausa…', changeLang: 'Canja harshe', endonym: 'Hausa' },
   zulu: { preparing: 'Ilungiselela ngesiZulu…', changeLang: 'Shintsha ulimi', endonym: 'isiZulu' },
   oromo: { preparing: 'Afaan Oromootiin qophaa\'aa jira…', changeLang: 'Afaan jijjiiri', endonym: 'Afaan Oromoo' },
   luganda: { preparing: 'Tuteekateeka mu Oluganda…', changeLang: 'Kyusa olulimi', endonym: 'Oluganda' },
+  igbo: { preparing: 'Na-akwadebe na Asụsụ Igbo…', changeLang: 'Gbanwee asụsụ', endonym: 'Asụsụ Igbo' },
+  xhosa: { preparing: 'Ilungiselela ngesiXhosa…', changeLang: 'Tshintsha ulwimi', endonym: 'isiXhosa' },
+  kinyarwanda: { preparing: 'Guteza imbere mu Kinyarwanda…', changeLang: 'Hindura ururimi', endonym: 'Ikinyarwanda' },
+  lingala: { preparing: 'Kozala na Lingála…', changeLang: 'Bongola lokótá', endonym: 'Lingála' },
+  shona: { preparing: 'Kugadzirira mu chiShona…', changeLang: 'Chinja mutauro', endonym: 'chiShona' },
+  tigrinya: { preparing: 'ብትግርኛ ኣብ ምድላው ይርከብ…', changeLang: 'ቋንቋ ምቕያር', endonym: 'ትግርኛ' },
+  wolof: { preparing: 'Waajal ci Wolof…', changeLang: 'Soppi làkk', endonym: 'Wolof' },
+  afrikaans: { preparing: 'Berei voor in Afrikaans…', changeLang: 'Verander taal', endonym: 'Afrikaans' },
 };
 
 function formatLangName(str: string): string {
@@ -136,10 +173,45 @@ export type { VoicePhase } from '../../utils/voiceSession';
 
 export const VOICE_STORAGE_KEY = 'hsk-live-voice';
 
+export const ONBOARDING_UI_STRINGS: Record<string, string> = {
+  langPlaceholder: 'Type your preferred language…',
+  nameStepTitle: 'Nice to meet you.',
+  nameStepLead: 'I can search, show, or save anything for you — on this website or any other.',
+  nameStepAsk: 'What should I call you?',
+  namePlaceholder: 'Type your name…',
+  howShouldResultsLook: 'How should results look?',
+  entityLangIntro: 'I reply in {lang}. Product names stay as this site lists them — the details can too, or be translated.',
+  asWritten: 'As written',
+  inLanguage: 'In {lang}',
+  namesAsWritten: 'Details exactly as the site lists them.',
+  detailsTranslated: 'Details translated. Numbers and links stay exactly as listed.',
+  entityLangPlaceholder: 'Pick one of the two cards above…',
+  termsStepTitle: 'Privacy & Terms of Use',
+  termsStepSubtitle: 'Transparent, anonymous, and built without collecting personal data.',
+  termsPiiTitle: 'No Personal Data Collection',
+  termsPiiDesc: 'We never collect or store personal identifying information (no emails, phone numbers, or real identities) from your chats or voice interactions.',
+  termsSessionTitle: 'Anonymous Session Tokens',
+  termsSessionDesc: 'Your session uses an anonymous client-side token solely to maintain context. It is never linked to your real identity.',
+  termsMemoryTitle: 'Temporary Chats and Mimi Vault',
+  termsMemoryDesc: 'Regular chats are temporary — closing the tab or clicking "Clear Chat" permanently deletes them. Items you save with "@kiku" are encrypted and can be unlocked at mimi.akropolys.cloud with your Secret Access Key.',
+  termsCookieTitle: 'Website Telemetry',
+  termsCookieDesc: "The website where Kiku is installed may collect cookies and analytics per their own cookie policy, outside Kiku's control.",
+  termsAgreeButton: 'Agree & Continue',
+  termsAgreeCounting: 'Agree & Continue ({seconds}s)',
+  termsPlaceholder: 'Please review our Privacy & Terms of Use above…',
+  allSet: "You're all set, {name}.",
+  replyingOriginal: 'Replying in {lang}, results as this site wrote them. Ask me anything.',
+  replyingTranslated: 'Replying in {lang}, results translated too. Ask me anything.',
+  greetReturning: 'Hi, {name}.',
+  greetReturningLead: 'What can I find for you today?',
+  footerHint: 'kiku · searches the whole catalogue in real time',
+  defaultPlaceholder: 'Ask me anything…',
+};
+
 export const DEFAULT_UI_STRINGS = {
   langPlaceholder: 'Type your preferred language…',
   nameStepTitle: 'Nice to meet you.',
-  nameStepLead: 'I can search, visualize, or capture anything for you — on this site or any other.',
+  nameStepLead: 'I can search, show, or save anything for you — on this website or any other.',
   nameStepAsk: 'What should I call you?',
   namePlaceholder: 'Type your name…',
   attachImage: 'Attach a photo',
@@ -174,18 +246,18 @@ export const DEFAULT_UI_STRINGS = {
   detailsTranslated: 'Details translated. Numbers and links stay exactly as listed.',
   entityLangPlaceholder: 'Pick one of the two cards above…',
   termsStepTitle: 'Privacy & Terms of Use',
-  termsStepSubtitle: 'Transparent, anonymous, and zero-PII by design.',
-  termsPiiTitle: 'Zero PII Collection',
-  termsPiiDesc: 'We never collect or store personal identifying information (no emails, phone numbers, or real-world identities) from your chats or voice sessions.',
+  termsStepSubtitle: 'Transparent, anonymous, and built without collecting personal data.',
+  termsPiiTitle: 'No Personal Data Collection',
+  termsPiiDesc: 'We never collect or store personal identifying information (no emails, phone numbers, or real identities) from your chats or voice sessions.',
   termsSessionTitle: 'Anonymous Session Tokens',
   termsSessionDesc: 'Your session uses an anonymous client-side token solely to maintain context. It is never linked to your real identity.',
-  termsMemoryTitle: 'Ephemeral Chats vs. Mimi Vault',
-  termsMemoryDesc: 'Regular chats are ephemeral — closing the tab or clicking "Clear Chat" terminates them forever. Items you save with "@kiku" are encrypted and can be unlocked at mimi.akropolys.cloud with your Secret Access Key.',
-  termsCookieTitle: 'Host Website Telemetry',
-  termsCookieDesc: 'The host website where Kiku is embedded may collect cookies and analytics per their own cookie policy, outside Kiku\'s control.',
+  termsMemoryTitle: 'Temporary Chats and Mimi Vault',
+  termsMemoryDesc: 'Regular chats are temporary — closing the tab or clicking "Clear Chat" permanently deletes them. Items you save with "@kiku" are encrypted and can be unlocked at mimi.akropolys.cloud with your Secret Access Key.',
+  termsCookieTitle: 'Website Telemetry',
+  termsCookieDesc: "The website where Kiku is installed may collect cookies and analytics per their own cookie policy, outside Kiku's control.",
   termsAgreeButton: 'Agree & Continue',
   termsAgreeCounting: 'Agree & Continue ({seconds}s)',
-  termsPlaceholder: 'Please review our Privacy & Terms above…',
+  termsPlaceholder: 'Please review our Privacy & Terms of Use above…',
   allSet: "You're all set, {name}.",
   replyingTranslated: 'Replying in {lang}, results translated too. Ask me anything.',
   replyingOriginal: 'Replying in {lang}, results as this site wrote them. Ask me anything.',
@@ -209,10 +281,73 @@ export const DEFAULT_UI_STRINGS = {
   voiceUnavailable: 'Voice is unavailable right now. Try again in a moment.',
   voiceLimitReached: "You've used up today's voice time. It resets in a day — chat still works.",
   voiceSiteLimit: 'Voice is out of allowance on this site for now. Chat still works.',
+  voiceIdleEnded: 'Voice closed after a quiet minute. Tap the mic to talk again.',
+  voiceSessionEnded: 'Voice session ended. Tap the mic to talk again.',
   voicePickerLabel: 'Choose a voice',
+  pillVoice: '{n} min voice',
+  pillImages: '{n} images',
+  pillVideos: '{n} videos',
+  pillReplies: '{n} replies',
   micNoSpeech: "Didn't catch anything. Try again, a little closer to the mic.",
   micFailed: "Couldn't hear that. Try again.",
   clearChat: 'Clear chat',
+  scoutsTitle: 'Scouts',
+  scoutPool: 'Shared pool',
+  scoutPoolEach: 'each',
+  scoutSendOut: 'Send {who} out',
+  scoutBuyTime: 'Buy time',
+  scoutInMotion: '{n} in motion',
+  scoutOpeningCheckout: 'Opening checkout…',
+  scoutSendItOut: 'Send it out',
+  scoutPickAvatar: 'Pick a scout',
+  scoutStateWatching: 'watching',
+  scoutStateSuccess: 'success',
+  scoutStatePaused: 'paused',
+  scoutStateReady: 'ready',
+  scoutStateEnded: 'ended',
+  scoutAskHowDid: 'How did {who} do?',
+  scoutAskWhatDoing: 'What is {who} doing?',
+  scoutBriefCameIn: '{who} watched {watch} and it came in{at}.',
+  scoutBriefRanOut: '{who} ran out of time before {watch} came in.',
+  scoutBriefWaiting: '{who} is waiting for a brief.',
+  scoutBriefWatching: '{who} is watching {watch}.',
+  scoutSendingHeard: 'Send it, then.',
+  scoutSent: 'Sent — {what}.',
+  scoutCouldNotSend: 'It could not be sent. {why}',
+  scoutReady: '{who} is ready. What should {who} watch, and at what price?',
+  scoutSendOutAsk: 'Send {who} out.',
+  scoutStoryWatching: '{who} — watching {watch}',
+  scoutStoryWatched: '{who} — watched {watch}',
+  scoutStoryIdle: '{who} — ready, no brief yet.',
+  scoutStoryIdleLead: 'Tell it what to watch. {budget}',
+  scoutStoryReached: 'Target reached.',
+  scoutStoryExpired: 'Ran out of time.',
+  scoutStoryPaused: 'Paused — it watches nothing until you resume it.',
+  scoutStoryRunning: 'Still out there.',
+  scoutBudgetLeft: '{left} left, {used} spent.',
+  scoutBudgetLeftOnly: '{left} left.',
+  scoutBudgetSpent: 'All {used} spent.',
+  scoutLogTime: 'Time',
+  scoutLogWhat: 'What happened',
+  scoutLogSetOut: 'Set out',
+  scoutLogSetOutAt: 'Set out at {v}',
+  scoutLogMet: 'Target met',
+  scoutLogMetAt: 'Target met at {v}',
+  scoutLogSent: 'Sent: {what}',
+  scoutLogNotSent: 'Could not be sent',
+  scoutLogRefused: 'Held back: outside your limits',
+  scoutLogPaused: 'Paused',
+  scoutLogResumed: 'Resumed',
+  scoutLogCanceled: 'Called back',
+  scoutReceiptAchieved: 'goal reached',
+  scoutReceiptCaught: 'caught at',
+  scoutReceiptMet: 'Met at',
+  scoutReceiptSpent: '{used} spent',
+  scoutReceiptTap: 'Tap for the whole story',
+  scoutReceiptOpen: 'What {who} found',
+  scoutReceiptDismiss: 'Dismiss',
+  scoutExplainAsk: 'My scout {who} was watching {watch} and it just hit. Walk me through what happened — where it started, how the value moved, when it triggered and what it cost.',
+  scoutLeftLabel: 'left',
   thinking: 'Thinking',
   thoughtForSeconds: 'Thought for {duration}',
   thoughtProcess: 'Thought process',
@@ -222,7 +357,7 @@ export const DEFAULT_UI_STRINGS = {
   whatHaveYouSaved: 'What have you saved?',
   deleteThis: 'Delete this',
   errShopperReplyLimit: "You've reached this site's reply limit for your account.",
-  errAccessRevoked: 'Your access to the assistant has been revoked by the store.',
+  errAccessRevoked: 'Your access to the assistant has been revoked on this website.',
   errAccountRequired: 'Please create an account to continue using the chat assistant.',
   errStreamInterrupted: 'The reply was interrupted. Please try again.',
   errNetwork: "The assistant couldn't respond just now — please try again in a moment.",
@@ -372,17 +507,12 @@ export const KIKU_KEY_REVEAL_SECONDS = 15;
 export interface ModalOrigin {
   x: number;
   y: number;
-  r: number;
-  top?: number;
-  left?: number;
-  width?: number;
-  height?: number;
-  borderRadius?: number;
 }
 
-export interface ChatModalProps extends Pick<KikuButtonProps, 'title' | 'logo' | 'placeholder' | 'backdropColor' | 'backdropBlur' | 'onSelectSource' | 'defaultCurrency' | 'chips' | 'theme' | 'classNames' | 'enableVoice' | 'voiceLang' | 'enableVision' | 'visionCategoryHint' | 'enableAudioResponse' | 'ttsVoice' | 'autoSpeakResponses'> {
+export interface ChatModalProps extends Pick<KikuButtonProps, 'title' | 'logo' | 'placeholder' | 'backdropColor' | 'backdropBlur' | 'onSelectSource' | 'defaultCurrency' | 'chips' | 'theme' | 'classNames' | 'enableVoice' | 'voiceLang' | 'enableVision' | 'ttsVoice'> {
   theme?: 'light' | 'dark' | AkropolysTheme;
   classNames?: any;
   origin?: ModalOrigin | null;
+  arrivals?: import('@akropolys/sdk').Scout[];
   onClose: () => void;
 }

@@ -498,8 +498,77 @@
   }
 }
 
-.hsk-cb-send:disabled .hsk-cb-send-sheath { opacity: 0; }
+.hsk-cb-send:disabled:not(.is-morph-spinning) .hsk-cb-send-sheath { opacity: 0; }
 .hsk-cb-send--stop .hsk-cb-send-sheath { display: none; }
+
+.hsk-cb-send.is-morph-spinning {
+  cursor: wait !important;
+  pointer-events: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+.hsk-cb-send.is-morph-spinning .hsk-cb-send-sheath {
+  opacity: 1 !important;
+  animation: hsk-sheath-morph 1.2s ease-in-out infinite alternate !important;
+}
+
+@keyframes hsk-sheath-morph {
+  0% {
+    border-radius: 50% 50% 50% 50%;
+    transform: scale(0.96);
+  }
+  50% {
+    border-radius: 46% 54% 52% 48% / 50% 47% 53% 50%;
+    transform: scale(1.03);
+  }
+  100% {
+    border-radius: 54% 46% 48% 52% / 47% 53% 47% 53%;
+    transform: scale(0.96);
+  }
+}
+
+.hsk-cb-send.is-morph-spinning .hsk-cb-send-kite {
+  animation: hsk-goo-spin 0.85s cubic-bezier(0.4, 0, 0.2, 1) infinite !important;
+}
+
+@keyframes hsk-goo-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.hsk-cb-send-spinner-dots {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hsk-goo-orb {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ffffff;
+}
+
+.hsk-goo-orb--1 {
+  top: 0;
+  left: 6px;
+}
+
+.hsk-goo-orb--2 {
+  bottom: 1px;
+  left: 1px;
+}
+
+.hsk-goo-orb--3 {
+  bottom: 1px;
+  right: 1px;
+}
 
 .hsk-cb-send:active:not(:disabled) .hsk-cb-send-sheath {
   box-shadow:
@@ -743,20 +812,295 @@
   100% { transform: scale(1); opacity: 1; }
 }
 
-@keyframes hsk-actions-enter {
-  0%   { opacity: 0; transform: translateY(4px) scale(0.96); }
-  100% { opacity: 1; transform: translateY(0) scale(1); }
+
+/* ─── Language Loading Transition Animations (Apple Duo Blur & Gooey Morph) ── */
+
+/* Apple's signature smooth deceleration bezier */
+:root {
+  --hsk-apple-bezier: cubic-bezier(0.16, 1, 0.3, 1);
+  --hsk-apple-exit-bezier: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .hsk-cb-msg-action:hover:not(:disabled) .hsk-retry-icon,
-  .hsk-cb-msg-action:hover:not(:disabled) .hsk-edit-icon,
-  .hsk-cb-msg-action:hover:not(:disabled) .hsk-copy-sheet,
-  .hsk-check-icon {
-    transform: none !important;
-    animation: none !important;
+/* Step 1 card content glides UP out of frame with Apple duo blur */
+@keyframes hsk-step1-exit-up {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-46px) scale(0.96);
+    filter: blur(14px);
   }
 }
 
+.hsk-step1-exit {
+  animation: hsk-step1-exit-up 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  pointer-events: none;
+  will-change: transform, opacity, filter;
+}
 
+/* Input / composer bar slides UP simultaneously with Step 1, blurring out */
+@keyframes hsk-composer-exit-up {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-42px);
+    filter: blur(12px);
+  }
+}
 
+.hsk-composer-exit-up {
+  animation: hsk-composer-exit-up 0.30s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  pointer-events: none;
+  will-change: transform, opacity, filter;
+}
+
+/* ── Large Gooey Loader Container ── */
+.hsk-lang-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+  padding: 16px 0;
+  width: 100%;
+}
+
+/* Spinner rises from where the send button was, scaling up and clearing blur */
+@keyframes hsk-lang-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(220px) scale(0.18);
+    filter: blur(12px);
+  }
+  65% {
+    opacity: 1;
+    transform: translateY(-8px) scale(1.04);
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0px);
+  }
+}
+
+.hsk-lang-loader--enter {
+  animation: hsk-lang-rise 0.66s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity, filter;
+}
+
+/* Spinner drops back DOWN toward the send button position and blurs away */
+@keyframes hsk-lang-fall {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0px);
+  }
+  25% {
+    opacity: 1;
+    transform: translateY(-6px) scale(0.98);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(220px) scale(0.18);
+    filter: blur(14px);
+  }
+}
+
+.hsk-lang-loader--exit {
+  animation: hsk-lang-fall 0.46s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  will-change: transform, opacity, filter;
+}
+
+/* ── Organic Gooey Morphing Stage ── */
+.hsk-lang-goo-stage {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  animation: hsk-goo-stage-spin 6.4s linear infinite;
+  transform-origin: center center;
+}
+
+@keyframes hsk-goo-stage-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Central mother core blob: pulsates in counter-rhythm to satellites */
+.hsk-lang-core-blob {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 28px;
+  height: 28px;
+  margin-top: -14px;
+  margin-left: -14px;
+  border-radius: 50%;
+  background: var(--hsk-primary, #ff6a33);
+  animation: hsk-goo-core 2.1s ease-in-out infinite;
+}
+
+@keyframes hsk-goo-core {
+  0%, 100% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scale(0.88);
+  }
+  65% {
+    transform: scale(1.16);
+  }
+  85% {
+    transform: scale(0.94);
+  }
+}
+
+/* Orbit arms at 120-degree intervals */
+.hsk-lang-orbit-arm {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+}
+
+.hsk-lang-orbit-arm--1 { transform: rotate(0deg); }
+.hsk-lang-orbit-arm--2 { transform: rotate(120deg); }
+.hsk-lang-orbit-arm--3 { transform: rotate(240deg); }
+
+/* Orbiting satellite: pulls out from core, stretches sticky bridge, snaps, re-merges */
+.hsk-lang-satellite {
+  position: absolute;
+  top: -10px;
+  left: -10px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--hsk-primary, #ff6a33);
+}
+
+.hsk-lang-satellite--1 {
+  animation: hsk-goo-satellite 2.1s ease-in-out infinite 0s;
+}
+.hsk-lang-satellite--2 {
+  animation: hsk-goo-satellite 2.1s ease-in-out infinite -0.7s;
+}
+.hsk-lang-satellite--3 {
+  animation: hsk-goo-satellite 2.1s ease-in-out infinite -1.4s;
+}
+
+@keyframes hsk-goo-satellite {
+  0% {
+    transform: translateX(8px) scale(0.92);
+  }
+  32% {
+    transform: translateX(24px) scale(1);
+  }
+  48% {
+    transform: translateX(35px) scale(0.85);
+  }
+  65% {
+    transform: translateX(33px) scale(0.92);
+  }
+  84% {
+    transform: translateX(16px) scale(1.06);
+  }
+  100% {
+    transform: translateX(8px) scale(0.92);
+  }
+}
+
+/* Preparing in [language] label */
+.hsk-lang-preparing {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  color: var(--hsk-chat-muted, rgba(255, 255, 255, 0.44));
+  text-align: center;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.hsk-lang-loader--enter .hsk-lang-preparing {
+  animation: hsk-preparing-in 0.42s 0.48s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.hsk-lang-loader--exit .hsk-lang-preparing {
+  animation: hsk-preparing-out 0.12s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes hsk-preparing-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+    filter: blur(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0px);
+  }
+}
+
+@keyframes hsk-preparing-out {
+  to {
+    opacity: 0;
+    transform: translateY(4px);
+    filter: blur(6px);
+  }
+}
+
+/* Composer re-enters simultaneously as spinner drops: slides UP from below clearing blur */
+.hsk-composer-reveal {
+  animation: hsk-composer-in 0.48s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity, filter;
+}
+
+@keyframes hsk-composer-in {
+  0% {
+    opacity: 0;
+    transform: translateY(36px);
+    filter: blur(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0px);
+  }
+}
+
+/* Next step content (Name step etc.) enters from below with Apple duo blur clearing */
+.hsk-step-enter {
+  animation: hsk-step-enter-in 0.46s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity, filter;
+}
+
+@keyframes hsk-step-enter-in {
+  0% {
+    opacity: 0;
+    transform: translateY(22px);
+    filter: blur(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-step1-exit,
+  .hsk-composer-exit-up,
+  .hsk-lang-loader--enter,
+  .hsk-lang-loader--exit,
+  .hsk-composer-reveal,
+  .hsk-step-enter {
+    animation: none !important;
+  }
+}

@@ -29,7 +29,36 @@
 }
 
 .hsk-cb-panel[data-script="nonlatin"] .hsk-cb-hint { font-size: 11px; line-height: 16px; bottom: 4px; }
-.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-voice-error { font-size: 12px; line-height: 22px; max-width: 30ch; }
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-voice-error {
+  font-size: 12px;
+  line-height: 1.7;
+  max-width: min(92%, 520px);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-msg-action {
+  height: 16px;
+  padding: 1px 6.5px;
+  font-size: 9.5px;
+  line-height: 1;
+}
+
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-msg-action .hsk-cb-msg-action-label {
+  font-size: 9.5px;
+  line-height: 1;
+}
+
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-user-footer,
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-ai-footer {
+  min-height: 16px;
+}
+
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-sent-status,
+.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-failed-notice {
+  font-size: 10px;
+  line-height: 1;
+}
 
 .hsk-cb-panel[data-script="nonlatin"] .hsk-cb-hello {
   font-size: clamp(20px, 3.4vw, 26px);
@@ -71,6 +100,38 @@
 .hsk-cb-panel[data-nastaliq="true"] .hsk-markdown-table td {
   line-height: 2.2;
 }
+
+.hsk-cb-panel[data-nastaliq="true"] .hsk-cb-voice-error {
+  font-size: 13px;
+  line-height: 2.0;
+  max-width: min(92%, 540px);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.hsk-cb-panel[data-nastaliq="true"] .hsk-cb-msg-action {
+  height: 16px;
+  padding: 1px 6.5px;
+  font-size: 9px;
+  line-height: 1;
+}
+
+.hsk-cb-panel[data-nastaliq="true"] .hsk-cb-msg-action .hsk-cb-msg-action-label {
+  font-size: 9px;
+  line-height: 1;
+}
+
+.hsk-cb-panel[data-nastaliq="true"] .hsk-cb-user-footer,
+.hsk-cb-panel[data-nastaliq="true"] .hsk-cb-ai-footer {
+  min-height: 16px;
+}
+
+.hsk-cb-panel[data-nastaliq="true"] .hsk-cb-sent-status,
+.hsk-cb-panel[data-nastaliq="true"] .hsk-cb-failed-notice {
+  font-size: 9.5px;
+  line-height: 1;
+}
+
 .hsk-cb-panel[data-script="nonlatin"] .hsk-cb-chip { font-size: 14px; }
 
 .hsk-cb-panel[data-script="nonlatin"] .hsk-cb-topbar-btn {

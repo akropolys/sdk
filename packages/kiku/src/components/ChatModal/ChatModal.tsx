@@ -960,16 +960,35 @@ export function ChatModal({
     return kept.map((m, i) => (i === last ? { ...m, content: pacedContent } : m));
   }, [messages, loading, streaming, pacedContent]);
 
-  const timelineItems = React.useMemo(
-    () => displayMessages
-      .map((m, idx) => ({ m, idx }))
-      .filter(({ m }) => m.role === 'user' && !m.spoken && !!m.content.trim())
-      .map(({ m, idx }) => {
+  const timelineItems = React.useMemo(() => {
+    const items: Array<{
+      idx: number;
+      text: string;
+      audioUrl?: string;
+      assistantAudioUrl?: string;
+      assistantIdx?: number;
+      spoken?: boolean;
+    }> = [];
+
+    displayMessages.forEach((m, idx) => {
+      if (m.role === 'user' && !!m.content.trim()) {
         const clean = m.content.replace(/^@kiku\s*/i, '').replace(/\s+/g, ' ').trim();
-        return { idx, text: clean.length > 30 ? clean.slice(0, 29).trimEnd() + '…' : clean };
-      }),
-    [displayMessages]
-  );
+        const nextMsg = displayMessages[idx + 1];
+        const assistantAudioUrl = nextMsg?.role === 'assistant' ? nextMsg.audioUrl : undefined;
+        const assistantIdx = nextMsg?.role === 'assistant' ? idx + 1 : undefined;
+        items.push({
+          idx,
+          text: clean.length > 30 ? clean.slice(0, 29).trimEnd() + '…' : clean,
+          audioUrl: m.audioUrl,
+          assistantAudioUrl,
+          assistantIdx,
+          spoken: !!m.spoken || !!nextMsg?.spoken,
+        });
+      }
+    });
+
+    return items;
+  }, [displayMessages]);
 
   const haltedEmpty =
     halted && displayMessages[displayMessages.length - 1]?.role !== 'assistant';
@@ -1208,15 +1227,15 @@ export function ChatModal({
             )}
           </div>
 
-          {voiceMode === 'off' && (
-            <ConversationTimeline
-              items={timelineItems}
-              activeIdx={activeMsgIdx}
-              progress={scrollProgress}
-              onJump={jumpToMessage}
-              side={isRTL ? 'left' : 'right'}
-            />
-          )}
+          <ConversationTimeline
+            items={timelineItems}
+            activeIdx={activeMsgIdx}
+            progress={scrollProgress}
+            onJump={jumpToMessage}
+            side={isRTL ? 'left' : 'right'}
+            voiceMuted={voiceMuted}
+            setVoiceMuted={setVoiceMuted}
+          />
 
           {/* Allowance pills removed: no upfront usage limit display */}
 

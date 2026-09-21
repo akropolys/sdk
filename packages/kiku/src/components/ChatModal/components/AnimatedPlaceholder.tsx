@@ -49,9 +49,12 @@ export function AnimatedPlaceholder({
   if (!content) return null;
   const seed = replaySeed !== undefined ? replaySeed : replay;
 
-  const units = splitPlaceholder(content);
+  // Long strings ride in as whole words. Per-grapheme, the stagger is still
+  // mid-flight across a long line and the text reads as a wave.
+  const long = content.length > 26;
+  const units = long ? (content.match(/\S+\s*/g) ?? [content]) : splitPlaceholder(content);
   const last = Math.max(units.length - 1, 1);
-  const fit = content.length > 44 ? '3' : content.length > 26 ? '2' : '1';
+  const fit = content.length > 44 ? '3' : long ? '2' : '1';
 
   return (
     <div className="hsk-animated-placeholder" data-fit={fit} dir="auto" aria-hidden="true">

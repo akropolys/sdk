@@ -1,4 +1,5 @@
 import React from 'react';
+import { lineDirection } from './textDirection';
 
 const SPACING_DOUBLE_REGEX = /[ \t]{2,}/g;
 const SPACING_PUNCT_REGEX = / ([.,!?:;])/g;
@@ -194,6 +195,8 @@ function buildMarkdown(content: string, streaming: boolean): React.ReactNode {
     }
   }
 
+  // The line still being typed keeps the chat's direction until it has enough letters to call.
+  const dirOf = (text: string, at: number) => lineDirection(text, streaming && at === lines.length - 1 ? 15 : 1);
   const blocks: React.ReactNode[] = [];
   let currentTextNodes: React.ReactNode[] = [];
   let bubbleIndex = 0;
@@ -246,30 +249,34 @@ function buildMarkdown(content: string, streaming: boolean): React.ReactNode {
     if (headerMatch) {
       const level = headerMatch[1].length;
       const Tag = `h${level + 3}` as keyof JSX.IntrinsicElements; // Maps # to h4, ## to h5 to avoid messing up host page hierarchy
-      currentTextNodes.push(<Tag key={key} className={`hsk-markdown-h${level}`}>{parseInline(headerMatch[2], key)}</Tag>);
+      currentTextNodes.push(<Tag key={key} className={`hsk-markdown-h${level}`} dir={dirOf(headerMatch[2], i)}>{parseInline(headerMatch[2], key)}</Tag>);
       i++;
       continue;
     }
 
     if (line.match(/^[\s]*[-*+•]\s+/)) {
       const listItems: React.ReactNode[] = [];
+      let listText = '';
       while (i < lines.length && lines[i].match(/^[\s]*[-*+•]\s+/)) {
         const itemText = lines[i].replace(/^[\s]*[-*+•]\s+/, '');
+        listText += itemText + ' ';
         listItems.push(<li key={`li-${i}`}>{parseInline(itemText, `li-${i}`)}</li>);
         i++;
       }
-      currentTextNodes.push(<ul key={`ul-${key}`} className="hsk-markdown-list hsk-markdown-ul">{listItems}</ul>);
+      currentTextNodes.push(<ul key={`ul-${key}`} className="hsk-markdown-list hsk-markdown-ul" dir={dirOf(listText, i - 1)}>{listItems}</ul>);
       continue;
     }
 
     if (line.match(/^[\s]*\d+[\.\)]\s+/)) {
       const listItems: React.ReactNode[] = [];
+      let listText = '';
       while (i < lines.length && lines[i].match(/^[\s]*\d+[\.\)]\s+/)) {
         const itemText = lines[i].replace(/^[\s]*\d+[\.\)]\s+/, '');
+        listText += itemText + ' ';
         listItems.push(<li key={`li-${i}`}>{parseInline(itemText, `li-${i}`)}</li>);
         i++;
       }
-      currentTextNodes.push(<ol key={`ol-${key}`} className="hsk-markdown-list hsk-markdown-ol">{listItems}</ol>);
+      currentTextNodes.push(<ol key={`ol-${key}`} className="hsk-markdown-list hsk-markdown-ol" dir={dirOf(listText, i - 1)}>{listItems}</ol>);
       continue;
     }
 
@@ -343,6 +350,7 @@ function buildMarkdown(content: string, streaming: boolean): React.ReactNode {
           {cells.map((cell, cIdx) => (
             <td
               key={`td-${key}-${rIdx}-${cIdx}`}
+              className={cell.trim().startsWith('✓') ? 'hsk-md-ok' : cell.trim().startsWith('✗') ? 'hsk-md-bad' : undefined}
               style={{ textAlign: finalAlignments[cIdx] || 'start' }}
             >
               <bdi>{parseInline(cell, `td-${key}-${rIdx}-${cIdx}`)}</bdi>
@@ -363,7 +371,7 @@ function buildMarkdown(content: string, streaming: boolean): React.ReactNode {
     }
 
     currentTextNodes.push(
-      <p key={key} className="hsk-markdown-p">
+      <p key={key} className="hsk-markdown-p" dir={dirOf(line, i)}>
         {parseInline(line, key)}
       </p>
     );

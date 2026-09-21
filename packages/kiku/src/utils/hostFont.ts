@@ -76,7 +76,7 @@ export function useScriptFontFace(font: ScriptFont | null | undefined): void {
   useMountedFaces(css ? `script|${font!.family}|${faces.map(f => f.url).join('|')}` : '', css);
 }
 
-export async function preloadScriptFont(font: ScriptFont, timeoutMs = 1200): Promise<void> {
+export async function preloadScriptFont(font: ScriptFont, timeoutMs = 0): Promise<void> {
   if (typeof document === 'undefined' || !('fonts' in document)) return;
   const css = scriptFontCSS(font);
   if (!css) return;
@@ -91,14 +91,36 @@ export async function preloadScriptFont(font: ScriptFont, timeoutMs = 1200): Pro
     document.head.appendChild(el);
   }
 
-  const fonts = (document as any).fonts;
-  const loads = font.faces.map(() =>
-    fonts.load(`16px "${font.family}"`).catch(() => {})
-  );
-  await Promise.race([
-    Promise.all(loads),
-    new Promise(resolve => setTimeout(resolve, timeoutMs)),
-  ]);
+  if (timeoutMs > 0) {
+    const fonts = (document as any).fonts;
+    const cleanFamily = font.family.replace(/^['"]|['"]$/g, '');
+    const matched = Array.from(fonts || []).filter(
+      (f: any) => f.family.replace(/^['"]|['"]$/g, '') === cleanFamily
+    ) as any[];
+
+    const loads = matched.length > 0
+      ? matched.map((f: any) => f.load().catch(() => {}))
+      : font.faces.map(f => {
+          const url = safeUrl(f.url);
+          if (!url) return Promise.resolve();
+          try {
+            const face = new (window as any).FontFace(cleanFamily, `url(${url})`, {
+              weight: safeWeight(f.weight),
+              style: 'normal',
+            });
+            return face.load().then((loaded: any) => {
+              (document as any).fonts?.add(loaded);
+            }).catch(() => {});
+          } catch {
+            return Promise.resolve();
+          }
+        });
+
+    await Promise.race([
+      Promise.all(loads),
+      new Promise(resolve => setTimeout(resolve, timeoutMs)),
+    ]);
+  }
 }
 
 export function useHostFontFace(theme: 'light' | 'dark' | AkropolysTheme | undefined): void {

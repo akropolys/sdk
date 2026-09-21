@@ -41,6 +41,7 @@ export interface ChatMessage {
   queued?: boolean;
 
   spoken?: boolean;
+  audioUrl?: string;
 }
 
 export interface ChatSource {

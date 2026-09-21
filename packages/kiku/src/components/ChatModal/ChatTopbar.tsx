@@ -6,8 +6,10 @@ import { KikuAvatar, type KikuState } from '../KikuAvatar';
 import { ScoutRail } from '../Scouts';
 import { SoundToggle } from './components/SoundToggle';
 import { cn } from '../../utils/cn';
+import { useIslandMorph } from '../../utils/island';
 
 export interface ChatTopbarProps {
+  scoutsAllowed?: boolean;
   title: string;
   logo?: string;
   hasMessages: boolean;
@@ -16,6 +18,7 @@ export interface ChatTopbarProps {
   awayFromBottom?: boolean;
   themeMenuOpen?: boolean;
   themeMenuClosing?: boolean;
+  onThemeMenuClosed?: () => void;
   isNarrow?: boolean;
   currentTheme?: ThemeId;
   onJumpToLatest?: () => void;
@@ -28,6 +31,8 @@ export interface ChatTopbarProps {
   onScoutAsk?: (scout: any) => void;
 }
 
+let droppedIn = false;
+
 const RadarIcon = ({ size = 15 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Z"/>
@@ -37,6 +42,7 @@ const RadarIcon = ({ size = 15 }: { size?: number }) => (
 );
 
 export function ChatTopbar({
+  scoutsAllowed,
   title,
   logo,
   hasMessages,
@@ -45,6 +51,7 @@ export function ChatTopbar({
   awayFromBottom = false,
   themeMenuOpen = false,
   themeMenuClosing = false,
+  onThemeMenuClosed,
   isNarrow = false,
   currentTheme = 'dark',
   onJumpToLatest,
@@ -57,6 +64,52 @@ export function ChatTopbar({
   onScoutAsk,
 }: ChatTopbarProps) {
   const tr = useT();
+  const barRef = React.useRef<HTMLDivElement>(null);
+  const trayRef = React.useRef<HTMLDivElement>(null);
+  const shadowRef = React.useRef<HTMLDivElement>(null);
+  const nameRef = React.useRef<HTMLElement | null>(null);
+  const [dropIn] = React.useState(() => { const first = !droppedIn; droppedIn = true; return first; });
+  // The dock's top border runs through the middle of the name pill, like the thinking tab on a reply.
+  React.useLayoutEffect(() => {
+    const bar = barRef.current, name = nameRef.current, dock = trayRef.current;
+    if (!bar || !name || !dock) return;
+    // Layout offsets, not the on-screen rect: the pill squashes with every hop, and a mid-hop measure moved the edge.
+    const mark = name.offsetParent as HTMLElement | null;
+    if (!mark) return;
+    const pillMiddle = mark.offsetTop + name.offsetTop + name.offsetHeight / 2;
+    bar.style.setProperty('--hsk-tray-top', `${pillMiddle}px`);
+    bar.style.setProperty('--hsk-tray-head', `${name.offsetHeight / 2 + 8}px`);
+    bar.style.setProperty('--hsk-tray-h', `${dock.offsetHeight}px`);
+    bar.style.setProperty('--hsk-tray-w', `${dock.offsetWidth}px`);
+  }, [themeMenuOpen, isNarrow]);
+  const [trayMotion] = React.useState(() =>
+    typeof window !== 'undefined' && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  );
+  // The dock's first mount blocked the page for a visible beat, so it mounts parked once the chat is idle.
+  const [trayReady, setTrayReady] = React.useState(false);
+  React.useEffect(() => {
+    if (!isNarrow || trayReady) return;
+    const ric = (window as any).requestIdleCallback;
+    const id = ric ? ric(() => setTrayReady(true), { timeout: 1200 }) : setTimeout(() => setTrayReady(true), 600);
+    return () => {
+      const cic = (window as any).cancelIdleCallback;
+      if (ric && cic) cic(id); else clearTimeout(id);
+    };
+  }, [isNarrow, trayReady]);
+  const trayMounted = isNarrow && (themeMenuOpen || trayReady);
+
+  const tray = useIslandMorph({
+    target: React.useCallback(() => trayRef.current, []),
+    trigger: React.useCallback(() => nameRef.current, []),
+    shadow: React.useCallback(() => shadowRef.current, []),
+    radius: 18,
+    enabled: isNarrow && themeMenuOpen && trayMotion,
+    onClosed: () => onThemeMenuClosed?.(),
+  });
+  React.useEffect(() => {
+    if (isNarrow && themeMenuClosing) tray.close();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [themeMenuClosing, isNarrow]);
   const [isImpacting, setIsImpacting] = React.useState(false);
   const [impactColor, setImpactColor] = React.useState<string>('#134e3d');
   const [impactGlow, setImpactGlow] = React.useState<string>('rgba(19, 78, 61, 0.45)');
@@ -118,7 +171,7 @@ export function ChatTopbar({
   }, []);
 
   return (
-    <div className="hsk-cb-topbar">
+    <div ref={barRef} className={cn("hsk-cb-topbar", isNarrow && themeMenuOpen && "is-docked")}>
       {/* Left Column: Back button on mobile, clean spacer on desktop */}
       <div className="hsk-cb-topbar-left" style={{ minWidth: '34px' }}>
         {isNarrow && (
@@ -158,11 +211,12 @@ export function ChatTopbar({
           alert={unread}
           onImpact={handleImpact}
           triggerRef={triggerRef}
+          dropIn={dropIn}
         />
         {logo ? (
-          <img className="hsk-cb-topbar-logo" src={logo} alt={title} />
+          <img ref={nameRef as React.Ref<HTMLImageElement>} className="hsk-cb-topbar-logo" src={logo} alt={title} />
         ) : (
-          <span className="hsk-cb-topbar-name">{title}</span>
+          <span ref={nameRef as React.Ref<HTMLSpanElement>} className="hsk-cb-topbar-name">{title}</span>
         )}
       </div>
 
@@ -180,7 +234,6 @@ export function ChatTopbar({
             type="button"
             className="hsk-cb-squircle-btn hsk-cb-exit-btn"
             onClick={onClose}
-            title="Close"
             aria-label="Close Chat"
           >
             <CloseIcon />
@@ -188,16 +241,26 @@ export function ChatTopbar({
         )}
       </div>
 
-      {/* Mobile Tray: Ooze menu above 2x2 theme grid */}
       {isNarrow && themeMenuOpen && (
         <div
-          className={cn("hsk-cb-topbar-ooze-menu", themeMenuClosing && "is-closing")}
+          className={cn("hsk-cb-topbar-scrim", themeMenuClosing && "is-closing")}
+          onClick={onToggleThemeMenu}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Mobile Tray: Ooze menu above 2x2 theme grid */}
+      {trayMounted && (
+        <div className={cn("hsk-cb-tray-shadow", !themeMenuOpen && "is-parked")} aria-hidden="true"><div ref={shadowRef} /></div>
+      )}
+      {trayMounted && (
+        <div
+          ref={trayRef}
+          className={cn("hsk-cb-topbar-ooze-menu", themeMenuClosing && "is-closing", trayMotion && "is-island", !themeMenuOpen && "is-parked")}
           role="dialog"
           aria-label="Scouts and theme selector"
           style={{
             position: 'absolute',
-            top: '100%',
-            marginTop: '8px',
             left: '50%',
             transform: 'translateX(-50%)',
             zIndex: 1000,
@@ -206,13 +269,14 @@ export function ChatTopbar({
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
         >
-          <ScoutRail
+          {scoutsAllowed && <ScoutRail
             className="hsk-cb-scout-tray"
             compact
+            paused={!themeMenuOpen}
             themeAttr={themeAttr}
             onNew={onScoutNew}
             onAsk={onScoutAsk}
-          />
+          />}
 
           <div className="hsk-cb-theme-block">
             <div className="hsk-cb-tray-aside">

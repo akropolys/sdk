@@ -14,6 +14,8 @@ export { useLiveContext } from './hooks/useLiveContext';
 export { useLiveValue, useLiveValues } from './hooks/useLiveValues';
 export { useLiveData } from './hooks/useLiveData';
 export { useScouts } from './hooks/useScouts';
+export { useAllowance } from './hooks/useAllowance';
+export type { UseAllowanceReturn } from './hooks/useAllowance';
 export type { UseScoutsOptions, UseScoutsReturn } from './hooks/useScouts';
 export {
   setLiveValue,

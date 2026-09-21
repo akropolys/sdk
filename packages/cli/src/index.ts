@@ -13,9 +13,13 @@ program
 
 program
   .command('init')
-  .description('Configure the local workspace by generating a default .env file template.')
-  .action(async () => {
-    await runInit();
+  .description('Set up Akropolys in this project: install the packages, capture credentials, mount the widget.')
+  .option('--skip-install', 'Do not install @akropolys/sdk and @akropolys/kiku.')
+  .option('--api-url <url>', 'Override the API base URL.')
+  .option('--no-login', 'Skip the browser sign-in and paste credentials instead.')
+  .option('--shell-url <url>', 'Override the sign-in page URL.')
+  .action(async (options) => {
+    await runInit(options);
   });
 
 program
