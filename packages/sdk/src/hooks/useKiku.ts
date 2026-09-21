@@ -30,7 +30,7 @@ interface UseKikuReturn {
 
   sendQueuedNow: () => void;
 
-  appendSpokenExchange: (heard: string, said: string) => void;
+  appendSpokenExchange: (heard: string, said: string, duration?: number) => void;
   stop: () => void;
   stopped: boolean;
 
@@ -50,12 +50,18 @@ interface PendingSend {
 interface SpokenExchange {
   heard: string;
   said: string;
+  duration?: number;
 }
 
-function appendSpoken(prev: ChatMessage[], heard: string, said: string): ChatMessage[] {
+function appendSpoken(prev: ChatMessage[], heard: string, said: string, duration?: number): ChatMessage[] {
   const next = [...prev];
   if (heard) next.push({ role: 'user', content: heard, spoken: true });
-  if (said) next.push({ role: 'assistant', content: said, spoken: true });
+  if (said) next.push({
+    role: 'assistant',
+    content: said,
+    spoken: true,
+    thoughtForSeconds: duration && duration > 0 ? Math.round(duration * 10) / 10 : undefined,
+  });
   return next;
 }
 
@@ -107,10 +113,8 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
   const displayedLenRef = useRef(0);
   const rafRef = useRef<number | null>(null);
   const streamDoneRef = useRef(false);
-  const paceClockRef = useRef(0);
-  const paceCarryRef = useRef(0);
 
-  const stopPacing = useCallback(() => {
+  const stopFlush = useCallback(() => {
     if (rafRef.current != null) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
@@ -132,33 +136,18 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
   useEffect(() => {
     return () => {
       activeStreamRef.current?.destroy();
-      stopPacing();
+      stopFlush();
     };
-  }, [stopPacing]);
+  }, [stopFlush]);
 
-  const startPacing = useCallback(() => {
+  const startFlush = useCallback(() => {
     if (rafRef.current != null) return;
-    const PACE_CATCHUP = 0.4;   // seconds to absorb the current backlog
-    const PACE_MIN = 140;       // chars/sec floor — a readable typing pace
-    const PACE_MAX = 1400;      // chars/sec ceiling for a big backlog
-    paceClockRef.current = 0;
-    paceCarryRef.current = 0;
-    const tick = (now: number) => {
+    // Tokens are flushed once per frame; the reveal speed belongs to the renderer.
+    const tick = () => {
       const target = targetTextRef.current;
-      const remaining = target.length - displayedLenRef.current;
-      const dt = paceClockRef.current === 0 ? 1 / 60 : Math.min(0.05, (now - paceClockRef.current) / 1000);
-      paceClockRef.current = now;
-      if (remaining > 0) {
-        const rate = Math.min(PACE_MAX, Math.max(PACE_MIN, remaining / PACE_CATCHUP));
-        const advance = paceCarryRef.current + rate * dt;
-        const whole = Math.floor(advance);
-        paceCarryRef.current = advance - whole;
-        if (whole < 1) {
-          rafRef.current = requestAnimationFrame(tick);
-          return;
-        }
-        displayedLenRef.current = Math.min(target.length, displayedLenRef.current + whole);
-        const shown = target.slice(0, displayedLenRef.current);
+      if (target.length > displayedLenRef.current) {
+        displayedLenRef.current = target.length;
+        const shown = target;
         setMessages(prev => {
           const next = [...prev];
           if (next.length > 0 && next[next.length - 1].role === 'assistant') {
@@ -264,11 +253,11 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
         displayedLenRef.current = 0;
         streamDoneRef.current = false;
         messageInitialized = true;
-        startPacing();
+        startFlush();
       } else if (continuing) {
         setLoading(false);
         setStreaming(true);
-        startPacing();
+        startFlush();
       }
     };
 
@@ -453,7 +442,7 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
 
     stream.on('error', (err: Error) => {
       streamDoneRef.current = true;
-      stopPacing();
+      stopFlush();
       setLoading(false);
       setStreaming(false);
       const partial = targetTextRef.current;
@@ -480,7 +469,7 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
       }
       onErrorRef.current?.(err);
     });
-  }, [client, startPacing, stopPacing]);
+  }, [client, startFlush, stopFlush]);
 
   const beginTurn = useCallback((
     history: { role: 'user' | 'assistant'; content: string }[],
@@ -543,10 +532,10 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     if (spokenQueueRef.current.length > 0) {
       const spoken = spokenQueueRef.current;
       spokenQueueRef.current = [];
-      for (const ex of spoken) settled = appendSpoken(settled, ex.heard, ex.said);
+      for (const ex of spoken) settled = appendSpoken(settled, ex.heard, ex.said, ex.duration);
       setMessages(prev => {
         let next = prev;
-        for (const ex of spoken) next = appendSpoken(next, ex.heard, ex.said);
+        for (const ex of spoken) next = appendSpoken(next, ex.heard, ex.said, ex.duration);
         return next;
       });
     }
@@ -597,7 +586,7 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
 
   const reset = useCallback(() => {
     activeStreamRef.current?.destroy();
-    stopPacing();
+    stopFlush();
     streamDoneRef.current = true;
     targetTextRef.current = '';
     displayedLenRef.current = 0;
@@ -622,7 +611,7 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
 
   const stop = useCallback(() => {
     activeStreamRef.current?.destroy();
-    stopPacing();
+    stopFlush();
     streamDoneRef.current = true;
     setLoading(false);
     setStreaming(false);
@@ -639,22 +628,22 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     }
     setStopped(true);
     setMessages(prev => prev.map(m => m.visualizing ? { ...m, visualizing: false } : m));
-  }, [stopPacing]);
+  }, [stopFlush]);
 
   const sendQueuedNow = useCallback(() => {
     if (!pendingRef.current) return;
     stop();
   }, [stop]);
 
-  const appendSpokenExchange = useCallback((heard: string, said: string) => {
+  const appendSpokenExchange = useCallback((heard: string, said: string, duration?: number) => {
     const h = heard.trim();
     const s = said.trim();
     if (!h && !s) return;
     if (loadingRef.current || streamingRef.current) {
-      spokenQueueRef.current.push({ heard: h, said: s });
+      spokenQueueRef.current.push({ heard: h, said: s, duration });
       return;
     }
-    setMessages(prev => appendSpoken(prev, h, s));
+    setMessages(prev => appendSpoken(prev, h, s, duration));
   }, []);
 
   const resolvedSources = useMemo(

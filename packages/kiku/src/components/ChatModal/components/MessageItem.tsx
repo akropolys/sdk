@@ -2,6 +2,7 @@ import React from 'react';
 import type { ChatMessage, ChatSource, ChatAction } from '@akropolys/sdk';
 import { cn } from '../../../utils/cn';
 import { renderMarkdown } from '../../../utils/markdown';
+import { lineDirection } from '../../../utils/textDirection';
 import { LiveTable } from '../../LiveTable';
 import { ThinkingBlock, parseThinking } from './ThinkingBlock';
 import { SourcesCarousel } from './SourcesCarousel';
@@ -95,6 +96,7 @@ export function MessageItem({
 
   const touchStartPos = React.useRef<{ x: number; y: number } | null>(null);
   const longPressTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pressFired = React.useRef(false);
 
   const anchorFor = React.useCallback((el: HTMLElement): HTMLElement => {
     const sel = isUser ? '.hsk-cb-user-bubble' : '.hsk-cb-ai-text';
@@ -112,6 +114,7 @@ export function MessageItem({
         const anchor = anchorFor(targetEl);
         const r = anchor.getBoundingClientRect();
         onLongPress(msg, { top: r.top, left: r.left, width: r.width, height: r.height }, isUser, anchor);
+        pressFired.current = true;
       }
       longPressTimer.current = null;
     }, 420);
@@ -121,6 +124,7 @@ export function MessageItem({
     if (e.touches.length !== 1) return;
     const touch = e.touches[0];
     touchStartPos.current = { x: touch.clientX, y: touch.clientY };
+    pressFired.current = false;
     startLongPress(e.currentTarget);
   }, [startLongPress]);
 
@@ -134,17 +138,19 @@ export function MessageItem({
     }
   }, []);
 
-  const handleTouchEnd = React.useCallback(() => {
+  const handleTouchEnd = React.useCallback((e: React.TouchEvent<HTMLElement>) => {
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current);
       longPressTimer.current = null;
     }
     touchStartPos.current = null;
+    if (pressFired.current && e.cancelable) e.preventDefault(); // the lift's synthetic click would land on the new overlay and close it
   }, []);
 
   const handleContextMenu = React.useCallback((e: React.MouseEvent<HTMLElement>) => {
     if (!onLongPress) return;
     e.preventDefault();
+    if (pressFired.current) return;
     const el = anchorFor(e.currentTarget);
     const r = el.getBoundingClientRect();
     onLongPress(msg, { top: r.top, left: r.left, width: r.width, height: r.height }, isUser, el);
@@ -213,6 +219,7 @@ export function MessageItem({
               onTouchEnd={handleTouchEnd}
               onTouchCancel={handleTouchEnd}
               onContextMenu={handleContextMenu}
+              dir={lineDirection(msg.content.replace(/^@kiku\s*/i, ''))}
             >
               {msg.spoken && <MicIcon className="hsk-cb-spoken-mark" size={10} />}
               {/^@kiku\b/i.test(msg.content) ? (
@@ -223,52 +230,54 @@ export function MessageItem({
               ) : msg.content}
             </div>
           )}
-          <div className="hsk-cb-user-footer">
-            <div className={cn('hsk-cb-msg-actions', hasError && 'hsk-cb-msg-actions--failed')}>
-              {onRetry && (hasError || isLastUser) && (
+          {isRunEnd && (
+            <div className="hsk-cb-user-footer">
+              <div className="hsk-cb-msg-actions">
+                {onRetry && (hasError || isLastUser) && (
+                  <button
+                    type="button"
+                    className="hsk-cb-msg-action hsk-cb-msg-action--retry"
+                    onClick={() => onRetry(msg)}
+                    aria-label={t('retry')}
+                  >
+                    <RetryIcon className={retrying ? 'hsk-retry-icon--spinning' : ''} size={11} />
+                    <span className="hsk-cb-msg-action-label">{t('retry')}</span>
+                  </button>
+                )}
+                {onEdit && (
+                  <button
+                    type="button"
+                    className="hsk-cb-msg-action hsk-cb-msg-action--edit"
+                    onClick={() => onEdit(msg)}
+                    aria-label={t('edit')}
+                  >
+                    <EditIcon size={11} />
+                    <span className="hsk-cb-msg-action-label">{t('edit')}</span>
+                  </button>
+                )}
                 <button
                   type="button"
-                  className="hsk-cb-msg-action hsk-cb-msg-action--retry"
-                  onClick={() => onRetry(msg)}
-                  aria-label={t('retry')}
+                  className={cn('hsk-cb-msg-action hsk-cb-msg-action--copy', copied && 'hsk-cb-msg-action--copied')}
+                  onClick={() => handleCopy(msg.content)}
+                  aria-label={copied ? t('copied') : t('copy')}
                 >
-                  <RetryIcon className={retrying ? 'hsk-retry-icon--spinning' : ''} size={11} />
-                  <span className="hsk-cb-msg-action-label">{t('retry')}</span>
+                  {copied ? <CheckIcon size={11} /> : <CopyIcon size={11} />}
+                  <span className="hsk-cb-msg-action-label">{copied ? t('copied') : t('copy')}</span>
                 </button>
+              </div>
+              {isLastUser && !hasError && (
+                <span className="hsk-cb-sent-status">
+                  {stopped || interrupted ? t('statusStopped') : t('statusSent')}
+                </span>
               )}
-              {onEdit && (
-                <button
-                  type="button"
-                  className="hsk-cb-msg-action hsk-cb-msg-action--edit"
-                  onClick={() => onEdit(msg)}
-                  aria-label={t('edit')}
-                >
-                  <EditIcon size={11} />
-                  <span className="hsk-cb-msg-action-label">{t('edit')}</span>
-                </button>
+              {hasError && (
+                <span className="hsk-cb-failed-notice">
+                  <span className="hsk-cb-failed-dot" />
+                  {t('msgFailed')}
+                </span>
               )}
-              <button
-                type="button"
-                className={cn('hsk-cb-msg-action hsk-cb-msg-action--copy', copied && 'hsk-cb-msg-action--copied')}
-                onClick={() => handleCopy(msg.content)}
-                aria-label={copied ? t('copied') : t('copy')}
-              >
-                {copied ? <CheckIcon size={11} /> : <CopyIcon size={11} />}
-                <span className="hsk-cb-msg-action-label">{copied ? t('copied') : t('copy')}</span>
-              </button>
             </div>
-            {isLastUser && !hasError && (
-              <span className="hsk-cb-sent-status">
-                {stopped || interrupted ? t('statusStopped') : t('statusSent')}
-              </span>
-            )}
-            {hasError && (
-              <span className="hsk-cb-failed-notice">
-                <span className="hsk-cb-failed-dot" />
-                {t('msgFailed')}
-              </span>
-            )}
-          </div>
+          )}
         </div>
       ) : (
         <div className={cn('hsk-cb-ai-msg', isNarrow && 'hsk-cb-ai-msg--inline')}>
@@ -286,6 +295,12 @@ export function MessageItem({
                 <>
                   {!msg.spoken && (thinking || msg.thoughtForSeconds != null || (isLast && (streaming || loading))) && (
                     <ThinkingBlock text={thinking} isComplete={isComplete} seconds={msg.thoughtForSeconds} />
+                  )}
+                  {msg.spoken && typeof msg.thoughtForSeconds === 'number' && msg.thoughtForSeconds > 0 && (
+                    <div className="hsk-cb-spoken-timing">
+                      <MicIcon size={11} />
+                      <span>spoken · {msg.thoughtForSeconds.toFixed(1)}s</span>
+                    </div>
                   )}
                   {cleanContent && (
                     <div className="hsk-cb-ai-content">
@@ -444,7 +459,7 @@ export function MessageItem({
 
             {!isUser && !streaming && cleanContent && (
               <div className="hsk-cb-ai-footer">
-                <div className={cn('hsk-cb-msg-actions', (hasError || cleanContent.includes("We're experiencing high demand right now")) && 'hsk-cb-msg-actions--failed')}>
+                <div className="hsk-cb-msg-actions">
                   <button
                     type="button"
                     className={cn('hsk-cb-msg-action hsk-cb-msg-action--copy', copied && 'hsk-cb-msg-action--copied')}

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useAkropolysContext } from '@akropolys/sdk';
 import { stopSpeech } from '../../../utils/tts';
 import { useVoiceSession } from '../../../utils/voiceSession';
@@ -14,7 +14,7 @@ export interface UseVoiceControllerOptions {
   shopperLanguage: string;
   ttsVoice?: string;
   handleSendUtterance: (text: string) => void;
-  appendSpokenExchange: (heard: string, said: string) => void;
+  appendSpokenExchange: (heard: string, said: string, duration?: number) => void;
 }
 
 export function useVoiceController({
@@ -30,7 +30,6 @@ export function useVoiceController({
   const [dictateState, setDictateState] = useState<'idle' | 'listening' | 'thinking'>('idle');
   const [voiceError, setVoiceError] = useState<string>('');
   const [voiceMuted, setVoiceMuted] = useState(false);
-  const [voiceSecondsLeft, setVoiceSecondsLeft] = useState<number | null>(null);
   const [voiceBlocked, setVoiceBlocked] = useState(false);
 
   const [liveVoiceName, setLiveVoiceName] = useState<string>(() => {
@@ -64,21 +63,24 @@ export function useVoiceController({
     onBargeIn: () => { stopSpeech(); },
   });
 
-  const apiUrl = (client as any)?.api?.apiUrl || (client as any)?.apiUrl || '';
+  const voiceUrl = (client as any)?.voiceUrl || (client as any)?.api?.voiceUrl;
+  const apiUrl = voiceUrl || (client as any)?.api?.apiUrl || (client as any)?.apiUrl || '';
   const siteId = (client as any)?.api?.siteId || (client as any)?.siteId || '';
   const token = (client as any)?.api?.apiToken || (client as any)?.apiToken || '';
   const kikuId = client?.getShopperId?.() || client?.getKikuPub?.() || undefined;
+  const shopperName = client?.getShopperName?.() || undefined;
 
   const live = useLiveVoice({
     apiUrl,
     siteId,
     token,
     kikuId,
+    name: shopperName,
     language: shopperLanguage,
     voice: liveVoiceName,
     muted: voiceMuted,
     onExchange: (exchange) => {
-      appendSpokenExchange(exchange.heard, exchange.said);
+      appendSpokenExchange(exchange.heard, exchange.said, exchange.duration);
     },
     onError: (err) => {
       if (err === 'shopper_reply_limit' || err === 'access_revoked' || err === 'account_required') {
@@ -88,7 +90,8 @@ export function useVoiceController({
         return;
       }
       setVoiceMode('off');
-      if (err === 'not-allowed') setVoiceError('micDenied');
+      if (err === 'idle') setVoiceError('voiceIdleEnded');
+      else if (err === 'not-allowed') setVoiceError('micDenied');
       else if (err === 'audio-capture') setVoiceError('micMissing');
       else if (err === 'limit') setVoiceError('voiceLimitReached');
       else if (err === 'siteLimit') setVoiceError('voiceSiteLimit');
@@ -108,6 +111,27 @@ export function useVoiceController({
     !!(window as any).WebSocket &&
     !!(window.AudioContext || (window as any).webkitAudioContext) &&
     !!navigator.mediaDevices?.getUserMedia;
+
+  // Idle-time, so opening the chat never waits on audio setup; no mic is requested here.
+  const { prewarm } = live;
+  useEffect(() => {
+    if (!canConverse) return;
+    const w = window as any;
+    if (w.requestIdleCallback) {
+      const id = w.requestIdleCallback(prewarm, { timeout: 3000 });
+      return () => w.cancelIdleCallback(id);
+    }
+    const id = window.setTimeout(prewarm, 1500);
+    return () => window.clearTimeout(id);
+  }, [canConverse, prewarm]);
+
+  // The server ended the session; a dead overlay would keep saying "Listening".
+  useEffect(() => {
+    if (voiceMode === 'converse' && live.state === 'ended') {
+      setVoiceMode('off');
+      setVoiceError('voiceSessionEnded');
+    }
+  }, [voiceMode, live.state]);
 
   const startVoice = useCallback(async (mode: 'dictate' | 'converse') => {
     if (!isSecureOrigin()) { setVoiceError('micInsecure'); return; }
@@ -143,7 +167,7 @@ export function useVoiceController({
     setVoiceError,
     voiceMuted,
     setVoiceMuted,
-    voiceSecondsLeft,
+    voiceSecondsLeft: live.secondsLeft ?? null,
     voiceBlocked,
     liveVoiceName,
     chooseVoice,

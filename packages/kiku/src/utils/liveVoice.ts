@@ -21,11 +21,12 @@ export interface LiveVoiceOptions {
 
   token: string;
   kikuId?: string;
+  name?: string;
 
   language?: string;
   voice?: string;
 
-  onExchange?: (exchange: { heard: string; said: string }) => void;
+  onExchange?: (exchange: { heard: string; said: string; duration?: number }) => void;
   onRefused?: (code: string) => void;
   onError?: (code: string) => void;
 
@@ -110,14 +111,17 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
 
   const turnHeardRef = useRef('');
   const turnSaidRef = useRef('');
+  const turnStartRef = useRef<number | null>(null);
 
   const flushExchange = useCallback(() => {
     const heard = turnHeardRef.current.trim();
     const said = turnSaidRef.current.trim();
+    const duration = turnStartRef.current ? Math.max(0.1, (Date.now() - turnStartRef.current) / 1000) : undefined;
     turnHeardRef.current = '';
     turnSaidRef.current = '';
+    turnStartRef.current = null;
     if (!heard && !said) return;
-    optsRef.current.onExchange?.({ heard, said });
+    optsRef.current.onExchange?.({ heard, said, duration });
   }, []);
 
   const chirp = useCallback(() => {
@@ -270,12 +274,72 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
     }
   }, [schedule, releaseHeld]);
 
+  const holdTimerRef = useRef<any>(null);
+  const holdGainRef = useRef<GainNode | null>(null);
+
   const stopHold = useCallback(() => {
-    // Silent - no drone
+    if (holdTimerRef.current) {
+      clearInterval(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+    const g = holdGainRef.current;
+    const ctx = ctxRef.current;
+    if (g && ctx && ctx.state !== 'closed') {
+      const now = ctx.currentTime;
+      try {
+        g.gain.cancelScheduledValues(now);
+        g.gain.setValueAtTime(g.gain.value, now);
+        g.gain.linearRampToValueAtTime(0.0001, now + 0.04);
+      } catch {}
+      setTimeout(() => {
+        try { g.disconnect(); } catch {}
+        if (holdGainRef.current === g) holdGainRef.current = null;
+      }, 50);
+    }
   }, []);
 
   const startHold = useCallback(() => {
-    // Silent - clean natural voice only
+    const ctx = ctxRef.current;
+    if (!ctx || ctx.state === 'closed' || holdTimerRef.current) return;
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+
+    const masterHold = ctx.createGain();
+    masterHold.gain.setValueAtTime(0.0001, ctx.currentTime);
+    masterHold.gain.exponentialRampToValueAtTime(0.035, ctx.currentTime + 0.08);
+    masterHold.connect(outGainRef.current || ctx.destination);
+    holdGainRef.current = masterHold;
+
+    // Gentle warm pentatonic lullaby motif notes: E4, G4, A4, C5, D5, E5
+    const motif = [329.63, 392.00, 440.00, 523.25, 587.33, 659.25];
+    let noteIdx = 0;
+
+    const playChime = () => {
+      const c = ctxRef.current;
+      const g = holdGainRef.current;
+      if (!c || c.state === 'closed' || !g) return;
+      const t = c.currentTime + 0.01;
+      const freq = motif[noteIdx % motif.length];
+      noteIdx++;
+
+      // Soft sine tone with gentle bell/lullaby decay
+      const osc = c.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, t);
+
+      const noteGain = c.createGain();
+      noteGain.gain.setValueAtTime(0.0001, t);
+      noteGain.gain.linearRampToValueAtTime(0.55, t + 0.02);
+      noteGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.42);
+
+      osc.connect(noteGain);
+      noteGain.connect(g);
+
+      osc.start(t);
+      osc.stop(t + 0.45);
+    };
+
+    playChime();
+    holdTimerRef.current = setInterval(playChime, 480);
   }, []);
 
   const teardown = useCallback((finalState: LiveState) => {
@@ -335,9 +399,11 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
           flushPending();
           break;
         case 'hearing':
+          if (!turnStartRef.current) turnStartRef.current = Date.now();
           setHearing(true);
           break;
         case 'thinking':
+          if (!turnStartRef.current) turnStartRef.current = Date.now();
           setHearing(false);
           setState('thinking');
           startHold();
@@ -409,6 +475,7 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
     url.searchParams.set('siteId', o.siteId);
     if (o.kikuId) url.searchParams.set('kikuId', o.kikuId);
+    if (o.name) url.searchParams.set('name', o.name);
     if (o.language) url.searchParams.set('language', o.language);
     url.searchParams.set('codec', 'adpcm');
     if (newVoice || o.voice) url.searchParams.set('voice', (newVoice || o.voice)!);
@@ -444,6 +511,7 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
     url.searchParams.set('siteId', o.siteId);
     if (o.kikuId) url.searchParams.set('kikuId', o.kikuId);
+    if (o.name) url.searchParams.set('name', o.name);
     if (o.language) url.searchParams.set('language', o.language);
     url.searchParams.set('codec', 'adpcm');
     if (o.voice) url.searchParams.set('voice', o.voice);
