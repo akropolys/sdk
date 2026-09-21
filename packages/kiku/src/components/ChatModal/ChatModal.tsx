@@ -54,6 +54,7 @@ import { ChatComposer } from './ChatComposer';
 import { VoiceOverlay } from './VoiceOverlay';
 import { LightboxModal } from './components/LightboxModal';
 import { ConversationTimeline } from './components/ConversationTimeline';
+import { AudioWaveTimeline } from './components/AudioWaveTimeline';
 import { TapbackMenu } from './components/TapbackMenu';
 
 // Clicking a scout used to post `scout <uuid>` at the model, which answered with
@@ -961,12 +962,27 @@ export function ChatModal({
   }, [messages, loading, streaming, pacedContent]);
 
   const timelineItems = React.useMemo(() => {
+    const items: Array<{ idx: number; text: string }> = [];
+    displayMessages.forEach((m, idx) => {
+      if (m.role === 'user' && !!m.content.trim()) {
+        const clean = m.content.replace(/^@kiku\s*/i, '').replace(/\s+/g, ' ').trim();
+        items.push({
+          idx,
+          text: clean.length > 28 ? clean.slice(0, 27).trimEnd() + '…' : clean,
+        });
+      }
+    });
+    return items;
+  }, [displayMessages]);
+
+  const audioWaveItems = React.useMemo(() => {
     const items: Array<{
       idx: number;
-      text: string;
+      text?: string;
       audioUrl?: string;
       assistantAudioUrl?: string;
       assistantIdx?: number;
+      duration?: number;
       spoken?: boolean;
     }> = [];
 
@@ -1228,18 +1244,28 @@ export function ChatModal({
             )}
           </div>
 
-          <ConversationTimeline
-            items={timelineItems}
-            activeIdx={activeMsgIdx}
-            progress={scrollProgress}
-            onJump={jumpToMessage}
-            side={isRTL ? 'left' : 'right'}
-            voiceMuted={voiceMuted}
-            setVoiceMuted={setVoiceMuted}
-            voiceMode={voiceMode}
-            voicePhase={voicePhase}
-            live={live}
-          />
+          {voiceMode === 'off' ? (
+            <ConversationTimeline
+              items={timelineItems}
+              activeIdx={activeMsgIdx}
+              progress={scrollProgress}
+              onJump={jumpToMessage}
+              side={isRTL ? 'left' : 'right'}
+            />
+          ) : (
+            <AudioWaveTimeline
+              items={audioWaveItems}
+              activeIdx={activeMsgIdx}
+              progress={scrollProgress}
+              onJump={jumpToMessage}
+              side={isRTL ? 'left' : 'right'}
+              voiceMuted={voiceMuted}
+              setVoiceMuted={setVoiceMuted}
+              voiceMode={voiceMode}
+              voicePhase={voicePhase}
+              live={live}
+            />
+          )}
 
           {/* Allowance pills removed: no upfront usage limit display */}
 

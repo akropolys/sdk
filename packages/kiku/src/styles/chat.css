@@ -2501,7 +2501,171 @@
 
 
 
-/* Continuous Growing Wave Rail */
+/* ============================================================
+   Original Conversation Timeline (for Chat Mode)
+   ============================================================ */
+.hsk-cb-timeline {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  /* Timeline on Left Rail (RTL mode) */
+  .hsk-cb-timeline.hsk-cb-timeline--left {
+    display: block;
+    position: absolute;
+    left: auto !important;
+    right: 100% !important;
+    margin-right: 28px !important;
+    top: 50%;
+    transform: translateY(-50%) !important;
+    width: 180px;
+    max-height: 60%;
+    overflow: hidden;
+    z-index: 10;
+    pointer-events: auto;
+    direction: ltr !important;
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 14%, #000 86%, transparent);
+    mask-image: linear-gradient(to bottom, transparent, #000 14%, #000 86%, transparent);
+  }
+
+  /* Timeline on Right Rail (LTR mode) */
+  .hsk-cb-timeline.hsk-cb-timeline--right {
+    display: block;
+    position: absolute;
+    left: 100% !important;
+    right: auto !important;
+    margin-left: 28px !important;
+    top: 50%;
+    transform: translateY(-50%) !important;
+    width: 180px;
+    max-height: 60%;
+    overflow: hidden;
+    z-index: 10;
+    pointer-events: auto;
+    direction: ltr !important;
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 14%, #000 86%, transparent);
+    mask-image: linear-gradient(to bottom, transparent, #000 14%, #000 86%, transparent);
+  }
+
+  .hsk-cb-timeline-track {
+    animation: hsk-tl-in .32s cubic-bezier(.22,1,.36,1) both;
+  }
+}
+
+@keyframes hsk-tl-in {
+  from { opacity: 0; transform: translateX(-10px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.hsk-cb-timeline-track {
+  --hsk-tl-x: 9px;
+  position: relative;
+  padding-left: 26px !important;
+  padding-right: 6px !important;
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.hsk-cb-timeline-track::before,
+.hsk-cb-timeline-track::after {
+  content: '';
+  position: absolute;
+  left: calc(var(--hsk-tl-x) - 1px) !important;
+  right: auto !important;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 2px;
+}
+
+.hsk-cb-timeline-track::before {
+  background: var(--hsk-chat-divide, rgba(0,0,0,.09));
+}
+
+.hsk-cb-timeline-track::after {
+  background: var(--hsk-primary, #ff6a33);
+  opacity: .5;
+  transform-origin: top;
+  transform: scaleY(var(--hsk-tl-progress, 0));
+  transition: transform .18s linear;
+}
+
+.hsk-cb-tl-item {
+  --hsk-tl-d: 0;
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 7px 6px 7px 0 !important;
+  border: none;
+  background: none;
+  text-align: left !important;
+  cursor: pointer;
+  font-family: var(--hsk-font);
+}
+
+.hsk-cb-tl-dot {
+  position: absolute;
+  left: calc(var(--hsk-tl-x, 9px) - 3px) !important;
+  right: auto !important;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 999px;
+  background: var(--hsk-chat-muted, #8a8f98);
+  opacity: max(.1, calc(.28 - var(--hsk-tl-d) * .07));
+  transition: transform .28s cubic-bezier(.34,1.4,.64,1),
+              opacity .46s cubic-bezier(.22,1,.36,1),
+              background .2s ease;
+}
+
+.hsk-cb-tl-label {
+  display: block;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--hsk-chat-muted, #8a8f98);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transform: translateX(calc(var(--hsk-tl-d) * 7px));
+  opacity: max(.32, calc(.9 - var(--hsk-tl-d) * .15));
+  transition: transform .46s cubic-bezier(.22,1,.36,1),
+              opacity .46s cubic-bezier(.22,1,.36,1),
+              color .2s ease;
+}
+
+.hsk-cb-tl-item:hover .hsk-cb-tl-label {
+  opacity: 1;
+  transform: translateX(calc(var(--hsk-tl-d) * 7px - 2px));
+}
+
+.hsk-cb-tl-item:hover .hsk-cb-tl-dot { transform: scale(1.25); }
+
+.hsk-cb-tl-cursor {
+  position: absolute;
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--hsk-primary, #ff6a33) 14%, transparent);
+  left: calc(var(--hsk-tl-x, 9px) - 4.5px) !important;
+  right: auto !important;
+  width: 9px;
+  height: 9px;
+  margin-top: -4.5px;
+  border-radius: 999px;
+  background: var(--hsk-primary, #ff6a33);
+  transform: translateY(0);
+  transition: transform .44s cubic-bezier(.22,1,.36,1);
+  will-change: transform;
+}
+
+.hsk-cb-tl-item--on .hsk-cb-tl-dot { opacity: 0; }
+
+.hsk-cb-tl-item--on .hsk-cb-tl-label {
+  color: var(--hsk-chat-text, #1f1f1f);
+  opacity: 1;
+  font-weight: 500;
+}
+
+/* ============================================================
+   Continuous Audio Wave Rail (Voice Mode ONLY)
+   ============================================================ */
 .hsk-cb-cont-wave-rail {
   display: none;
 }
@@ -2517,7 +2681,7 @@
     margin-left: 24px !important;
     top: 50%;
     transform: translateY(-50%) !important;
-    width: 44px;
+    width: 36px;
     max-height: 80%;
     z-index: 10;
     pointer-events: auto;
@@ -2533,7 +2697,7 @@
     margin-right: 24px !important;
     top: 50%;
     transform: translateY(-50%) !important;
-    width: 44px;
+    width: 36px;
     max-height: 80%;
     z-index: 10;
     pointer-events: auto;
@@ -2542,29 +2706,28 @@
 
 /* Play/Pause Button atop the wave */
 .hsk-cb-cont-wave-btn {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 999px;
-  border: 1px solid var(--hsk-chat-divide, rgba(0,0,0,0.12));
-  background: var(--hsk-chat-surface, rgba(255,255,255,0.92));
+  border: 1px solid color-mix(in srgb, var(--hsk-chat-text, #fff) 14%, transparent);
+  background: color-mix(in srgb, var(--hsk-chat-text, #fff) 8%, var(--hsk-chat-bg, #1a1a1e));
   backdrop-filter: blur(12px);
-  color: var(--hsk-chat-text, #1f1f1f);
+  color: var(--hsk-chat-text, #fff);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-  transition: transform 0.2s cubic-bezier(0.34, 1.5, 0.64, 1), background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  transition: transform 0.2s cubic-bezier(0.34, 1.5, 0.64, 1), background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
   margin-bottom: 8px;
   z-index: 2;
   flex-shrink: 0;
 }
 
 .hsk-cb-cont-wave-btn:hover {
-  transform: scale(1.12);
+  transform: scale(1.1);
   border-color: var(--hsk-primary, #ff6a33);
   color: var(--hsk-primary, #ff6a33);
-  box-shadow: 0 4px 14px rgba(0,0,0,0.12);
 }
 
 .hsk-cb-cont-wave-btn.is-playing {
@@ -2578,8 +2741,8 @@
 /* The Continuous Waveform Track */
 .hsk-cb-cont-wave-track {
   position: relative;
-  width: 36px;
-  min-height: 50px;
+  width: 28px;
+  min-height: 40px;
   cursor: pointer;
   transition: height 0.3s cubic-bezier(0.22, 1, 0.36, 1);
   display: flex;
@@ -2592,21 +2755,21 @@
   transition: height 0.3s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.hsk-cb-cont-wave-svg.is-playing {
-  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--hsk-primary, #ff6a33) 30%, transparent));
+.hsk-wave-bar {
+  transition: stroke 0.15s ease, opacity 0.15s ease;
 }
 
 /* Scrubbing head */
 .hsk-cb-cont-wave-cursor {
   position: absolute;
-  left: calc(50% - 5px);
+  left: calc(50% - 4px);
   top: 0;
-  width: 10px;
-  height: 10px;
-  margin-top: -5px;
+  width: 8px;
+  height: 8px;
+  margin-top: -4px;
   border-radius: 999px;
   background: var(--hsk-primary, #ff6a33);
-  box-shadow: 0 0 0 3px #fff, 0 0 0 6px color-mix(in srgb, var(--hsk-primary, #ff6a33) 35%, transparent);
+  box-shadow: 0 0 0 2.5px #fff, 0 0 8px var(--hsk-primary, #ff6a33);
   pointer-events: none;
   transition: transform 0.12s linear;
   z-index: 3;
@@ -2615,11 +2778,11 @@
 /* Live Recording Tip */
 .hsk-cb-cont-wave-live-tip {
   position: absolute;
-  left: calc(50% - 4px);
+  left: calc(50% - 3px);
   top: 0;
-  width: 8px;
-  height: 8px;
-  margin-top: -4px;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
   border-radius: 999px;
   pointer-events: none;
   z-index: 4;
@@ -2658,8 +2821,6 @@
   background: color-mix(in srgb, var(--hsk-chat-text, #1f1f1f) 8%, transparent);
   color: var(--hsk-chat-muted, #8a8f98);
 }
-
-
 
 @media (prefers-reduced-motion: reduce) {
   .hsk-cb-timeline-track { animation: none; }
