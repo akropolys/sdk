@@ -1,24 +1,30 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useId } from 'react';
+import { figure, when } from '../../utils/figure';
 import { flushSync } from 'react-dom';
 import { THEMES, isThemeId, themeDef, DEFAULT_DARK, DEFAULT_LIGHT, type ThemeId } from './themes';
 import { useKiku, useScouts, ChatSource, ChatAttachment, CaptureTarget, subscribeLiveStream } from '@akropolys/sdk';
 import { useAkropolysContext } from '@akropolys/sdk';
 import { cn } from '../../utils/cn';
 import { resolveTheme } from '../../utils/theme';
-import { useHostFontFace } from '../../utils/hostFont';
+import { useHostFontFace, preloadScriptFont } from '../../utils/hostFont';
 import { useDragToDismiss } from '../../utils/sheetGesture';
 import { downscaleImage } from '../../utils/downscaleImage';
 import { MarkupEditor } from '../MarkupEditor';
-import { ScoutRail } from '../Scouts';
+import { ScoutRail, ScoutReceipt, speciesNick, humanMinutes } from '../Scouts';
 import type { KikuState } from '../KikuAvatar';
 import KikuDoodles from '../KikuDoodles';
 
 import {
   DEFAULT_CHIPS,
+  DEFAULT_UI_STRINGS,
+  ONBOARDING_UI_STRINGS,
   UIStringsContext,
   extractName,
   ChatModalProps,
+  getLoadingMeta,
+  type Translate,
 } from './types';
+import { warmLanguage } from '../../utils/chromeWarm';
 import { useScriptFont } from './hooks/useScriptFont';
 import { useChatScroll } from './hooks/useChatScroll';
 import { usePacedText } from './hooks/usePacedText';
@@ -29,7 +35,9 @@ import { ChatTopbar } from './ChatTopbar';
 import { CopyIcon, CheckIcon, CloseIcon } from './icons';
 import { OnboardingView } from './OnboardingView';
 
-const THEME_MENU_EXIT_MS = 200;
+const THEME_MENU_EXIT_MS = 180;
+const TRAY_EXIT_CEILING_MS = 700;
+const OVERLAY_EXIT_MS = 200;
 import { chime, primeChimes } from '../../utils/chime';
 import { SoundToggle } from './components/SoundToggle';
 import { useDelayedClose } from './hooks/useDelayedClose';
@@ -48,6 +56,103 @@ import { LightboxModal } from './components/LightboxModal';
 import { ConversationTimeline } from './components/ConversationTimeline';
 import { TapbackMenu } from './components/TapbackMenu';
 
+// Clicking a scout used to post `scout <uuid>` at the model, which answered with
+// an error because it is not a question. The scout's own log tells the story.
+// Every line is a UI string, so the tale arrives in the shopper's language; only
+// the numbers, the subject and the nickname stay as they are.
+function scoutBrief(scout: any, t: Translate): [string, string] {
+  const who = speciesNick(scout.id, scout.avatar);
+  const watch = scout.brief || scout.subject;
+
+  if (scout.status === "triggered") {
+    const at = scout.triggerValue ? ` ${figure(scout.triggerValue)}` : "";
+    return [t("scoutAskHowDid", { who }), t("scoutBriefCameIn", { who, watch, at })];
+  }
+  if (scout.status === "expired") {
+    return [t("scoutAskHowDid", { who }), t("scoutBriefRanOut", { who, watch })];
+  }
+  if (scout.status === "idle") {
+    return [t("scoutAskWhatDoing", { who }), t("scoutBriefWaiting", { who })];
+  }
+  return [t("scoutAskWhatDoing", { who }), t("scoutBriefWatching", { who, watch })];
+}
+
+// The tale: where the scout was sent, how the value moved, and where it stands.
+// The event log holds no ticks, only turns of the brief, so the value trail —
+// initialValue to triggerValue — carries the movement. Markdown stays in code:
+// the strings are machine-translated, and asterisks do not survive that.
+// One row per thing the scout did, oldest first. ✓ and ✗ stay in code so translation cannot drop them.
+function scoutLog(scout: any, events: any[], t: Translate, lang?: string): string[] {
+  const fig = (v: unknown) => figure(String(v), lang);
+  const briefed = events.some((e) => e.eventType === "briefed");
+  const rows: string[] = [];
+  const row = (iso: string, what: string) => rows.push(`| ${when(iso, lang)} | ${what} |`);
+  const sorted = [...events].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+  for (const e of sorted) {
+    const p = e.payload || {};
+    if (e.eventType === "briefed" || (e.eventType === "spawned" && !briefed)) {
+      row(e.createdAt, scout.initialValue ? t("scoutLogSetOutAt", { v: fig(scout.initialValue) }) : t("scoutLogSetOut"));
+    } else if (e.eventType === "triggered") {
+      row(e.createdAt, `✓ ${p.triggerValue ? t("scoutLogMetAt", { v: fig(p.triggerValue) }) : t("scoutLogMet")}`);
+    } else if (e.eventType === "acted") {
+      row(e.createdAt, p.result?.status === "sent" ? `✓ ${t("scoutLogSent", { what: String(p.action ?? "") })}` : `✗ ${t("scoutLogNotSent")}`);
+    } else if (e.eventType === "refused") {
+      row(e.createdAt, `✗ ${t("scoutLogRefused")}`);
+    } else if (e.eventType === "paused") {
+      row(e.createdAt, t("scoutLogPaused"));
+    } else if (e.eventType === "resumed") {
+      row(e.createdAt, t("scoutLogResumed"));
+    } else if (e.eventType === "canceled") {
+      row(e.createdAt, t("scoutLogCanceled"));
+    }
+  }
+  return rows;
+}
+
+function scoutStory(scout: any, events: any[], balance: number, t: Translate, lang?: string): string {
+  const who = `**${speciesNick(scout.id, scout.avatar)}**`;
+  const spent = scout.minutesUsed ?? 0;
+  const used = humanMinutes(spent, t);
+  const left =
+    scout.dedicatedMinutes > 0 ? scout.dedicatedMinutes : scout.status === "expired" ? 0 : balance;
+  const budget =
+    left > 0
+      ? spent > 0
+        ? t("scoutBudgetLeft", { left: humanMinutes(left, t), used })
+        : t("scoutBudgetLeftOnly", { left: humanMinutes(left, t) })
+      : t("scoutBudgetSpent", { used });
+  if (scout.status === "idle") {
+    return [t("scoutStoryIdle", { who }), "", t("scoutStoryIdleLead", { budget })].join("\n");
+  }
+
+  const watch = scout.brief || scout.subject;
+  const done = scout.status === "triggered" || scout.status === "expired";
+  const lines: string[] = [t(done ? "scoutStoryWatched" : "scoutStoryWatching", { who, watch })];
+
+  const rows = scoutLog(scout, events, t, lang);
+  if (rows.length) lines.push("", `| ${t("scoutLogTime")} | ${t("scoutLogWhat")} |`, "|---|---|", ...rows);
+
+  const ending =
+    scout.status === "triggered"
+      ? t("scoutStoryReached")
+      : scout.status === "expired"
+        ? t("scoutStoryExpired")
+        : scout.status === "paused"
+          ? t("scoutStoryPaused")
+          : t("scoutStoryRunning");
+
+  lines.push("", `${ending} ${budget}`);
+  return lines.join("\n");
+}
+
+// The avatar's departure lands in the transcript rather than vanishing behind a
+// closed rail. Appended locally: the model has no notion of avatar nicknames,
+// and the brief the shopper types next is what actually deploys the scout.
+function sendOutExchange(avatar: string | undefined, t: Translate): [string, string] {
+  const who = avatar ? speciesNick(avatar, avatar) : 'a scout';
+  return [t('scoutSendOutAsk', { who }), t('scoutReady', { who })];
+}
+
 export function ChatModal({
   title = 'kiku',
   logo,
@@ -63,15 +168,13 @@ export function ChatModal({
   enableVoice = false,
   voiceLang,
   enableVision = false,
-  visionCategoryHint,
-  enableAudioResponse = true,
   ttsVoice = 'Puck',
-  autoSpeakResponses = true,
   origin,
+  arrivals,
 }: ChatModalProps) {
   const client = useAkropolysContext();
   const { messages, sources, loading, streaming, error, errorCode, lastAction, lastIntent, allowedActions, send, queuedMessage, sendQueuedNow, appendSpokenExchange, stop, stopped, interrupted, continueGenerating, reset, referencedIds } = useKiku();
-  const { activeScouts } = useScouts();
+  const { enabled: scoutsAllowed, scouts, activeScouts, balance, justTriggered, dispatchScout } = useScouts();
 
   const [shopperName, setShopperNameState] = useState<string>(() => {
     try { return client.getShopperName?.() ?? ''; } catch { return ''; }
@@ -83,6 +186,9 @@ export function ChatModal({
     try { return client.getEntityLanguageMode?.() ?? ''; } catch { return ''; }
   });
   const [justCompleted, setJustCompleted] = useState(false);
+  const [preloadedStrings, setPreloadedStrings] = useState<Record<string, string> | null>(null);
+  const [pendingLanguage, setPendingLanguage] = useState<string>('');
+  const [langSwitching, setLangSwitching] = useState(false);
 
   const {
     chromeReady,
@@ -95,7 +201,7 @@ export function ChatModal({
     hostFontCovers,
     t,
     tNode,
-  } = useScriptFont({ shopperLanguage, theme });
+  } = useScriptFont({ shopperLanguage: shopperLanguage || pendingLanguage, theme, preloadedStrings });
 
   const discussedSources = React.useMemo(() => {
     const byRef = sources.filter(s => s.id && referencedIds.includes(s.id));
@@ -137,11 +243,67 @@ export function ChatModal({
   });
 
   const onboarding = messages.length === 0;
-  const awaitingLang = onboarding && !shopperLanguage;
-  const awaitingName = onboarding && !!shopperLanguage && !shopperName;
+  const targetLang = pendingLanguage || shopperLanguage;
+  const isEn = !targetLang || targetLang.toLowerCase() === 'english' || targetLang.toLowerCase() === 'en';
+  const isLangPreparing = langSwitching || !!pendingLanguage || (!!shopperLanguage && !chromeReady && !isEn);
+  const awaitingLang = onboarding && !shopperLanguage && !isLangPreparing;
+  const awaitingName = onboarding && !!shopperLanguage && !shopperName && !isLangPreparing;
   const awaitingEntityLang = onboarding && !!shopperLanguage && !!shopperName && !entityLangPref;
   const awaitingConsent = onboarding && !!shopperLanguage && !!shopperName && !!entityLangPref && !termsAgreed;
-  const inOnboarding = awaitingLang || awaitingName || awaitingEntityLang || awaitingConsent;
+  const inOnboarding = awaitingLang || awaitingName || awaitingEntityLang || awaitingConsent || isLangPreparing;
+  const inputLocked = awaitingEntityLang || awaitingConsent || isLangPreparing;
+
+  // Composer choreography:
+  // 1. isLangPreparing → true: immediately start composerExiting (slides UP with Apple blur),
+  //    then after 280ms hide it completely and start the spinner rise.
+  // 2. isLangPreparing → false: show immediately with composerRevealing (slides UP from below clearing blur).
+  const [prevPreparingForComposer, setPrevPreparingForComposer] = useState(isLangPreparing);
+  const [composerHidden,   setComposerHidden]   = useState(false);
+  const [composerExiting,  setComposerExiting]  = useState(false);
+  const [composerRevealing, setComposerRevealing] = useState(false);
+  const composerWasHidden = useRef(false);
+  const composerHideTimer   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const composerRevealTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  if (isLangPreparing !== prevPreparingForComposer) {
+    setPrevPreparingForComposer(isLangPreparing);
+    if (isLangPreparing) {
+      if (composerRevealTimer.current) clearTimeout(composerRevealTimer.current);
+      setComposerRevealing(false);
+      // Start exit-up animation immediately (in sync with step1 flying away)
+      setComposerExiting(true);
+      composerHideTimer.current = setTimeout(() => {
+        setComposerHidden(true);
+        setComposerExiting(false);
+        composerWasHidden.current = true;
+      }, 280);
+    } else {
+      if (composerHideTimer.current) clearTimeout(composerHideTimer.current);
+      setComposerExiting(false);
+      setComposerHidden(false);
+      if (composerWasHidden.current) {
+        composerWasHidden.current = false;
+        setComposerRevealing(true);
+        composerRevealTimer.current = setTimeout(() => setComposerRevealing(false), 560);
+      }
+    }
+  }
+
+  useEffect(() => () => {
+    if (composerHideTimer.current) clearTimeout(composerHideTimer.current);
+    if (composerRevealTimer.current) clearTimeout(composerRevealTimer.current);
+  }, []);
+
+
+  useEffect(() => {
+    if (!awaitingLang) return;
+    const trimmed = input.trim();
+    if (trimmed.length < 2) return;
+    const timer = setTimeout(() => {
+      warmLanguage(client, trimmed, DEFAULT_UI_STRINGS);
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [awaitingLang, input, client]);
 
   const hasLiveData = React.useMemo(
     () => messages.some(m => (m as any).liveKeys?.length > 0),
@@ -162,17 +324,76 @@ export function ChatModal({
     return () => mq.removeEventListener?.('change', apply);
   }, []);
 
-  const chooseLanguage = (lang: string) => {
+  const chooseLanguage = async (lang: string) => {
     const v = lang.trim();
     if (!v) {
       try { client.setShopperLanguage?.(''); } catch {  }
       setShopperLanguageState('');
+      setPendingLanguage('');
+      setPreloadedStrings(null);
       return;
     }
+    setPendingLanguage(v);
+    setLangSwitching(true);
+
+    // English: no animation — instant transition (it's the default, nothing to "load")
+    const isTargetEn = v.toLowerCase() === 'english' || v.toLowerCase() === 'en';
+    if (isTargetEn) {
+      setPreloadedStrings(DEFAULT_UI_STRINGS);
+      try { client.setShopperLanguage?.(v); } catch {  }
+      setShopperLanguageState(v);
+      setPendingLanguage('');
+      setLangSwitching(false);
+      setJustCompleted(false);
+      return;
+    }
+
+    // For all non-English languages, enforce a minimum animation window so the
+    // goo spinner always has time to rise, orbit, and fall — even when strings
+    // are already cached.  Target: step1-exit (300ms) + spinner-rise (700ms) +
+    // min-steady (200ms) = 1200ms.  We start the clock now.
+    const animStart = Date.now();
+    const MIN_ANIM_MS = 1200;
+
+    try {
+      const cached = client.getCachedUIStrings?.(v, ONBOARDING_UI_STRINGS) ?? client.getCachedUIStrings?.(v, DEFAULT_UI_STRINGS);
+      if (cached?.strings && Object.keys(cached.strings).length > 0) {
+        setPreloadedStrings(cached.strings);
+        if (cached.font) {
+          await preloadScriptFont(cached.font, 800);
+        }
+      } else {
+        const fetchP = client.getUIStrings?.(v, ONBOARDING_UI_STRINGS);
+        const res = await Promise.race([
+          fetchP,
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000)),
+        ]);
+        if (res?.font) {
+          await preloadScriptFont(res.font, 1200);
+        }
+        if (res?.strings && Object.keys(res.strings).length > 0) {
+          setPreloadedStrings(res.strings);
+        }
+      }
+    } catch {  }
+
+    // Hold the preparing state long enough for the spinner animation to feel intentional
+    const elapsed = Date.now() - animStart;
+    if (elapsed < MIN_ANIM_MS) {
+      await new Promise((r) => setTimeout(r, MIN_ANIM_MS - elapsed));
+    }
+
     try { client.setShopperLanguage?.(v); } catch {  }
     setShopperLanguageState(v);
+    setPendingLanguage('');
+    setLangSwitching(false);
     setJustCompleted(false);
+
+    try {
+      client.getUIStrings?.(v, DEFAULT_UI_STRINGS)?.catch?.(() => {});
+    } catch {  }
   };
+
 
   const chooseEntityLang = (mode: 'translated' | 'original') => {
     try { client.setEntityLanguageMode?.(mode); } catch {  }
@@ -191,7 +412,8 @@ export function ChatModal({
   };
 
   const activePlaceholder =
-    awaitingLang ? t('langPlaceholder')
+    isLangPreparing ? getLoadingMeta(pendingLanguage || shopperLanguage).preparing
+    : awaitingLang ? t('langPlaceholder')
     : awaitingName ? t('namePlaceholder')
     : awaitingEntityLang ? t('entityLangPlaceholder')
     : awaitingConsent ? t('termsPlaceholder')
@@ -215,13 +437,17 @@ export function ChatModal({
     return DEFAULT_DARK;
   });
 
+  const [theming, setTheming] = useState(false);
+  const themingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (themingTimer.current) clearTimeout(themingTimer.current); }, []);
+
   // Fluid theme switch: updates active theme and lets CSS & canvas glyphs animate live
   const handleToggleTheme = (next: ThemeId, alsoCloseMenu = false) => {
+    setTheming(true);
+    if (themingTimer.current) clearTimeout(themingTimer.current);
+    themingTimer.current = setTimeout(() => setTheming(false), 420);
     setCurrentTheme(next);
-    if (alsoCloseMenu) {
-      setThemeMenuOpen(false);
-      setThemeMenuClosing(false);
-    }
+    if (alsoCloseMenu) closeThemeMenuNow();
     try { localStorage.setItem('akropolys_theme', next); } catch { /* noop */ }
   };
 
@@ -231,6 +457,73 @@ export function ChatModal({
 
   const handleSendRef = useRef<(text: string) => void>(() => {});
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // A scout's page is its report: fetched fresh, told in the transcript.
+  const tellScoutStory = async (scout: any) => {
+    const [heard] = scoutBrief(scout, t);
+    try {
+      const full = await client?.scouts.get(scout.id);
+      const sc = full?.scout ?? scout;
+      appendSpokenExchange(heard, scoutStory(sc, full?.events ?? [], balance, t, shopperLanguage));
+    } catch {
+      appendSpokenExchange(...scoutBrief(scout, t));
+    }
+  };
+
+  // A scout that comes in says so in the thread, and if the shopper agreed it
+  // could send something, it goes now — from this tab, under their own login.
+  const announced = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    justTriggered.forEach(async (sc: any) => {
+      if (announced.current.has(sc.id)) return;
+      announced.current.add(sc.id);
+      await tellScoutStory(sc);
+      if (!sc.actionType || sc.actionType === 'alert') return;
+      try {
+        const ev = await dispatchScout(sc.id);
+        appendSpokenExchange(t('scoutSendingHeard'), t('scoutSent', { what: ev?.message ?? sc.actionType }));
+      } catch (err: any) {
+        appendSpokenExchange(t('scoutSendingHeard'), t('scoutCouldNotSend', { why: err?.message ?? '' }));
+      }
+    });
+  }, [justTriggered]);
+
+  // Arrivals while closed are told on open; the first poll would file them as history.
+  useEffect(() => {
+    (arrivals ?? []).forEach((sc: any) => {
+      if (announced.current.has(sc.id)) return;
+      announced.current.add(sc.id);
+      void tellScoutStory(sc);
+    });
+  }, []);
+
+  // A scout that fires while nobody is watching the rail used to change colour
+  // and chime into an empty room. It hands over a receipt instead, and the
+  // receipt stays until the shopper tears it off — reading the story does not
+  // count as dismissing it.
+  const DISMISSED_KEY = 'akropolys_scout_receipts_seen';
+  const [dismissed, setDismissed] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem(DISMISSED_KEY) || '[]'); } catch { return []; }
+  });
+  const dismissReceipt = (id: string) => {
+    setDismissed((prev) => {
+      const next = prev.includes(id) ? prev : [...prev, id];
+      try { localStorage.setItem(DISMISSED_KEY, JSON.stringify(next.slice(-80))); } catch {  }
+      return next;
+    });
+  };
+  const receipts = scouts
+    .filter((s) => s.status === 'triggered' && !dismissed.includes(s.id))
+    .slice(-6);
+
+  // The stub says it happened; the detail is a real turn, so the model explains
+  // what the scout did — with the live value and its log — in the shopper's own
+  // language rather than a canned line.
+  const openReceipt = (scout: any) => {
+    const who = speciesNick(scout.id, scout.avatar);
+    const watch = scout.brief || scout.subject;
+    void handleSendRef.current?.(t('scoutExplainAsk', { who, watch }));
+  };
 
   const handleSend = async (text?: string, extraAttachments?: ChatAttachment[], forcedIntent?: string, captureTargets?: CaptureTarget[]) => {
     const raw = (text ?? input).trim();
@@ -248,12 +541,12 @@ export function ChatModal({
       return;
     }
     if (awaitingLang) {
-      if (!raw) return;
-      chooseLanguage(raw);
+      if (!raw || langSwitching) return;
       setInput('');
+      void chooseLanguage(raw);
       return;
     }
-    if (awaitingEntityLang) {
+    if (inputLocked) {
       setInput('');
       return;
     }
@@ -405,7 +698,7 @@ export function ChatModal({
     closing: themeMenuClosing,
     requestClose: closeThemeMenu,
     closeNow: closeThemeMenuNow,
-  } = useDelayedClose(THEME_MENU_EXIT_MS, () => setThemeMenuOpen(false));
+  } = useDelayedClose(isNarrow ? TRAY_EXIT_CEILING_MS : THEME_MENU_EXIT_MS, () => setThemeMenuOpen(false));
 
   useEffect(() => {
     if (!themeMenuOpen) return;
@@ -441,6 +734,14 @@ export function ChatModal({
     jumpToMessage,
     jumpToBottom,
   } = useChatScroll({ messages, loading, streaming, messageRefs });
+
+  const { closing: overlayClosing, requestClose: exitOverlay } = useDelayedClose(OVERLAY_EXIT_MS, onClose);
+  const requestClose = useCallback(() => {
+    setThemeMenuOpen(false);
+    setScoutsOpen(false);
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) onClose();
+    else exitOverlay();
+  }, [exitOverlay, onClose]);
 
   useDragToDismiss({
     panel: useCallback(() => panelRef.current, []),
@@ -490,11 +791,11 @@ export function ChatModal({
     const h = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       if (lightboxSrc) { setLightboxSrc(null); return; }
-      onClose();
+      requestClose();
     };
     document.addEventListener('keydown', h);
     return () => document.removeEventListener('keydown', h);
-  }, [lightboxSrc, onClose]);
+  }, [lightboxSrc, requestClose]);
 
   const handleReset = useCallback(() => {
     reset();
@@ -618,7 +919,6 @@ export function ChatModal({
     setAttachments(prev => prev.filter((_, i) => i !== idx));
   };
 
-  const shownSources = (live.sources?.length ?? 0) > 0 ? live.sources : discussedSources;
   const hasTranslucentBackdrop = backdropColor && (backdropColor.includes('rgba') || backdropColor.includes('hsla') || backdropColor === 'transparent');
   const backdropFilterStyle = (backdropBlur || hasTranslucentBackdrop) ? {
     backdropFilter: `blur(${typeof backdropBlur === 'number' ? `${backdropBlur}px` : (backdropBlur || '20px')})`,
@@ -636,10 +936,9 @@ export function ChatModal({
   const halted = (stopped || interrupted) && !loading && !streaming;
 
   const tail = messages[messages.length - 1];
-  const pacedContent = usePacedText(
-    tail?.role === 'assistant' ? tail.content ?? '' : '',
-    loading || streaming,
-  );
+  const pacedContent = usePacedText(tail?.role === 'assistant' ? tail.content ?? '' : '');
+  const draining = tail?.role === 'assistant' && pacedContent.length < (tail.content?.length ?? 0);
+  const revealing = streaming || draining;
 
   const displayMessages = React.useMemo(() => {
     const inFlight = loading || streaming;
@@ -664,7 +963,7 @@ export function ChatModal({
   const timelineItems = React.useMemo(
     () => displayMessages
       .map((m, idx) => ({ m, idx }))
-      .filter(({ m }) => m.role === 'user' && !!m.content.trim())
+      .filter(({ m }) => m.role === 'user' && !m.spoken && !!m.content.trim())
       .map(({ m, idx }) => {
         const clean = m.content.replace(/^@kiku\s*/i, '').replace(/\s+/g, ' ').trim();
         return { idx, text: clean.length > 30 ? clean.slice(0, 29).trimEnd() + '…' : clean };
@@ -684,7 +983,7 @@ export function ChatModal({
     <UIStringsContext.Provider value={t}>
       <div
         ref={overlayRef}
-        className={cn("hsk-cb-overlay", origin && "hsk-cb-overlay--grows", classNames.overlay)}
+        className={cn("hsk-cb-overlay", origin && "hsk-cb-overlay--grows", overlayClosing && "hsk-cb-overlay--closing", classNames.overlay)}
         onPointerDown={e => {
           primeChimes();
           if (e.target === e.currentTarget) {
@@ -693,23 +992,18 @@ export function ChatModal({
         }}
         onClick={e => {
           if (e.target === e.currentTarget && (overlayRef.current as any)?._ptrDown && Date.now() - mountTimeRef.current > 200) {
-            onClose();
+            requestClose();
           }
           if (overlayRef.current) (overlayRef.current as any)._ptrDown = false;
         }}
         data-hsk-theme={hskThemeAttr}
+        data-hsk-theming={theming ? '' : undefined}
         style={{
           ...(backdropFilterStyle),
           ...(backdropColor ? { background: backdropColor } : {}),
           ...(origin ? {
             '--hsk-ox': `${origin.x}px`,
             '--hsk-oy': `${origin.y}px`,
-            '--hsk-or': `${Math.ceil(origin.r)}px`,
-            '--hsk-bt': `${Math.round(origin.top ?? origin.y)}px`,
-            '--hsk-bl': `${Math.round(origin.left ?? origin.x)}px`,
-            '--hsk-bw': `${Math.round(origin.width ?? 0)}px`,
-            '--hsk-bh': `${Math.round(origin.height ?? 0)}px`,
-            '--hsk-bbr': `${Math.round(origin.borderRadius ?? 12)}px`,
           } as React.CSSProperties : {}),
           ...customStyles,
         }}
@@ -762,19 +1056,21 @@ export function ChatModal({
               awayFromBottom={showJumpToBottom}
               themeMenuOpen={themeMenuOpen}
               themeMenuClosing={themeMenuClosing}
+              onThemeMenuClosed={closeThemeMenuNow}
               isNarrow={isNarrow}
               currentTheme={currentTheme}
               onJumpToLatest={jumpToBottom}
               onReset={handleReset}
-              onClose={onClose}
+              onClose={requestClose}
               onToggleThemeMenu={() => (themeMenuOpen ? closeThemeMenu() : setThemeMenuOpen(true))}
               onSelectTheme={(t) => { handleToggleTheme(t, true); }}
               themeAttr={hskThemeAttr}
-              onScoutNew={() => {
-                setInput('');
+              onScoutNew={(avatar) => {
+                appendSpokenExchange(...sendOutExchange(avatar, t));
                 setTimeout(() => textareaRef.current?.focus(), 60);
               }}
-              onScoutAsk={(scout) => { void handleSend(`scout ${scout.id}`); }}
+              scoutsAllowed={scoutsAllowed}
+              onScoutAsk={(scout) => { void tellScoutStory(scout); }}
             />
 
             <div className="hsk-cb-msgs" ref={msgsContainerRef as any}>
@@ -789,13 +1085,18 @@ export function ChatModal({
                   awaitingConsent={awaitingConsent}
                   termsAgreed={termsAgreed}
                   shopperLanguage={shopperLanguage}
+                  pendingLanguage={pendingLanguage}
                   shopperName={shopperName}
                   entityLangPref={entityLangPref}
                   chromeReady={chromeReady && baseFontReady}
                   activeChips={activeChips}
+                  speechLang={speechLang}
                   t={t}
                   tNode={tNode}
                   chooseLanguage={chooseLanguage}
+                  langSwitching={langSwitching}
+                  isLangPreparing={isLangPreparing}
+                  onPrewarmLanguage={(lang) => warmLanguage(client, lang, DEFAULT_UI_STRINGS)}
                   chooseEntityLang={chooseEntityLang}
                   agreeTerms={agreeTerms}
                   handleSend={handleSend}
@@ -806,7 +1107,7 @@ export function ChatModal({
                   messageRefs={messageRefs}
                   isNarrow={isNarrow}
                   loading={loading}
-                  streaming={streaming}
+                  streaming={revealing}
                   sources={sources}
                   referencedIds={referencedIds}
                   discussedSources={discussedSources}
@@ -852,74 +1153,96 @@ export function ChatModal({
               )}
             </div>
 
-            <ChatComposer
-              gooId={gooId}
-              input={input}
-              setInput={setInput}
-              showKikuPicker={showKikuPicker}
-              setShowKikuPicker={setShowKikuPicker}
-              showAtPicker={showAtPicker}
-              setShowAtPicker={setShowAtPicker}
-              captureAllowed={captureAllowed}
-              discussedSources={discussedSources}
-              defaultCurrency={defaultCurrency}
-              handleSelectExtension={handleSelectExtension}
-              handleKikuCapture={handleKikuCapture}
-              handleKikuCaptureAll={handleKikuCaptureAll}
-              handleKikuViewHistory={handleKikuViewHistory}
-              handleKikuDelete={handleKikuDelete}
-              attachments={attachments}
-              removeAttachment={removeAttachment}
-              chromeLoading={!chromeReady}
-              imageInputRef={imageInputRef}
-              handleImageFiles={handleImageFiles}
-              enableVision={enableVision}
-              enableVoice={enableVoice && !inOnboarding}
-              canConverse={canConverse}
-              voiceMode={voiceMode}
-              startVoice={startVoice}
-              stopVoice={stopVoice}
-              voiceBlocked={voiceBlocked}
-              textareaRef={textareaRef}
-              classNames={classNames}
-              handleInput={handleInput}
-              handleKeyDown={handleKeyDown}
-              voice={voice}
-              voicePhase={voicePhase}
-              activePlaceholder={activePlaceholder}
-              loading={loading}
-              streaming={streaming}
-              stop={stop}
-              handleSend={handleSend}
-              voiceError={voiceError}
-              setVoiceError={setVoiceError}
-              shopperLanguage={shopperLanguage}
-              t={t}
-            />
+            {!composerHidden && (
+              <div className={cn(
+                composerExiting  && 'hsk-composer-exit-up',
+                composerRevealing && 'hsk-composer-reveal',
+              )}>
+                <ChatComposer
+                  gooId={gooId}
+                  input={input}
+                  setInput={setInput}
+                  showKikuPicker={showKikuPicker}
+                  setShowKikuPicker={setShowKikuPicker}
+                  showAtPicker={showAtPicker}
+                  setShowAtPicker={setShowAtPicker}
+                  captureAllowed={captureAllowed}
+                  discussedSources={discussedSources}
+                  defaultCurrency={defaultCurrency}
+                  handleSelectExtension={handleSelectExtension}
+                  handleKikuCapture={handleKikuCapture}
+                  handleKikuCaptureAll={handleKikuCaptureAll}
+                  handleKikuViewHistory={handleKikuViewHistory}
+                  handleKikuDelete={handleKikuDelete}
+                  attachments={attachments}
+                  removeAttachment={removeAttachment}
+                  chromeLoading={!chromeReady}
+                  imageInputRef={imageInputRef}
+                  handleImageFiles={handleImageFiles}
+                  enableVision={enableVision && !inOnboarding}
+                  enableVoice={enableVoice && !inOnboarding}
+                  canConverse={canConverse}
+                  voiceMode={voiceMode}
+                  startVoice={startVoice}
+                  inputLocked={inputLocked}
+                  stopVoice={stopVoice}
+                  voiceBlocked={voiceBlocked}
+                  textareaRef={textareaRef}
+                  classNames={classNames}
+                  handleInput={handleInput}
+                  handleKeyDown={handleKeyDown}
+                  voice={voice}
+                  voicePhase={voicePhase}
+                  activePlaceholder={activePlaceholder}
+                  loading={loading}
+                  streaming={streaming}
+                  stop={stop}
+                  handleSend={handleSend}
+                  voiceError={voiceError}
+                  setVoiceError={setVoiceError}
+                  shopperLanguage={shopperLanguage}
+                  langSwitching={langSwitching || isLangPreparing}
+                  t={t}
+                />
+              </div>
+            )}
           </div>
 
-          <ConversationTimeline
-            items={timelineItems}
-            activeIdx={activeMsgIdx}
-            progress={scrollProgress}
-            onJump={jumpToMessage}
-            side={isRTL ? 'left' : 'right'}
-          />
+          {voiceMode === 'off' && (
+            <ConversationTimeline
+              items={timelineItems}
+              activeIdx={activeMsgIdx}
+              progress={scrollProgress}
+              onJump={jumpToMessage}
+              side={isRTL ? 'left' : 'right'}
+            />
+          )}
+
+          {/* Allowance pills removed: no upfront usage limit display */}
 
           <div className={cn("hsk-cb-kiku-id-rail", isRTL ? "hsk-cb-kiku-id-rail--right" : "hsk-cb-kiku-id-rail--left")}>
-            <ScoutRail
+            <div className="hsk-cb-dock-frost" aria-hidden="true" />
+            {scoutsAllowed && <ScoutReceipt
+              scouts={receipts}
+              isNarrow={isNarrow}
+              lang={shopperLanguage}
+              onOpen={openReceipt}
+              onDismiss={dismissReceipt}
+            />}
+
+            {scoutsAllowed && <ScoutRail
               themeAttr={hskThemeAttr}
               open={scoutsOpen}
               onOpenChange={(v) => {
                 setScoutsOpen(v);
                 if (v && themeMenuOpen) closeThemeMenuNow();
               }}
-              onAsk={(scout) => { void handleSend(`scout ${scout.id}`); }}
-              onNew={() => {
-                setInput('');
+              onAsk={(scout) => { void tellScoutStory(scout); }}
+              onNew={(avatar) => {
+                appendSpokenExchange(...sendOutExchange(avatar, t));
                 setTimeout(() => textareaRef.current?.focus(), 60);
               }}
-            />
+            />}
 
             <SoundToggle />
 
@@ -962,7 +1285,7 @@ export function ChatModal({
               type="button"
               className="hsk-cb-kiku-id-pill"
               onClick={() => displayKikuPub !== 'N/A' && copyValue(displayKikuPub, 'pub')}
-              title={t('keyCopyId')}
+              aria-label={t('keyCopyId')}
             >
               <span className="hsk-cb-kiku-id-rail-val">{displayKikuPub}</span>
               {copied === 'pub' ? <CheckIcon /> : <CopyIcon />}
@@ -982,9 +1305,6 @@ export function ChatModal({
               live={live}
               voiceMuted={voiceMuted}
               setVoiceMuted={setVoiceMuted}
-              shownSources={shownSources}
-              onSelectSource={onSelectSource}
-              defaultCurrency={defaultCurrency}
               voiceError={voiceError}
               t={t}
             />
