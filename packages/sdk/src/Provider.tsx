@@ -11,6 +11,7 @@ export interface AkropolysProviderProps extends AkropolysConfig {
 export function AkropolysProvider({
   siteId,
   apiUrl,
+  voiceUrl,
   apiToken,
   shopperId,
   vertical,
@@ -21,13 +22,14 @@ export function AkropolysProvider({
   onError,
   display,
   children
-}: AkropolysProviderProps) {
+}: AkropolysProviderProps & { voiceUrl?: string }) {
   const clientRef = useRef<AkropolysClient | null>(null);
 
   if (!clientRef.current) {
     clientRef.current = new AkropolysClient({
       siteId,
       apiUrl,
+      voiceUrl,
       apiToken,
       shopperId,
       vertical,
@@ -42,6 +44,7 @@ export function AkropolysProvider({
     clientRef.current.updateConfig({
       siteId,
       apiUrl,
+      voiceUrl,
       apiToken,
       vertical,
       display

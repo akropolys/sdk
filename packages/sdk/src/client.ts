@@ -125,6 +125,7 @@ export function resolveDisplayFields(fields: Record<string, any>, display?: impo
 export class AkropolysClient {
   readonly api: AkropolysAPI;
   get apiUrl(): string { return this.api.apiUrl; }
+  voiceUrl?: string;
   readonly vertical: string;
   readonly display?: import('./types').DisplayConfig;
   readonly entities = {
@@ -166,9 +167,12 @@ export class AkropolysClient {
     quote: (minutes: number, signal?: AbortSignal) => this.api.scoutQuote(minutes, signal),
     checkout: (input: { minutes: number; avatar?: string; returnUrl?: string; siteId?: string }, signal?: AbortSignal) => this.api.scoutCheckout(input, signal),
     setAvatar: (id: string, avatar: string, kikuKey?: string, signal?: AbortSignal) => this.api.setScoutAvatar(id, avatar, kikuKey, signal),
+    dispatch: (id: string, kikuKey?: string, signal?: AbortSignal) => this.api.dispatchScout(id, kikuKey, signal),
     balance: (siteId?: string, kikuKey?: string, signal?: AbortSignal) => this.api.scoutBalance(siteId, kikuKey, signal),
     addMinutes: (id: string, minutes: number, kikuKey?: string, signal?: AbortSignal) => this.api.addScoutMinutes(id, minutes, kikuKey, signal),
   };
+
+  allowance = (siteId?: string, signal?: AbortSignal) => this.api.allowance(siteId, signal);
 
   private ingestQueue: Record<string, any>[] = [];
   private ingestTimer: ReturnType<typeof setTimeout> | null = null;
@@ -225,12 +229,14 @@ export class AkropolysClient {
     } catch {  }
   }
 
-  static readonly DEFAULT_API_URL = 'https://api.akropolys.cloud/v1';
+  static readonly DEFAULT_API_URL = 'https://agora-740936679905.europe-west1.run.app/v1';
 
   constructor(config: AkropolysConfig) {
     const siteId = config.siteId || getEnvVar('NEXT_PUBLIC_AKROPOLYS_SITE_ID') || '';
     const apiUrl = config.apiUrl || getEnvVar('NEXT_PUBLIC_AKROPOLYS_API_URL') || AkropolysClient.DEFAULT_API_URL;
     const apiToken = config.apiToken || getEnvVar('NEXT_PUBLIC_AKROPOLYS_API_TOKEN') || '';
+    const voiceUrl = config.voiceUrl || getEnvVar('NEXT_PUBLIC_AKROPOLYS_VOICE_URL');
+    if (voiceUrl) this.voiceUrl = voiceUrl;
 
     if (!siteId) console.error('[Akropolys] Missing siteId — pass <AkropolysProvider siteId=…> or set NEXT_PUBLIC_AKROPOLYS_SITE_ID.');
     if (!apiToken) console.error('[Akropolys] Missing apiToken — pass <AkropolysProvider apiToken=…> or set NEXT_PUBLIC_AKROPOLYS_API_TOKEN.');
@@ -350,10 +356,17 @@ export class AkropolysClient {
 
   chat(query: string, history: Array<{ role: 'user' | 'assistant'; content: string }> = [], attachments?: ChatAttachment[], forcedIntent?: string, captureTargets?: CaptureTarget[]): KikuStream {
     const abortController = new AbortController();
-    const responsePromise = this.getCurrentContextAsync(abortController.signal).then(ctx =>
-      this.api.chatStream(query, history, abortController.signal, ctx, attachments, forcedIntent, captureTargets)
-    );
+    const t0 = performance.now();
+    const marks: string[] = [];
+    const mark = (label: string) => marks.push(`${label}=${Math.round(performance.now() - t0)}ms`);
+    const responsePromise = this.getCurrentContextAsync(abortController.signal).then(ctx => {
+      mark('context');
+      return this.api.chatStream(query, history, abortController.signal, ctx, attachments, forcedIntent, captureTargets);
+    }).then(res => { mark('headers'); return res; });
     const stream = new KikuStream(responsePromise, abortController);
+    let texted = false;
+    stream.on('token', () => { if (!texted) { texted = true; mark('first_text'); } });
+    stream.on('done', () => { mark('done'); console.info(`[kiku timing] ${marks.join(' ')}`); });
     stream.on('meta', (meta: any) => {
       if (meta && typeof meta.language === 'string' && meta.language) {
         this.setShopperLanguage(meta.language);
@@ -377,6 +390,7 @@ export class AkropolysClient {
     if (config.apiUrl) this.api.apiUrl = config.apiUrl;
     if (config.siteId) this.api.siteId = config.siteId;
     if (config.apiToken) this.api.apiToken = config.apiToken;
+    if (config.voiceUrl !== undefined) this.voiceUrl = config.voiceUrl;
     if (config.vertical !== undefined) {
       (this as any).vertical = config.vertical;
       this.api.vertical = config.vertical;
@@ -597,9 +611,35 @@ export class AkropolysClient {
 
   private static CHROME_STRINGS_CACHE_VERSION = 4;
 
+  getCachedUIStrings(language: string, defaults: Record<string, string>): UIStrings | null {
+    if (typeof window === 'undefined' || !language) return null;
+    const fingerprint = AkropolysClient.hashStrings(defaults);
+    const cacheKey = `akropolys_ui_strings_v${AkropolysClient.CHROME_STRINGS_CACHE_VERSION}_${language.toLowerCase().trim()}_${fingerprint}`;
+    try {
+      const raw = localStorage.getItem(cacheKey);
+      if (raw) {
+        const cached = JSON.parse(raw);
+        if (cached?.strings && Object.keys(cached.strings).length > 0) {
+          return {
+            strings: cached.strings,
+            complete: true,
+            curated: cached.curated !== false,
+            dir: cached.dir === 'rtl' ? 'rtl' : 'ltr',
+            bcp47: typeof cached.bcp47 === 'string' ? cached.bcp47 : '',
+            font: cached.font?.family && cached.font?.faces?.length ? cached.font : null,
+          };
+        }
+      }
+    } catch {  }
+    return null;
+  }
+
   async getUIStrings(language: string, defaults: Record<string, string>): Promise<UIStrings> {
     const fingerprint = AkropolysClient.hashStrings(defaults);
     const cacheKey = `akropolys_ui_strings_v${AkropolysClient.CHROME_STRINGS_CACHE_VERSION}_${language.toLowerCase().trim()}_${fingerprint}`;
+
+    const cachedHit = this.getCachedUIStrings(language, defaults);
+    if (cachedHit) return cachedHit;
 
     const english: UIStrings = { strings: {}, complete: false, curated: true, dir: 'ltr', bcp47: '', font: null };
 
@@ -623,17 +663,20 @@ export class AkropolysClient {
       } catch {  }
     }
 
-    let result = await this.api.uiStrings(language);
-    if (!result?.complete) result = await this.api.uiStrings(language);
+    let result = await this.api.uiStrings(language, defaults);
+    if (!result?.complete) result = await this.api.uiStrings(language, defaults);
     if (!result?.complete || Object.keys(result.strings).length === 0) return english;
     const translated = result.strings;
 
     if (typeof window !== 'undefined') {
       try {
-        const stale = `akropolys_ui_strings_v${AkropolysClient.CHROME_STRINGS_CACHE_VERSION}_${language.toLowerCase().trim()}_`;
+        const prefix = 'akropolys_ui_strings_';
+        const currentVerPrefix = `akropolys_ui_strings_v${AkropolysClient.CHROME_STRINGS_CACHE_VERSION}_`;
         for (let i = localStorage.length - 1; i >= 0; i--) {
           const k = localStorage.key(i);
-          if (k && k.startsWith(stale) && k !== cacheKey) localStorage.removeItem(k);
+          if (k && k.startsWith(prefix) && !k.startsWith(currentVerPrefix)) {
+            localStorage.removeItem(k);
+          }
         }
         localStorage.setItem(cacheKey, JSON.stringify({ strings: translated, dir: result.dir, bcp47: result.bcp47, font: result.font, curated: result.curated }));
       } catch {  }

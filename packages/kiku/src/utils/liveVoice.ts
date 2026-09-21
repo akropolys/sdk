@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { chime } from './chime';
+import { AdpcmEncoder, decodeAdpcm } from './adpcm';
 
 export type LiveState = 'idle' | 'connecting' | 'listening' | 'thinking' | 'speaking' | 'ended';
 
@@ -33,8 +34,15 @@ export interface LiveVoiceOptions {
 
 const INPUT_RATE = 16000;
 const OUTPUT_RATE = 24000;
-const PLAY_LEAD = 0.12;
+// Ultra-low latency playback buffer: 80ms initial buffer starts audio instantly
+const START_BUFFER_SEC = 0.08;
+const REFILL_BUFFER_SEC = 0.12;
+const SCHEDULE_LEAD = 0.03;
 const FLUSH_FADE = 0.08;
+const MAX_PENDING_CHUNKS = 250; // 10s of 40ms chunks held until the server is ready
+const HEARING_LEVEL = 0.12;
+const HEARING_HOLD_MS = 500;
+const IDLE_CLOSE_MS = 60_000;
 
 const WORKLET_SRC = `
 class KikuCapture extends AudioWorkletProcessor {
@@ -71,29 +79,6 @@ class KikuCapture extends AudioWorkletProcessor {
 registerProcessor('kiku-capture', KikuCapture);
 `;
 
-function toBase64(buf: ArrayBuffer): string {
-  const bytes = new Uint8Array(buf);
-  let s = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) {
-    s += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + 0x8000)));
-  }
-  return btoa(s);
-}
-
-function fromBase64(b64: string): Float32Array {
-  const bin = atob(b64);
-  const len = bin.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
-  const dataView = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const numSamples = len >> 1;
-  const float32 = new Float32Array(numSamples);
-  for (let i = 0; i < numSamples; i++) {
-    float32[i] = dataView.getInt16(i * 2, true) / 32768;
-  }
-  return float32;
-}
-
 export function useLiveVoice(opts: LiveVoiceOptions) {
   const [state, setState] = useState<LiveState>('idle');
   const [hearing, setHearing] = useState(false);
@@ -107,6 +92,9 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
   const analyserRef = useRef<AnalyserNode | null>(null);
 
   const playAtRef = useRef(0);
+  const replyingRef = useRef(false);
+  const heldRef = useRef<Float32Array[]>([]);
+  const heldSecRef = useRef(0);
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const outAnalyserRef = useRef<AnalyserNode | null>(null);
   const outGainRef = useRef<GainNode | null>(null);
@@ -116,7 +104,9 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
   useEffect(() => { optsRef.current = opts; }, [opts]);
 
   const readyRef = useRef(false);
-  const armCaptureRef = useRef<(() => void) | null>(null);
+  const pendingRef = useRef<ArrayBuffer[]>([]);
+  const encoderRef = useRef(new AdpcmEncoder());
+  const workletCtxRef = useRef<Promise<AudioContext | null> | null>(null);
 
   const turnHeardRef = useRef('');
   const turnSaidRef = useRef('');
@@ -134,16 +124,43 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
     // Silent - no synthetic beeps during live voice
   }, []);
 
-  const beginCapture = useCallback(() => {
-    if (!readyRef.current) return;
-    if (ctxRef.current && ctxRef.current.state === 'suspended') {
-      ctxRef.current.resume().catch(() => {});
+  const sendAudio = useCallback((buf: ArrayBuffer) => {
+    const ws = wsRef.current;
+    if (!readyRef.current || !ws || ws.readyState !== WebSocket.OPEN) {
+      const q = pendingRef.current;
+      q.push(buf);
+      if (q.length > MAX_PENDING_CHUNKS) q.shift();
+      return;
     }
-    const arm = armCaptureRef.current;
-    if (!arm) return;
-    armCaptureRef.current = null;
-    arm();
+    ws.send(encoderRef.current.encode(new Int16Array(buf)));
   }, []);
+
+  const flushPending = useCallback(() => {
+    const q = pendingRef.current;
+    pendingRef.current = [];
+    for (const buf of q) sendAudio(buf);
+  }, [sendAudio]);
+
+  // Built once per context and reused, so tapping voice only waits for the mic.
+  const audioContext = useCallback((): Promise<AudioContext | null> => {
+    const held = ctxRef.current;
+    if (workletCtxRef.current && held && held.state !== 'closed') return workletCtxRef.current;
+    const AC: typeof AudioContext = (window as any).AudioContext || (window as any).webkitAudioContext;
+    if (!AC) return Promise.resolve(null);
+    const ctx = new AC({ latencyHint: 'interactive', sampleRate: OUTPUT_RATE });
+    ctxRef.current = ctx;
+    const blobUrl = URL.createObjectURL(new Blob([WORKLET_SRC], { type: 'application/javascript' }));
+    workletCtxRef.current = ctx.audioWorklet.addModule(blobUrl)
+      .then(() => ctx)
+      .catch(() => null)
+      .finally(() => URL.revokeObjectURL(blobUrl));
+    return workletCtxRef.current;
+  }, []);
+
+  const prewarm = useCallback(() => {
+    if (typeof window === 'undefined' || wsRef.current) return;
+    void audioContext();
+  }, [audioContext]);
 
   const micLevel = useCallback(() => {
     const a = analyserRef.current;
@@ -193,7 +210,7 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
     playAtRef.current = fadeEnd; // next turn must not open inside the fade
   }, []);
 
-  const enqueue = useCallback((chunk: Float32Array) => {
+  const schedule = useCallback((chunk: Float32Array) => {
     const ctx = ctxRef.current;
     const out = outAnalyserRef.current;
     if (!ctx || !out || chunk.length === 0) return;
@@ -201,8 +218,7 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
       ctx.resume().catch(() => {});
     }
 
-    const rate = outRateRef.current;
-    const buf = ctx.createBuffer(1, chunk.length, rate);
+    const buf = ctx.createBuffer(1, chunk.length, outRateRef.current);
     buf.getChannelData(0).set(chunk);
 
     const src = ctx.createBufferSource();
@@ -210,8 +226,7 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
     src.connect(out);
 
     const now = ctx.currentTime;
-    // Continuous chain; a fresh run opens a jitter buffer so a late packet cannot tear a gap.
-    const at = playAtRef.current > now ? playAtRef.current : now + PLAY_LEAD;
+    const at = playAtRef.current > now ? playAtRef.current : now + SCHEDULE_LEAD;
     src.start(at);
     playAtRef.current = at + buf.duration;
 
@@ -220,11 +235,40 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
       sourcesRef.current.delete(src);
       if (sourcesRef.current.size === 0) {
         playAtRef.current = 0;
-        setState(s => (s === 'speaking' ? 'listening' : s));
+        if (!replyingRef.current) setState(s => (s === 'speaking' ? 'listening' : s));
       }
     };
     setState(s => (s === 'speaking' || s === 'idle' || s === 'ended' ? s : 'speaking'));
   }, []);
+
+  const releaseHeld = useCallback(() => {
+    const held = heldRef.current;
+    heldRef.current = [];
+    heldSecRef.current = 0;
+    for (const chunk of held) schedule(chunk);
+  }, [schedule]);
+
+  const dropHeld = useCallback(() => {
+    heldRef.current = [];
+    heldSecRef.current = 0;
+  }, []);
+
+  const enqueue = useCallback((chunk: Float32Array) => {
+    const ctx = ctxRef.current;
+    if (!ctx || chunk.length === 0) return;
+    const playing = playAtRef.current > ctx.currentTime;
+    if (playing && heldRef.current.length === 0) {
+      schedule(chunk);
+      return;
+    }
+    const target = replyingRef.current ? REFILL_BUFFER_SEC : START_BUFFER_SEC;
+    heldRef.current.push(chunk);
+    heldSecRef.current += chunk.length / outRateRef.current;
+    if (heldSecRef.current >= target) {
+      replyingRef.current = true;
+      releaseHeld();
+    }
+  }, [schedule, releaseHeld]);
 
   const stopHold = useCallback(() => {
     // Silent - no drone
@@ -238,7 +282,11 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
     flushExchange();
     wsRef.current = null;
     readyRef.current = false;
-    armCaptureRef.current = null;
+    pendingRef.current = [];
+    workletCtxRef.current = null;
+    replyingRef.current = false;
+    heldRef.current = [];
+    heldSecRef.current = 0;
     stopHold();
     flushPlayback();
     nodeRef.current?.disconnect();
@@ -263,7 +311,14 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
 
   const attachWsHandlers = useCallback((ws: WebSocket) => {
     let abandoned = false;
+    ws.binaryType = 'arraybuffer';
+    encoderRef.current = new AdpcmEncoder();
     ws.onmessage = ev => {
+      if (ev.data instanceof ArrayBuffer) {
+        stopHold();
+        enqueue(decodeAdpcm(ev.data));
+        return;
+      }
       let f: any;
       try { f = JSON.parse(ev.data); } catch { return; }
       switch (f.type) {
@@ -277,11 +332,7 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
           if (typeof f.secondsLeft === 'number') setSecondsLeft(f.secondsLeft);
           readyRef.current = true;
           setState('listening');
-          beginCapture();
-          break;
-        case 'audio':
-          stopHold();
-          if (f.audio) enqueue(fromBase64(f.audio));
+          flushPending();
           break;
         case 'hearing':
           setHearing(true);
@@ -298,6 +349,8 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
           turnSaidRef.current += f.text;
           break;
         case 'interrupted':
+          replyingRef.current = false;
+          dropHeld();
           stopHold();
           flushPlayback();
           chime('interrupt');
@@ -305,6 +358,8 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
           setState('listening');
           break;
         case 'turn_complete':
+          releaseHeld();
+          replyingRef.current = false;
           stopHold();
           setHearing(false);
           flushExchange();
@@ -335,7 +390,7 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
       teardown('ended');
     };
     ws.onerror = () => { if (!abandoned && wsRef.current === ws) optsRef.current.onError?.('connection'); };
-  }, [beginCapture, enqueue, flushExchange, flushPlayback, startHold, stopHold, stop, teardown]);
+  }, [dropHeld, enqueue, flushExchange, flushPending, flushPlayback, releaseHeld, startHold, stopHold, stop, teardown]);
 
   const hotReconnect = useCallback((newVoice?: string) => {
     const oldWs = wsRef.current;
@@ -349,11 +404,13 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
     }
     const o = optsRef.current;
     const base = o.apiUrl.replace(/\/+$/, '');
-    const url = new URL(base + '/voice/live', window.location.href);
+    const path = base.endsWith('/voice/live') ? base : base + '/voice/live';
+    const url = new URL(path, window.location.href);
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
     url.searchParams.set('siteId', o.siteId);
     if (o.kikuId) url.searchParams.set('kikuId', o.kikuId);
     if (o.language) url.searchParams.set('language', o.language);
+    url.searchParams.set('codec', 'adpcm');
     if (newVoice || o.voice) url.searchParams.set('voice', (newVoice || o.voice)!);
 
     const ws = new WebSocket(url.toString(), ['akropolys.token.' + o.token]);
@@ -375,23 +432,20 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
     if (wsRef.current) return;
     setState('connecting');
     const o = optsRef.current;
+    pendingRef.current = [];
 
-    const AC: typeof AudioContext = (window as any).AudioContext || (window as any).webkitAudioContext;
-    if (AC) {
-      if (!ctxRef.current || ctxRef.current.state === 'closed') {
-        ctxRef.current = new AC({ latencyHint: 'interactive', sampleRate: OUTPUT_RATE });
-      }
-      if (ctxRef.current.state === 'suspended') {
-        ctxRef.current.resume().catch(() => {});
-      }
-    }
+    // Resumed inside the tap, the one moment a browser allows it.
+    const ctxReady = audioContext();
+    ctxRef.current?.resume().catch(() => {});
 
     const base = o.apiUrl.replace(/\/+$/, '');
-    const url = new URL(base + '/voice/live', window.location.href);
+    const path = base.endsWith('/voice/live') ? base : base + '/voice/live';
+    const url = new URL(path, window.location.href);
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
     url.searchParams.set('siteId', o.siteId);
     if (o.kikuId) url.searchParams.set('kikuId', o.kikuId);
     if (o.language) url.searchParams.set('language', o.language);
+    url.searchParams.set('codec', 'adpcm');
     if (o.voice) url.searchParams.set('voice', o.voice);
 
     const ws = new WebSocket(url.toString(), ['akropolys.token.' + o.token]);
@@ -409,7 +463,6 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
         },
       });
     } catch (e: any) {
-      abandoned = true;
       try { ws.close(); } catch {  }
       wsRef.current = null;
       setState('idle');
@@ -425,11 +478,16 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
       track.enabled = !optsRef.current.muted;
     }
 
-    const ctx = ctxRef.current && ctxRef.current.state !== 'closed'
-      ? ctxRef.current
-      : (AC ? new AC({ latencyHint: 'interactive', sampleRate: OUTPUT_RATE }) : null);
-    if (!ctx) return;
-    ctxRef.current = ctx;
+    const ctx = await ctxReady;
+    if (wsRef.current !== ws) {
+      stream.getTracks().forEach(t => t.stop());
+      return;
+    }
+    if (!ctx) {
+      optsRef.current.onError?.('audio-worklet');
+      stop();
+      return;
+    }
     if (ctx.state === 'suspended') {
       ctx.resume().catch(() => {});
     }
@@ -451,33 +509,45 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
     outAnalyserRef.current = outAnalyser;
 
     try {
-      const blobUrl = URL.createObjectURL(new Blob([WORKLET_SRC], { type: 'application/javascript' }));
-      await ctx.audioWorklet.addModule(blobUrl);
-      URL.revokeObjectURL(blobUrl);
-      if (wsRef.current !== ws) {
-        stream.getTracks().forEach(t => t.stop());
-        ctx.close().catch(() => {});
-        return;
-      }
-
       const node = new AudioWorkletNode(ctx, 'kiku-capture');
       nodeRef.current = node;
-      node.port.onmessage = e => {
-        const curWs = wsRef.current;
-        if (!curWs || curWs.readyState !== WebSocket.OPEN) return;
-        curWs.send(JSON.stringify({ type: 'audio', audio: toBase64(e.data) }));
-      };
+      node.port.onmessage = e => sendAudio(e.data);
       const srcNode = ctx.createMediaStreamSource(stream);
-      armCaptureRef.current = () => {
-        srcNode.connect(inAnalyser);
-        srcNode.connect(node);
-      };
-      beginCapture();
+      srcNode.connect(inAnalyser);
+      srcNode.connect(node);
     } catch {
       optsRef.current.onError?.('audio-worklet');
       stop();
     }
-  }, [beginCapture, enqueue, flushExchange, flushPlayback, startHold, stopHold, stop, teardown]);
+  }, [attachWsHandlers, audioContext, sendAudio, stop]);
+
+  // The model sends no partial transcripts, so "hearing" comes from the mic itself.
+  useEffect(() => {
+    if (state !== 'listening') {
+      setHearing(false);
+      return;
+    }
+    let lastLoud = 0;
+    let on = false;
+    // Replies re-enter listening, so this clock only runs while nobody is talking.
+    const quietSince = Date.now();
+    const id = window.setInterval(() => {
+      const now = Date.now();
+      if (!optsRef.current.muted && micLevel() > HEARING_LEVEL) lastLoud = now;
+      if (now - Math.max(lastLoud, quietSince) > IDLE_CLOSE_MS) {
+        window.clearInterval(id);
+        optsRef.current.onError?.('idle');
+        stop();
+        return;
+      }
+      const next = now - lastLoud < HEARING_HOLD_MS;
+      if (next !== on) {
+        on = next;
+        setHearing(next);
+      }
+    }, 100);
+    return () => window.clearInterval(id);
+  }, [state, micLevel, stop]);
 
   useEffect(() => () => { stop(); }, [stop]);
 
@@ -487,5 +557,5 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
     for (const track of stream.getAudioTracks()) track.enabled = !opts.muted;
   }, [opts.muted, state]);
 
-  return { state, phase: state, hearing, sources, secondsLeft, micLevel, micSpectrum, spectrumBins, start, stop };
+  return { state, phase: state, hearing, sources, secondsLeft, micLevel, micSpectrum, spectrumBins, start, stop, prewarm };
 }
