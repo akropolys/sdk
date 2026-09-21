@@ -978,10 +978,11 @@ export function ChatModal({
         const assistantIdx = nextMsg?.role === 'assistant' ? idx + 1 : undefined;
         items.push({
           idx,
-          text: clean.length > 30 ? clean.slice(0, 29).trimEnd() + '…' : clean,
+          text: clean,
           audioUrl: m.audioUrl,
           assistantAudioUrl,
           assistantIdx,
+          duration: nextMsg?.thoughtForSeconds,
           spoken: !!m.spoken || !!nextMsg?.spoken,
         });
       }
@@ -1235,6 +1236,9 @@ export function ChatModal({
             side={isRTL ? 'left' : 'right'}
             voiceMuted={voiceMuted}
             setVoiceMuted={setVoiceMuted}
+            voiceMode={voiceMode}
+            voicePhase={voicePhase}
+            live={live}
           />
 
           {/* Allowance pills removed: no upfront usage limit display */}
