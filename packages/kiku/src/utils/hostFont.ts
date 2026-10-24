@@ -26,7 +26,9 @@ function safeUrl(url: string): string | null {
   return u;
 }
 
-const RANGE_SEGMENT = /^[Uu]\+[0-9A-Fa-f?]{1,6}(-[0-9A-Fa-f]{1,6})?$/;
+const safeFamily = (f: string): string => (/["\\{}<>;\n\r]/.test(f) ? '' : f.trim());
+
+const RANGE_SEGMENT =/^[Uu]\+[0-9A-Fa-f?]{1,6}(-[0-9A-Fa-f]{1,6})?$/;
 
 const safeRange = (r: string): string => {
   const parts = r.split(',').map(s => s.trim()).filter(Boolean);
@@ -59,11 +61,13 @@ function useMountedFaces(key: string, css: string): void {
 }
 
 function scriptFontCSS(font: ScriptFont): string {
+  const family = safeFamily(font.family);
+  if (!family) return '';
   return font.faces
     .map(f => {
       const url = safeUrl(f.url);
       if (!url) return '';
-      return `@font-face{font-family:"${font.family}";font-style:normal;` +
+      return `@font-face{font-family:"${family}";font-style:normal;` +
         `font-weight:${safeWeight(f.weight)};font-display:swap;src:url(${url}) format("woff2");` +
         (safeRange(f.unicodeRange) ? `unicode-range:${safeRange(f.unicodeRange)};` : '') + '}';
     })
@@ -123,9 +127,41 @@ export async function preloadScriptFont(font: ScriptFont, timeoutMs = 0): Promis
   }
 }
 
+const UI_WEIGHTS = ['400', '500', '600', '700'];
+
+function fontQuery(families: string[], strings: Record<string, string>) {
+  const text = Array.from(new Set(Array.from(Object.values(strings).join('')))).join('');
+  const stack = families.map(f => `"${f.replace(/^['"]|['"]$/g, '')}"`).join(', ');
+  return { text, stack };
+}
+
+// True when every face these strings need is already loaded at every weight the widget draws.
+export function fontsLoadedFor(families: string[], strings: Record<string, string>): boolean {
+  const fonts = typeof document !== 'undefined' ? (document as any).fonts : null;
+  const { text, stack } = fontQuery(families, strings);
+  if (!fonts?.check || !text || !stack) return true;
+  try {
+    return UI_WEIGHTS.every(w => fonts.check(`${w} 16px ${stack}`, text));
+  } catch {
+    return true;
+  }
+}
+
+// Loads, at every weight the widget draws, each face these strings need; unicode-range faces load only their slices.
+export async function loadFontsFor(families: string[], strings: Record<string, string>, timeoutMs: number): Promise<void> {
+  const fonts = typeof document !== 'undefined' ? (document as any).fonts : null;
+  if (!fonts?.load) return;
+  const { text, stack } = fontQuery(families, strings);
+  if (!text || !stack) return;
+  await Promise.race([
+    Promise.all(UI_WEIGHTS.map(w => fonts.load(`${w} 16px ${stack}`, text).catch(() => {}))),
+    new Promise(resolve => setTimeout(resolve, timeoutMs)),
+  ]);
+}
+
 export function useHostFontFace(theme: 'light' | 'dark' | AkropolysTheme | undefined): void {
   const t = typeof theme === 'object' && theme ? theme : undefined;
-  const family = t?.fontFamily?.split(',')[0].trim().replace(/^['"]|['"]$/g, '') ?? '';
+  const family = safeFamily(t?.fontFamily?.split(',')[0].trim().replace(/^['"]|['"]$/g, '') ?? '');
   const urls = typeof t?.fontUrl === 'string' ? { normal: t.fontUrl } : (t?.fontUrl ?? {});
   const normal = urls.normal ?? '';
   const bold = urls.bold ?? '';

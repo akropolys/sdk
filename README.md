@@ -46,7 +46,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AkropolysProvider
           siteId={process.env.NEXT_PUBLIC_AKROPOLYS_SITE_ID!}
           apiUrl={process.env.NEXT_PUBLIC_AKROPOLYS_API_URL!}
-          apiToken={process.env.NEXT_PUBLIC_AKROPOLYS_API_KEY!}
+          apiToken={process.env.NEXT_PUBLIC_AKROPOLYS_API_TOKEN!}
         >
           {children}
           <KikuButton label="Ask me anything" enableVoice enableVision />
@@ -57,32 +57,36 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 }
 ```
 
-### 2. Stream Live Telemetry (Server)
+### 2. Index your records (Server)
 
 ```typescript
-import { signLiveRecords } from '@akropolys/sdk/server';
+import { createIngestClient, signed } from '@akropolys/sdk/server';
 
-const payload = await signLiveRecords([
-  {
-    key: 'Sony WH-1000XM5',
-    fields: { price: '$348.00', stock: '3 left', promo: 'FLASH15' }
-  },
-  {
-    key: '2023 BMW M340i',
-    fields: { price: '$54,900', status: 'Available', location: 'Downtown Lot' }
-  }
-], process.env.AKROPOLYS_PRIVATE_KEY!, { kid: process.env.AKROPOLYS_KID! });
-
-await fetch(`${process.env.AKROPOLYS_API_URL}/live`, {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'X-API-Key': process.env.AKROPOLYS_API_KEY!,
-    'X-Akropolys-Site': process.env.AKROPOLYS_SITE_ID!,
-  },
-  body: JSON.stringify(payload),
+const akropolys = createIngestClient({
+  siteId: process.env.AKROPOLYS_SITE_ID!,
+  apiToken: process.env.AKROPOLYS_API_TOKEN!,
+  privateKey: process.env.AKROPOLYS_PRIVATE_KEY!,
+  kid: process.env.AKROPOLYS_KID!,
 });
+
+await akropolys.ingest({
+  id: product.id,
+  title: product.name,
+  fields: { price: product.price, url: product.url },
+}, signed);
 ```
+
+Use your source record's stable `id`. `fields.url` is optional but recommended for records with a webpage. ID-only records can be searched, shown and saved in Kiku; a supplied link is retained in saved history. Fingerprints skip unchanged content. On Pro or Business, pass an ID-bearing array to `ingestBatch(records, signed)`.
+
+### 3. Stream live values (Server)
+
+```typescript
+await akropolys.ingestLive([
+  { key: 'product-123', fields: { price: '$348.00', stock: '3 left' } },
+], signed);
+```
+
+Catalogue records use `id`; the separate live-value API uses its existing stable `key`. The server client handles signing and sending for both APIs. Keep its private key on your server.
 
 ---
 

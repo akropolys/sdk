@@ -37,24 +37,33 @@ export interface ChatMessage {
   thinking?: string; // the model's reasoning, delivered separately from the answer
   thoughtForSeconds?: number; // wall-clock time from send until the answer began
   statusMessage?: string; // live status update (e.g. "Searching 2,431 products...")
+  statusStage?: string; // which step the reply is on, for the widget's own translated label
+  human?: boolean; // written by a person from the site's team, not by Kiku
+  repliedSeconds?: number; // how long the visitor waited for that person's reply
 
   queued?: boolean;
 
   spoken?: boolean;
+  live?: string; // the voice conversation this was said in; absent when narrated into the chat
   audioUrl?: string;
 }
 
+export interface CardDetail {
+  label: string;
+  value: string;
+}
+
 export interface ChatSource {
+  images?: import("./types").EntityImage[];
   id?: string;
   url?: string;
   fields?: Record<string, any>;
   name: string;
-  price?: string;
-  currency?: string;
-  category?: string;
   image?: string;
-  brand?: string;
-  availability?: string;
+  // The site's chosen card fields, in its order, under its own names.
+  details?: CardDetail[];
+  swatch?: string; // the colour itself, when the entry is a colour
+  target?: boolean; // the colour read or worked out, shown beside the site's matches
 }
 
 export interface ChatMetadata {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { ScriptFont, AkropolysTheme } from '@akropolys/sdk';
 import { useAkropolysContext } from '@akropolys/sdk';
-import { useScriptFontFace, preloadScriptFont } from '../../../utils/hostFont';
+import { useScriptFontFace, preloadScriptFont, loadFontsFor, fontsLoadedFor } from '../../../utils/hostFont';
 import { cachedBaseFont, readyBaseFont } from '../../../utils/chromeWarm';
 import { DEFAULT_UI_STRINGS, ONBOARDING_UI_STRINGS, getLoadingMeta, type UIStringKey } from '../types';
 
@@ -46,6 +46,12 @@ function resolveFirstFamily(varRef: string): string {
   return '';
 }
 
+// The clay page holds until the next page's letters are drawn in their own font, but never longer than this.
+const FONT_WAIT_MS = 5000;
+
+// The chat waits for its language; a failed load is tried again at these gaps, the last one repeating.
+const LANG_RETRY_MS = [5000, 15000, 45000, 120000];
+
 export function useScriptFont({ shopperLanguage, theme, preloadedStrings }: UseScriptFontOptions) {
   const client = useAkropolysContext();
   const cachedInitial = shopperLanguage ? (
@@ -56,7 +62,6 @@ export function useScriptFont({ shopperLanguage, theme, preloadedStrings }: UseS
     ? preloadedStrings
     : (cachedInitial?.strings ?? {});
   const [chromeStrings, setChromeStrings] = useState<Record<string, string>>(() => initialStrings);
-  const [chromeCurated, setChromeCurated] = useState<boolean>(() => cachedInitial?.curated !== false);
   const [chromeReady, setChromeReady] = useState<boolean>(() => !shopperLanguage || (preloadedStrings && Object.keys(preloadedStrings).length > 0) || !!cachedInitial?.complete);
   const [loadedLang, setLoadedLang] = useState<string>(() => {
     if (preloadedStrings && Object.keys(preloadedStrings).length > 0) return shopperLanguage;
@@ -87,6 +92,8 @@ export function useScriptFont({ shopperLanguage, theme, preloadedStrings }: UseS
   const [scriptFont, setScriptFont] = useState<ScriptFont | null>(() => cachedInitial?.font ?? null);
   const [baseFont, setBaseFont] = useState<ScriptFont | null>(() => readyBaseFont(client));
   const [baseFontReady, setBaseFontReady] = useState<boolean>(true);
+  const [fontWait, setFontWait] = useState(false);
+  const openedLangRef = React.useRef(shopperLanguage);
 
   // Sync synchronously during render if shopperLanguage changes, preventing any 1-frame flash of old strings
   const [prevShopperLanguage, setPrevShopperLanguage] = useState(shopperLanguage);
@@ -108,17 +115,23 @@ export function useScriptFont({ shopperLanguage, theme, preloadedStrings }: UseS
       setChromeStrings(sourceStrings);
       effectiveStrings = sourceStrings;
       if (cached) {
-        setChromeCurated(cached.curated !== false);
         if (cached.font) setScriptFont(cached.font);
         if (cached.dir) setIsRTL(cached.dir === 'rtl');
         if (cached.bcp47) setSpeechLang(cached.bcp47);
       }
+      if (cached?.font) void preloadScriptFont(cached.font);
+      setFontWait(!fontsLoadedFor([cached?.font?.family, baseFont?.family].filter((f): f is string => !!f), sourceStrings));
       setLoadedLang(shopperLanguage);
       setChromeReady(true);
     }
   }
 
-  const effectiveChromeReady = isEn || (loadedLang.toLowerCase() === shopperLanguage.toLowerCase() && chromeReady) || (effectiveStrings && Object.keys(effectiveStrings).length > 0);
+  // Opening chat never waits for translations or fonts; cached/default text is immediately usable.
+  // Only an explicit language change during this visit can hold the onboarding transition.
+  const effectiveChromeReady = shopperLanguage === openedLangRef.current || isEn || (!fontWait && (
+    (loadedLang.toLowerCase() === shopperLanguage.toLowerCase() && chromeReady) ||
+    Object.keys(effectiveStrings).length > 0
+  ));
 
   useEffect(() => {
     if (!shopperLanguage) {
@@ -133,29 +146,52 @@ export function useScriptFont({ shopperLanguage, theme, preloadedStrings }: UseS
     const known = knownLanguage(shopperLanguage);
     const meta = getLoadingMeta(shopperLanguage);
     const isLangEn = known?.bcp47 === 'en';
+    let cancelled = false;
+
+    // Only a language picked during this visit holds the clay page; a returning visitor's page is never covered.
+    const holdForFonts = (font: ScriptFont | null | undefined, strings: Record<string, string>) => {
+      const families = [font?.family, baseFont?.family].filter((f): f is string => !!f);
+      if (shopperLanguage === openedLangRef.current || fontsLoadedFor(families, strings)) {
+        setFontWait(false);
+        return;
+      }
+      setFontWait(true);
+      loadFontsFor(families, strings, FONT_WAIT_MS).then(() => {
+        if (!cancelled) setFontWait(false);
+      });
+    };
 
     const cachedFull = client?.getCachedUIStrings?.(shopperLanguage, DEFAULT_UI_STRINGS);
     if (cachedFull?.strings && Object.keys(cachedFull.strings).length > 0) {
-      setChromeCurated(cachedFull.curated !== false);
       setChromeStrings(cachedFull.strings);
       setIsRTL(cachedFull.dir === 'rtl');
       setSpeechLang(cachedFull.bcp47 || known?.bcp47 || '');
-      if (cachedFull.font) setScriptFont(cachedFull.font);
+      if (cachedFull.font) {
+        void preloadScriptFont(cachedFull.font);
+        setScriptFont(cachedFull.font);
+      }
+      holdForFonts(cachedFull.font, cachedFull.strings);
       setLoadedLang(shopperLanguage);
       setChromeReady(true);
-      return;
+      return () => {
+        cancelled = true;
+      };
     }
 
     const cachedOnboarding = client?.getCachedUIStrings?.(shopperLanguage, ONBOARDING_UI_STRINGS);
     if (cachedOnboarding?.strings && Object.keys(cachedOnboarding.strings).length > 0) {
-      setChromeCurated(cachedOnboarding.curated !== false);
       setChromeStrings(cachedOnboarding.strings);
       setIsRTL(cachedOnboarding.dir === 'rtl');
       setSpeechLang(cachedOnboarding.bcp47 || known?.bcp47 || '');
-      if (cachedOnboarding.font) setScriptFont(cachedOnboarding.font);
+      if (cachedOnboarding.font) {
+        void preloadScriptFont(cachedOnboarding.font);
+        setScriptFont(cachedOnboarding.font);
+      }
+      holdForFonts(cachedOnboarding.font, cachedOnboarding.strings);
       setLoadedLang(shopperLanguage);
       setChromeReady(true);
     } else {
+      setFontWait(false);
       setChromeStrings({});
       if (known) {
         setIsRTL(known.dir === 'rtl');
@@ -168,30 +204,32 @@ export function useScriptFont({ shopperLanguage, theme, preloadedStrings }: UseS
       }
     }
 
-    let cancelled = false;
-    (async () => {
+    const tryLoad = async (): Promise<boolean> => {
+      let got = false;
       try {
         if (!cachedOnboarding?.strings) {
           const resFast = await client.getUIStrings?.(shopperLanguage, ONBOARDING_UI_STRINGS);
           if (!cancelled && resFast?.complete) {
-            setChromeCurated(resFast.curated !== false);
+            setFontWait(true);
             setChromeStrings(prev => ({ ...prev, ...resFast.strings }));
             setIsRTL(resFast.dir === 'rtl');
             setSpeechLang(resFast.bcp47 || known?.bcp47 || '');
             try { localStorage.setItem(dirKey, resFast.dir); } catch {  }
-            if (resFast.font) {
-              await preloadScriptFont(resFast.font, 1200);
-              if (!cancelled) setScriptFont(resFast.font);
-            }
+            if (resFast.font) void preloadScriptFont(resFast.font);
+            const families = [resFast.font?.family, baseFont?.family].filter((f): f is string => !!f);
+            await loadFontsFor(families, resFast.strings, FONT_WAIT_MS);
             if (!cancelled) {
+              if (resFast.font) setScriptFont(resFast.font);
               setLoadedLang(shopperLanguage);
               setChromeReady(true);
+              setFontWait(false);
             }
           }
         }
 
         const resFull = await client.getUIStrings?.(shopperLanguage, DEFAULT_UI_STRINGS);
         if (!cancelled && resFull?.complete) {
+          got = true;
           setChromeStrings(prev => ({ ...prev, ...resFull.strings }));
           if (resFull.font) {
             await preloadScriptFont(resFull.font, 1200);
@@ -199,11 +237,16 @@ export function useScriptFont({ shopperLanguage, theme, preloadedStrings }: UseS
           }
         }
       } catch {
-        /* Builtin or defaults */
-        if (!cancelled) {
-          setLoadedLang(shopperLanguage);
-          setChromeReady(true);
-        }
+        return false;
+      }
+      return got;
+    };
+
+    (async () => {
+      for (let attempt = 0; !cancelled; attempt++) {
+        if (await tryLoad()) break;
+        const gap = LANG_RETRY_MS[Math.min(attempt, LANG_RETRY_MS.length - 1)];
+        await new Promise(resolve => window.setTimeout(resolve, gap));
       }
     })();
     return () => {
@@ -325,11 +368,11 @@ export function useScriptFont({ shopperLanguage, theme, preloadedStrings }: UseS
     return s;
   }, [effectiveStrings, chromeStrings]);
 
-  const tNode = useCallback((key: UIStringKey, vars: Record<string, string>) => {
+  const tNode = useCallback((key: UIStringKey, vars?: Record<string, string>) => {
     let s = effectiveStrings[key] || chromeStrings[key] || DEFAULT_UI_STRINGS[key] || key;
     return s.split(/(\{[a-zA-Z]+\})/g).map((part, i) => {
       const m = part.match(/^\{([a-zA-Z]+)\}$/);
-      if (m && vars[m[1]] !== undefined) return <bdi key={i}>{vars[m[1]]}</bdi>;
+      if (m && vars?.[m[1]] !== undefined) return <bdi key={i}>{vars[m[1]]}</bdi>;
       return <React.Fragment key={i}>{part}</React.Fragment>;
     });
   }, [effectiveStrings, chromeStrings]);
@@ -337,7 +380,6 @@ export function useScriptFont({ shopperLanguage, theme, preloadedStrings }: UseS
   return {
     chromeStrings,
     chromeReady: effectiveChromeReady,
-    chromeCurated,
     isRTL,
     speechLang,
     scriptFont,

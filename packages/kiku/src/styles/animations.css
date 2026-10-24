@@ -35,28 +35,12 @@
   transform: scale(1.35);
 }
 
-.hsk-msg-audio-btn {
-  transition: color .18s ease, transform .22s cubic-bezier(.34, 1.56, .64, 1);
-}
-.hsk-msg-audio-btn:hover:not(:disabled) {
-  color: var(--hsk-primary, #ff6a33);
-  transform: scale(1.12);
-}
-.hsk-msg-audio-btn:active:not(:disabled) { transform: scale(.94); transition-duration: .1s; }
-
-.hsk-markup-color {
-  transition: transform .22s cubic-bezier(.34, 1.56, .64, 1), border-color .18s ease;
-}
-.hsk-markup-color:hover:not(.hsk-markup-color--on) { transform: scale(1.22); }
-.hsk-markup-color--on:hover { transform: scale(1.15); }
-
 @media (prefers-reduced-motion: reduce) {
   .hsk-cb-back:hover:not(:disabled) .hsk-cb-back-icon,
   .hsk-cb-panel[dir="rtl"] .hsk-cb-back:hover:not(:disabled) .hsk-cb-back-icon,
   .hsk-cb-theme-squircle-trigger:hover .hsk-cb-theme-trigger-icon,
   .hsk-cb-dot-item:hover:not(.hsk-cb-dot-item--active),
-  .hsk-msg-audio-btn:hover:not(:disabled),
-  .hsk-markup-color:hover:not(.hsk-markup-color--on) { transform: none; }
+  .hsk-msg-audio-btn:hover:not(:disabled) { transform: none; }
   .hsk-cb-tools-toggle:hover:not(:disabled),
   .hsk-cb-tools-toggle--open:hover:not(:disabled) { transform: none; }
 }
@@ -70,7 +54,19 @@
 }
 
 /* Apple Siri Chromatic Edge Ring - Razor Sharp */
-.hsk-voice-control:not(.hsk-voice-control--muted)::before {
+
+.hsk-voice-control--waiting {
+  opacity: .45;
+  cursor: default;
+}
+
+.hsk-voice-control--waiting::before,
+.hsk-voice-control--waiting .hsk-voice-control-icon {
+  animation: none !important;
+  background: none !important;
+}
+
+.hsk-voice-control[data-control="mic"]:not(.hsk-voice-control--muted):not(.hsk-voice-control--waiting)::before {
   content: '';
   position: absolute;
   inset: -1.5px;
@@ -95,18 +91,77 @@
 }
 
 /* Apple Siri Mic Breathing Pulse when Active */
-.hsk-voice-control:not(.hsk-voice-control--muted) .hsk-voice-control-icon {
+.hsk-voice-control[data-control="mic"]:not(.hsk-voice-control--muted):not(.hsk-voice-control--waiting) .hsk-voice-control-icon {
   animation: hsk-apple-siri-mic-pulse 2.2s ease-in-out infinite;
+}
+
+/* image — the sun rises over the ridge */
+.hsk-img-sun,
+.hsk-img-ridge {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform .34s cubic-bezier(.34, 1.56, .64, 1);
+}
+.hsk-voice-control--attach:is(:hover, :active) .hsk-img-sun { transform: translate(1px, -1.5px) scale(1.25); }
+.hsk-voice-control--attach:is(:hover, :active) .hsk-img-ridge { transform: translateY(-1px); transition-delay: 40ms; }
+
+/* mic — muting strikes the slash through rather than swapping it in */
+.hsk-mic-slash {
+  stroke-dasharray: 29;
+  animation: hsk-slash-draw .3s cubic-bezier(.65, 0, .35, 1) both;
+}
+@keyframes hsk-slash-draw {
+  from { stroke-dashoffset: 29; }
+  to { stroke-dashoffset: 0; }
+}
+
+/* muting answers with a small pop on the icon */
+.hsk-voice-control[data-control="mic"].hsk-voice-control--muted .hsk-voice-control-icon {
+  animation: hsk-icon-pop .38s cubic-bezier(.34, 1.56, .64, 1);
+}
+@keyframes hsk-icon-pop {
+  0% { transform: scale(.82); }
+  100% { transform: scale(1); }
+}
+
+/* close — turns a quarter away */
+.hsk-voice-exit svg { transition: transform .32s cubic-bezier(.34, 1.56, .64, 1); }
+.hsk-voice-exit:hover svg { transform: rotate(90deg); }
+
+/* sound — the waves ripple outward, nearest first; muting crosses them out */
+.hsk-snd-wave { transform-box: fill-box; transform-origin: left center; }
+.hsk-cb-sound-pill:hover .hsk-snd-wave {
+  animation: hsk-wave-ripple .9s ease-out infinite;
+  animation-delay: calc(var(--hsk-wave, 0) * 140ms);
+}
+.hsk-mimi-dot { transform-box: fill-box; transform-origin: center; opacity: .7; }
+.hsk-cb-sound-pill:hover .hsk-mimi-dot,
+.hsk-cb-toolsheet-item:hover .hsk-mimi-dot {
+  animation: hsk-mimi-typing .9s ease-in-out infinite;
+  animation-delay: calc(var(--hsk-dot, 0) * 130ms);
+}
+@keyframes hsk-mimi-typing {
+  0%, 60%, 100% { transform: translateY(0); opacity: .55; }
+  30% { transform: translateY(-1.8px); opacity: 1; }
+}
+@keyframes hsk-wave-ripple {
+  0% { opacity: .25; transform: scale(.7); }
+  45% { opacity: 1; transform: scale(1.05); }
+  100% { opacity: .25; transform: scale(1); }
+}
+.hsk-snd-x {
+  stroke-dasharray: 8;
+  animation: hsk-snd-x-draw .26s ease-out both;
+}
+.hsk-snd-x + .hsk-snd-x { animation-delay: 70ms; }
+@keyframes hsk-snd-x-draw {
+  from { stroke-dashoffset: 8; }
+  to { stroke-dashoffset: 0; }
 }
 
 @keyframes hsk-apple-siri-spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
-}
-
-@keyframes hsk-apple-siri-breathe {
-  0%, 100% { transform: scale(0.95); opacity: 0.55; }
-  50% { transform: scale(1.15); opacity: 0.95; }
 }
 
 @keyframes hsk-apple-siri-mic-pulse {
@@ -126,6 +181,15 @@
   .hsk-voice-control--muted::after { animation: none; }
   .hsk-voice-control:hover,
   .hsk-voice-control:hover .hsk-mic-cap { transform: none; }
+  .hsk-voice-control--attach:hover .hsk-img-sun,
+  .hsk-voice-control--attach:hover .hsk-img-ridge,
+  .hsk-voice-exit:hover svg { transform: none; }
+  .hsk-mic-slash,
+  .hsk-snd-x,
+  .hsk-cb-sound-pill:hover .hsk-snd-wave,
+  .hsk-cb-sound-pill:hover .hsk-mimi-dot,
+  .hsk-cb-toolsheet-item:hover .hsk-mimi-dot,
+  .hsk-voice-controls .hsk-voice-control-icon { animation: none; }
 }
 
 /* An error earns one short shake — enough to catch the eye, over before it */
@@ -222,15 +286,6 @@
   animation: hsk-check-draw .42s cubic-bezier(.65, 0, .35, 1) forwards;
 }
 @keyframes hsk-check-draw { to { stroke-dashoffset: 0; } }
-
-/* send — the dart leans into its travel, the tail trails a beat behind */
-.hsk-send-body,
-.hsk-send-tail { transition: transform .28s cubic-bezier(.22, 1, .36, 1); }
-.hsk-send-tail { transition-delay: 40ms; }
-.hsk-chat-send:hover:not(:disabled) .hsk-send-body,
-.hsk-cb-send:hover:not(:disabled) .hsk-send-body { transform: translate(1.5px, -1.5px); }
-.hsk-chat-send:hover:not(:disabled) .hsk-send-tail,
-.hsk-cb-send:hover:not(:disabled) .hsk-send-tail { transform: translate(2.5px, -2.5px); }
 
 @media (prefers-reduced-motion: reduce) {
   .hsk-sun-rays, .hsk-sun-core, .hsk-moon-body, .hsk-wood-layer,
@@ -498,77 +553,8 @@
   }
 }
 
-.hsk-cb-send:disabled:not(.is-morph-spinning) .hsk-cb-send-sheath { opacity: 0; }
+.hsk-cb-send:disabled .hsk-cb-send-sheath { opacity: 0; }
 .hsk-cb-send--stop .hsk-cb-send-sheath { display: none; }
-
-.hsk-cb-send.is-morph-spinning {
-  cursor: wait !important;
-  pointer-events: none !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  overflow: visible !important;
-}
-
-.hsk-cb-send.is-morph-spinning .hsk-cb-send-sheath {
-  opacity: 1 !important;
-  animation: hsk-sheath-morph 1.2s ease-in-out infinite alternate !important;
-}
-
-@keyframes hsk-sheath-morph {
-  0% {
-    border-radius: 50% 50% 50% 50%;
-    transform: scale(0.96);
-  }
-  50% {
-    border-radius: 46% 54% 52% 48% / 50% 47% 53% 50%;
-    transform: scale(1.03);
-  }
-  100% {
-    border-radius: 54% 46% 48% 52% / 47% 53% 47% 53%;
-    transform: scale(0.96);
-  }
-}
-
-.hsk-cb-send.is-morph-spinning .hsk-cb-send-kite {
-  animation: hsk-goo-spin 0.85s cubic-bezier(0.4, 0, 0.2, 1) infinite !important;
-}
-
-@keyframes hsk-goo-spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.hsk-cb-send-spinner-dots {
-  position: relative;
-  width: 18px;
-  height: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.hsk-goo-orb {
-  position: absolute;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #ffffff;
-}
-
-.hsk-goo-orb--1 {
-  top: 0;
-  left: 6px;
-}
-
-.hsk-goo-orb--2 {
-  bottom: 1px;
-  left: 1px;
-}
-
-.hsk-goo-orb--3 {
-  bottom: 1px;
-  right: 1px;
-}
 
 .hsk-cb-send:active:not(:disabled) .hsk-cb-send-sheath {
   box-shadow:
@@ -685,6 +671,24 @@
   font-weight: 400;
 }
 
+.hsk-cb-terms-more {
+  margin: 0 0 4px;
+  font-size: 12.5px;
+  color: var(--hsk-chat-muted, #9ca3af);
+  text-align: start;
+}
+
+.hsk-cb-terms-more a {
+  color: var(--hsk-primary, #ff6a33);
+  font-weight: 600;
+  text-decoration: none;
+  unicode-bidi: isolate;
+}
+
+.hsk-cb-terms-more a:hover {
+  text-decoration: underline;
+}
+
 .hsk-cb-terms-divider {
   height: 1px;
   margin: 14px 0;
@@ -750,6 +754,17 @@
   }
 }
 
+@keyframes hsk-theme-pill-in {
+  from { opacity: 0; transform: scale(.94); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.hsk-cb-panel[dir="rtl"] .hsk-cb-theme-2x2-grid { transform-origin: bottom right; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hsk-cb-theme-squircle-trigger { animation: none; }
+}
+
 @keyframes hsk-theme-morph-out {
   0% {
     opacity: 1;
@@ -812,7 +827,6 @@
   100% { transform: scale(1); opacity: 1; }
 }
 
-
 /* ─── Language Loading Transition Animations (Apple Duo Blur & Gooey Morph) ── */
 
 /* Apple's signature smooth deceleration bezier */
@@ -871,149 +885,27 @@
   width: 100%;
 }
 
-/* Spinner rises from where the send button was, scaling up and clearing blur */
-@keyframes hsk-lang-rise {
-  0% {
-    opacity: 0;
-    transform: translateY(220px) scale(0.18);
-    filter: blur(12px);
-  }
-  65% {
-    opacity: 1;
-    transform: translateY(-8px) scale(1.04);
-    filter: blur(0px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-    filter: blur(0px);
-  }
-}
-
 .hsk-lang-loader--enter {
-  animation: hsk-lang-rise 0.66s cubic-bezier(0.16, 1, 0.3, 1) both;
-  will-change: transform, opacity, filter;
+  animation: hsk-clay-in 0.16s steps(2, end) both;
 }
 
-/* Spinner drops back DOWN toward the send button position and blurs away */
-@keyframes hsk-lang-fall {
-  0% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-    filter: blur(0px);
-  }
-  25% {
-    opacity: 1;
-    transform: translateY(-6px) scale(0.98);
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(220px) scale(0.18);
-    filter: blur(14px);
-  }
+@keyframes hsk-clay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-.hsk-lang-loader--exit {
-  animation: hsk-lang-fall 0.46s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-  will-change: transform, opacity, filter;
+/* A lump of clay on the table, seen from above; ClayLoader sets each frame. */
+.hsk-clay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
 }
 
-/* ── Organic Gooey Morphing Stage ── */
-.hsk-lang-goo-stage {
-  position: relative;
-  width: 96px;
-  height: 96px;
-  animation: hsk-goo-stage-spin 6.4s linear infinite;
-  transform-origin: center center;
-}
-
-@keyframes hsk-goo-stage-spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
-}
-
-/* Central mother core blob: pulsates in counter-rhythm to satellites */
-.hsk-lang-core-blob {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 28px;
-  height: 28px;
-  margin-top: -14px;
-  margin-left: -14px;
-  border-radius: 50%;
-  background: var(--hsk-primary, #ff6a33);
-  animation: hsk-goo-core 2.1s ease-in-out infinite;
-}
-
-@keyframes hsk-goo-core {
-  0%, 100% {
-    transform: scale(1);
-  }
-  30% {
-    transform: scale(0.88);
-  }
-  65% {
-    transform: scale(1.16);
-  }
-  85% {
-    transform: scale(0.94);
-  }
-}
-
-/* Orbit arms at 120-degree intervals */
-.hsk-lang-orbit-arm {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 0;
-  height: 0;
-}
-
-.hsk-lang-orbit-arm--1 { transform: rotate(0deg); }
-.hsk-lang-orbit-arm--2 { transform: rotate(120deg); }
-.hsk-lang-orbit-arm--3 { transform: rotate(240deg); }
-
-/* Orbiting satellite: pulls out from core, stretches sticky bridge, snaps, re-merges */
-.hsk-lang-satellite {
-  position: absolute;
-  top: -10px;
-  left: -10px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: var(--hsk-primary, #ff6a33);
-}
-
-.hsk-lang-satellite--1 {
-  animation: hsk-goo-satellite 2.1s ease-in-out infinite 0s;
-}
-.hsk-lang-satellite--2 {
-  animation: hsk-goo-satellite 2.1s ease-in-out infinite -0.7s;
-}
-.hsk-lang-satellite--3 {
-  animation: hsk-goo-satellite 2.1s ease-in-out infinite -1.4s;
-}
-
-@keyframes hsk-goo-satellite {
-  0% {
-    transform: translateX(8px) scale(0.92);
-  }
-  32% {
-    transform: translateX(24px) scale(1);
-  }
-  48% {
-    transform: translateX(35px) scale(0.85);
-  }
-  65% {
-    transform: translateX(33px) scale(0.92);
-  }
-  84% {
-    transform: translateX(16px) scale(1.06);
-  }
-  100% {
-    transform: translateX(8px) scale(0.92);
-  }
+.hsk-clay-table {
+  display: block;
+  width: 240px;
+  height: 160px;
 }
 
 /* Preparing in [language] label */
@@ -1028,7 +920,7 @@
 }
 
 .hsk-lang-loader--enter .hsk-lang-preparing {
-  animation: hsk-preparing-in 0.42s 0.48s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: hsk-preparing-in 0.42s 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .hsk-lang-loader--exit .hsk-lang-preparing {
@@ -1056,7 +948,6 @@
   }
 }
 
-/* Composer re-enters simultaneously as spinner drops: slides UP from below clearing blur */
 .hsk-composer-reveal {
   animation: hsk-composer-in 0.48s cubic-bezier(0.16, 1, 0.3, 1) both;
   will-change: transform, opacity, filter;

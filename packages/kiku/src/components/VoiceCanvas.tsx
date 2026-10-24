@@ -3,6 +3,7 @@ import type { VoicePhase } from '../utils/voiceSession';
 
 export interface VoiceCanvasProps {
   phase: VoicePhase;
+  theme?: string;
 
   level: () => number;
 
@@ -15,6 +16,11 @@ export interface VoiceCanvasProps {
 type RGB = [number, number, number];
 
 function parseColor(css: string, fallback: RGB): RGB {
+  const hex = css.trim().match(/^#([\da-f]{3}|[\da-f]{6})$/i);
+  if (hex) {
+    const value = hex[1].length === 3 ? hex[1].split('').map(c => c + c).join('') : hex[1];
+    return [parseInt(value.slice(0, 2), 16), parseInt(value.slice(2, 4), 16), parseInt(value.slice(4, 6), 16)];
+  }
   const m = css.match(/-?[\d.]+/g);
   if (!m || m.length < 3) return fallback;
   return [Number(m[0]), Number(m[1]), Number(m[2])];
@@ -31,7 +37,7 @@ function rgba(c: RGB, alpha: number): string {
 const BANDS = 24;
 const SPECTRUM_FRACTION = 0.42;
 
-export function VoiceCanvas({ phase, level, spectrum, bins, className }: VoiceCanvasProps) {
+export function VoiceCanvas({ phase, theme, level, spectrum, bins, className }: VoiceCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const phaseRef = useRef(phase);
   const levelRef = useRef(level);
@@ -215,7 +221,7 @@ export function VoiceCanvas({ phase, level, spectrum, bins, className }: VoiceCa
       ro?.disconnect();
       window.removeEventListener('resize', resize);
     };
-  }, []);
+  }, [theme]);
 
   return <canvas ref={canvasRef} className={className} aria-hidden="true" />;
 }

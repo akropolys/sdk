@@ -37,7 +37,6 @@ function segmentText(text: string): string[] {
         return segments;
       }
     } catch {
-      // fallback
     }
   }
   return [text];

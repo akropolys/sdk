@@ -4,21 +4,14 @@ import {
   IngestResponse,
   AkropolysError,
   CaptureTarget,
-  Scout,
-  ScoutEvent,
-  CreateScoutInput,
-  ListScoutsResponse,
-  ScoutQuote,
-  ScoutCheckout,
-  GetScoutResponse,
-  ScoutActionResponse,
+  ChatAttachment,
 } from './types';
+import { normalizeIngestRecord, recordID, ingestionEntity } from './ingestionRecord';
+import { loadConversation, saveConversation, listenConversation, type HumanConversation, type ConversationEvent, type VisitorRequest } from './conversation';
 
 export interface UIStrings {
   strings: Record<string, string>;
   complete: boolean;
-
-  curated: boolean;
   dir: 'ltr' | 'rtl';
 
   bcp47: string;
@@ -28,7 +21,7 @@ export interface UIStrings {
 
 export interface WidgetSettings {
   identityUrl: string;
-  scouts: { enabled: boolean; canAct: boolean };
+  cardFields: string[];
   detectedLanguage?: string;
   font?: ScriptFont | null;
 }
@@ -59,13 +52,16 @@ async function sleep(ms: number) {
   return new Promise(r => setTimeout(r, ms));
 }
 
-function toEntityPayload(product: Record<string, any>): { url: string; fields: Record<string, any> } {
-  const url = product.url || '';
+function toEntityPayload(product: Record<string, any>): Record<string, any> {
+  product = normalizeIngestRecord(product);
+  const core: Record<string, any> = {};
+  const reserved = new Set(['id', 'title', 'image', 'images', 'content', 'expiresAt']);
   const fields: Record<string, any> = {};
   let explicit: Record<string, any> | undefined;
 
   for (const [k, v] of Object.entries(product)) {
     if (k === 'url') continue;
+    if (reserved.has(k)) { core[k] = v; continue; }
     if (k === 'fields' && v && typeof v === 'object' && !Array.isArray(v)) {
       explicit = v as Record<string, any>;
       continue;
@@ -75,23 +71,24 @@ function toEntityPayload(product: Record<string, any>): { url: string; fields: R
   if (explicit) Object.assign(fields, explicit);
 
   if (!fields.image && Array.isArray(fields.images) && fields.images.length > 0) {
-    fields.image = fields.images[0];
+    const first = fields.images[0];
+    fields.image = typeof first === 'string' ? first : first?.url;
   }
-  return { url, fields };
+  return { ...core, fields };
 }
 
 export class AkropolysAPI {
+  userProof?: string;
+
   constructor(
     public apiUrl: string,
     public siteId: string,
     public apiToken: string,
     private getShopperId?: () => string | undefined,
     private getSessionId?: () => string | undefined,
-    public vertical?: string,
     private getDeviceId?: () => string | undefined,
     private getKikuPub?: () => string | undefined,
     private getShopperName?: () => string | undefined,
-    private getCart?: () => unknown,
     private getShopperLanguage?: () => string | undefined,
     private getEntityLanguageMode?: () => string | undefined,
     private getKikuKey?: () => string | undefined
@@ -99,21 +96,109 @@ export class AkropolysAPI {
 
   private widget?: Promise<WidgetSettings>;
 
-  // One boot call: the site's identity address and whether it wants scouts.
+  private humanConversation?: HumanConversation | null;
+
+  // The conversation a person was asked into, if any; remembered across reloads.
+  get conversation(): HumanConversation | null {
+    if (this.humanConversation === undefined) this.humanConversation = loadConversation(this.siteId);
+    return this.humanConversation;
+  }
+
+  // A reopened request keeps its token: the server only returns one when the conversation is new.
+  openConversation(id: string, token?: string): void {
+    const current = this.conversation;
+    const same = current?.id === id;
+    const next = { id, token: token || (same ? current!.token : ''), cursor: same ? current!.cursor : 0 };
+    this.humanConversation = next.token ? next : null;
+    saveConversation(this.siteId, this.humanConversation);
+  }
+
+  seenConversationMessage(id: number): void {
+    const c = this.conversation;
+    if (!c || id <= c.cursor) return;
+    this.humanConversation = { ...c, cursor: id };
+    saveConversation(this.siteId, this.humanConversation);
+  }
+
+  // The visitor's requests on this site, found by their Kiku identity; empty for a visitor without one.
+  async myRequests(): Promise<VisitorRequest[]> {
+    if (!this.getKikuKey?.()) return [];
+    const res = await fetch(`${this.apiUrl}/conversations?siteId=${encodeURIComponent(this.siteId)}`, { headers: this.buildHeaders() });
+    if (!res.ok) return [];
+    return (await res.json()).requests ?? [];
+  }
+
+  // Picks a request up again in this browser; resolves with its last message id, or null when it is not theirs.
+  async resumeRequest(id: string): Promise<number | null> {
+    const url = `${this.apiUrl}/conversations/${encodeURIComponent(id)}/resume?siteId=${encodeURIComponent(this.siteId)}`;
+    const res = await fetch(url, { method: 'POST', headers: this.buildHeaders() });
+    if (!res.ok) return null;
+    const body = await res.json();
+    this.humanConversation = { id, token: body.token, cursor: 0 };
+    saveConversation(this.siteId, this.humanConversation);
+    return Number(body.lastMessageId) || 0;
+  }
+
+  // Replies from the team the visitor has not seen yet, for the badge on the closed launcher.
+  async unreadFromTeam(): Promise<number> {
+    return (await this.conversationState())?.unread ?? 0;
+  }
+
+  // Where the remembered request stands: its status, and the team's replies not yet seen.
+  async conversationState(): Promise<{ status: string; unread: number } | null> {
+    const c = this.conversation;
+    if (!c) return null;
+    const url = `${this.apiUrl}/conversations/${encodeURIComponent(c.id)}?siteId=${encodeURIComponent(this.siteId)}&after=${c.cursor}`;
+    const res = await fetch(url, { headers: this.buildHeaders(false, { 'X-Akropolys-Conversation-Token': c.token }) });
+    if (!res.ok) return null;
+    const body = await res.json();
+    const messages: { role: string }[] = body.messages ?? [];
+    return { status: body.status, unread: messages.filter(m => m.role === 'human').length };
+  }
+
+  // The visitor ended the request: the team is told, and this browser forgets it.
+  leaveConversation(): void {
+    const c = this.conversation;
+    if (!c) return;
+    this.forgetConversation();
+    const url = `${this.apiUrl}/conversations/${encodeURIComponent(c.id)}/leave?siteId=${encodeURIComponent(this.siteId)}`;
+    fetch(url, { method: 'POST', headers: this.buildHeaders(false, { 'X-Akropolys-Conversation-Token': c.token }), keepalive: true }).catch(() => {});
+  }
+
+  forgetConversation(): void {
+    this.humanConversation = null;
+    saveConversation(this.siteId, null);
+  }
+
+  // One connection to the conversation's replies, from the last message seen; resolves with the HTTP status.
+  conversationEvents(onEvent: (e: ConversationEvent) => void, signal: AbortSignal, after?: number): Promise<number> {
+    const c = this.conversation;
+    if (!c) return Promise.resolve(404);
+    const url = `${this.apiUrl}/conversations/${encodeURIComponent(c.id)}/events?siteId=${encodeURIComponent(this.siteId)}&after=${after ?? c.cursor}`;
+    return listenConversation(url, this.buildHeaders(false, { 'X-Akropolys-Conversation-Token': c.token }), onEvent, signal);
+  }
+
+  // Last known card fields; components read them through useCardFields so they re-render when they arrive.
+  cardFields: string[] = [];
+
+  // One boot call: the site's identity address, language and font.
   widgetSettings(): Promise<WidgetSettings> {
     if (!this.widget) {
       this.widget = (async () => {
         try {
           const res = await fetch(`${this.apiUrl}/site-widget?siteId=${encodeURIComponent(this.siteId)}`);
-          const data = res.ok ? await res.json() : null;
+          if (!res.ok) throw new Error(`site-widget ${res.status}`);
+          const data = await res.json();
+          this.cardFields = Array.isArray(data?.cardFields) ? data.cardFields.filter((f: unknown) => typeof f === 'string') : [];
           return {
             identityUrl: data?.identityUrl || '',
-            scouts: { enabled: !!data?.scouts?.enabled, canAct: !!data?.scouts?.canAct },
+            cardFields: this.cardFields,
             detectedLanguage: typeof data?.detectedLanguage === 'string' ? data.detectedLanguage : undefined,
             font: data?.font ? this.parseFont(data.font) : null,
           };
         } catch {
-          return { identityUrl: '', scouts: { enabled: false, canAct: false } };
+          this.widget = undefined; // next caller retries
+          return { identityUrl: '', cardFields: this.cardFields };
         }
       })();
     }
@@ -149,6 +234,20 @@ export class AkropolysAPI {
       return await res.json();
     } catch {
       return null;
+    }
+  }
+
+  // Parks a photo as this session's working scene, so the voice model can edit it.
+  async storeScene(image: string): Promise<boolean> {
+    try {
+      const res = await fetch(`${this.apiUrl}/scene`, {
+        method: 'POST',
+        headers: this.buildHeaders(),
+        body: JSON.stringify({ siteId: this.siteId, image }),
+      });
+      return res.ok;
+    } catch {
+      return false;
     }
   }
 
@@ -194,8 +293,7 @@ export class AkropolysAPI {
     }
   }
 
-  // defaults travel with the request: the widget owns its own dictionary, so a
-  // string added here is translated without a server release.
+  // defaults ride along so a new widget string is translated without a server release
   async uiStrings(language: string, defaults?: Record<string, string>): Promise<UIStrings | null> {
     try {
       const res = await fetch(`${this.apiUrl}/ui-strings`, {
@@ -209,7 +307,6 @@ export class AkropolysAPI {
       return {
         strings: data.strings,
         complete: data.complete !== false,
-        curated: data.curated === true,
         dir: data.dir === 'rtl' ? 'rtl' : 'ltr',
         bcp47: typeof data.bcp47 === 'string' ? data.bcp47 : '',
         font: this.parseFont(data.font),
@@ -232,18 +329,16 @@ export class AkropolysAPI {
     }
   }
 
-  // The kiku pub is the shopper's own identity and outranks the host page's
-  // shopperId prop, which the server only falls back to. Withholding it let a
-  // shopper hold minutes under one id and be read under another.
+  // the kiku pub outranks the host's shopperId, or minutes held under one id are read under another
   private buildHeaders(_legacy?: boolean, extraHeaders?: Record<string, string>): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'X-Akropolys-Token': this.apiToken,
       'X-Akropolys-Site': this.siteId,
-      'X-Akropolys-Vertical': this.vertical || '',
     };
     const shopperId = this.getShopperId?.();
     if (shopperId) headers['X-Akropolys-Shopper-Id'] = shopperId;
+    if (this.userProof) headers['X-Akropolys-Shopper-Proof'] = this.userProof;
     const sessionId = this.getSessionId?.();
     if (sessionId) headers['X-Akropolys-Session-Id'] = sessionId;
     const deviceId = this.getDeviceId?.();
@@ -339,33 +434,13 @@ export class AkropolysAPI {
     }
   }
 
-  private async del<T>(path: string, extraHeaders?: Record<string, string>, signal?: AbortSignal): Promise<T> {
-    const url = `${this.apiUrl}${path}`;
-    try {
-      const headers = this.buildHeaders(false, extraHeaders);
-      const res = await fetch(url, { method: 'DELETE', headers, signal });
-      if (!res.ok) {
-        const text = await res.text();
-        let message = text;
-        try {
-          const parsed = JSON.parse(text);
-          if (parsed && typeof parsed.error === 'string') message = parsed.error;
-        } catch {}
-        throw { status: res.status, message } as AkropolysError;
-      }
-      return res.json();
-    } catch (e) {
-      if ((e as any)?.name === 'AbortError' || signal?.aborted) throw e;
-      throw e;
-    }
-  }
-
   async mintKikuKey(): Promise<{ secret: string; publicId: string }> {
     const data = await this.post<{ secret?: string; publicId: string; key?: string }>('/shopper/kiku-key', {});
     return { secret: data.secret ?? data.key ?? '', publicId: data.publicId };
   }
 
   async ingest(product: Record<string, any>): Promise<IngestResponse> {
+    recordID(ingestionEntity(product));
     if (product && product.envelope && product.sig) {
       log('info', 'ingesting ASEP v1 signed envelope', product.envelope.kid || '');
       return this.post('/ingest', {
@@ -384,9 +459,18 @@ export class AkropolysAPI {
 
   async ingestBatch(products: Record<string, any>[]): Promise<IngestResponse> {
     if (products.length === 0) return { success: true, message: 'empty batch', count: 0 };
-    const first = products[0];
-    if (first && first.envelope && first.sig) {
-      return this.ingest(first);
+    // Avoid partial writes when a later record has no stable ID.
+    products.forEach(p => recordID(ingestionEntity(p)));
+    if (products.some(p => p?.envelope && p?.sig)) {
+      // Each signature belongs to its own envelope; do not drop later entities.
+      let count = 0, queued = 0;
+      for (const product of products) {
+        const result = await this.ingest(product);
+        if (!result.success) return { ...result, count, queued: queued + (result.queued ?? 0) };
+        queued += result.queued ?? 0;
+        count++;
+      }
+      return { success: true, count, queued, ...(queued > 0 ? { code: 'reindex_queued' as const } : {}), message: queued > 0 ? 'Updates queued for re-indexing' : 'batch ingested' };
     }
     log('info', `ingesting batch of ${products.length} entities`);
     const formattedEntities = products.map(toEntityPayload);
@@ -424,7 +508,7 @@ export class AkropolysAPI {
     history: Array<{ role: 'user' | 'assistant'; content: string }> = [],
     signal?: AbortSignal,
     currentContext?: any,
-    attachments?: Array<{ type: 'image'; data: string }>,
+    attachments?: ChatAttachment[],
     forcedIntent?: string,
     captureTargets?: CaptureTarget[]
   ): Promise<Response> {
@@ -437,14 +521,19 @@ export class AkropolysAPI {
     if (shopperLanguage) body.shopperLanguage = shopperLanguage;
     const entityLanguageMode = this.getEntityLanguageMode?.();
     if (entityLanguageMode) body.entityLanguageMode = entityLanguageMode;
-    const cart = this.getCart?.();
-    if (Array.isArray(cart) && cart.length > 0) body.cart = cart.slice(0, 50);
     if (attachments && attachments.length > 0) {
       body.attachments = attachments.map(({ preview, ...a }: any) => a);
       if (attachments.some((a: any) => a.annotated)) body.imageAnnotated = true;
+      const marked = attachments.find((a: any) => a.annotated && typeof a.preview === 'string');
+      if (marked) body.imageGuide = marked.preview;
       if (attachments.some((a: any) => a.instructed)) body.imageInstructed = true;
       const marks = attachments.flatMap((a: any) => (Array.isArray(a.marks) ? a.marks : []));
       if (marks.length > 0) body.imageMarks = marks;
+    }
+    const conversation = this.conversation;
+    if (conversation) {
+      body.conversationId = conversation.id;
+      body.conversationToken = conversation.token;
     }
     if (forcedIntent)                          body.forcedIntent = forcedIntent;
     if (captureTargets && captureTargets.length > 0) body.captureTargets = captureTargets;
@@ -531,125 +620,10 @@ export class AkropolysAPI {
     }, 0, signal);
   }
 
-  // dispatchScout sends what a triggered scout held back, under the login the
-  // shopper's own browser hands us. Without them here there is nothing to send.
-  async dispatchScout(id: string, kikuKey?: string, signal?: AbortSignal): Promise<any> {
-    const auth = await this.shopperAuth();
-    if (!auth) throw new Error('sign in to the site first');
-    const headers: Record<string, string> = { 'X-Akropolys-Shopper-Auth': auth };
-    if (kikuKey) headers['X-Akropolys-Kiku-Key'] = kikuKey;
-    const res = await this.post<{ event: any }>(`/scouts/${id}/dispatch`, {}, 0, signal, false, headers);
-    return res.event;
-  }
-
-  async createScout(input: CreateScoutInput, signal?: AbortSignal): Promise<Scout> {
-    log('info', 'createScout', input.subject);
-    const siteId = input.siteId || this.siteId;
-    const extraHeaders: Record<string, string> = {};
-    if (input.kikuKey) {
-      extraHeaders['X-Akropolys-Kiku-Key'] = input.kikuKey;
-    }
-    const body: Record<string, any> = {
-      siteId,
-      name: input.name,
-      brief: input.brief,
-      subject: input.subject,
-      rules: input.rules,
-      actionType: input.actionType || 'alert',
-      dedicatedMinutes: input.dedicatedMinutes ?? 0,
-      initialValue: input.initialValue,
-    };
-    if (input.kikuKey) body.kikuKey = input.kikuKey;
-    const res = await this.post<{ scout: Scout }>('/scouts', body, 0, signal, false, extraHeaders);
-    return res.scout;
-  }
-
-  async listScouts(filter?: { siteId?: string; status?: string; kikuKey?: string }, signal?: AbortSignal): Promise<ListScoutsResponse> {
-    log('info', 'listScouts', filter?.status ?? 'all');
-    const siteId = filter?.siteId || this.siteId;
-    const params = new URLSearchParams();
-    if (siteId) params.set('siteId', siteId);
-    if (filter?.status) params.set('status', filter.status);
-    if (filter?.kikuKey) params.set('kikuKey', filter.kikuKey);
-    const extraHeaders: Record<string, string> = {};
-    if (filter?.kikuKey) extraHeaders['X-Akropolys-Kiku-Key'] = filter.kikuKey;
-    const qs = params.toString() ? `?${params.toString()}` : '';
-    return this.get<ListScoutsResponse>(`/scouts${qs}`, extraHeaders, signal);
-  }
-
-  async scoutBalance(siteId?: string, kikuKey?: string, signal?: AbortSignal): Promise<number> {
-    const params = new URLSearchParams();
-    if (siteId || this.siteId) params.set('siteId', siteId || this.siteId);
-    if (kikuKey) params.set('kikuKey', kikuKey);
-    const extraHeaders: Record<string, string> = {};
-    if (kikuKey) extraHeaders['X-Akropolys-Kiku-Key'] = kikuKey;
-    const qs = params.toString() ? `?${params.toString()}` : '';
-    const res = await this.get<{ balance: number }>(`/scouts/balance${qs}`, extraHeaders, signal);
-    return res.balance ?? 0;
-  }
-
   async allowance(siteId?: string, signal?: AbortSignal): Promise<{ images: number; videos: number; voiceSeconds: number; replies: number }> {
     const params = new URLSearchParams();
     if (siteId || this.siteId) params.set('siteId', siteId || this.siteId);
     const res = await this.get<{ images: number; videos: number; voiceSeconds: number; replies: number }>(`/visualize/allowance?${params.toString()}`, {}, signal);
     return { images: res.images ?? -1, videos: res.videos ?? -1, voiceSeconds: res.voiceSeconds ?? -1, replies: res.replies ?? -1 };
-  }
-
-  async addScoutMinutes(id: string, minutes: number, kikuKey?: string, signal?: AbortSignal): Promise<number> {
-    const extraHeaders: Record<string, string> = {};
-    if (kikuKey) extraHeaders['X-Akropolys-Kiku-Key'] = kikuKey;
-    const res = await this.post<{ dedicatedMinutes: number }>(`/scouts/${id}/minutes`, { minutes }, 0, signal, false, extraHeaders);
-    return res.dedicatedMinutes ?? 0;
-  }
-
-  async scoutQuote(minutes: number, signal?: AbortSignal): Promise<ScoutQuote> {
-    return this.get<ScoutQuote>(`/scouts/quote?minutes=${minutes}`, {}, signal);
-  }
-
-  async scoutCheckout(input: { minutes: number; avatar?: string; returnUrl?: string; siteId?: string }, signal?: AbortSignal): Promise<ScoutCheckout> {
-    return this.post<ScoutCheckout>('/scouts/checkout', {
-      siteId: input.siteId || this.siteId,
-      minutes: input.minutes,
-      avatar: input.avatar || '',
-      returnUrl: input.returnUrl || '',
-    }, 0, signal);
-  }
-
-  async setScoutAvatar(id: string, avatar: string, kikuKey?: string, signal?: AbortSignal): Promise<string> {
-    const extraHeaders: Record<string, string> = {};
-    if (kikuKey) extraHeaders['X-Akropolys-Kiku-Key'] = kikuKey;
-    const res = await this.post<{ avatar: string }>(`/scouts/${id}/avatar`, { avatar }, 0, signal, false, extraHeaders);
-    return res.avatar;
-  }
-
-  async getScout(id: string, kikuKey?: string, signal?: AbortSignal): Promise<GetScoutResponse> {
-    log('info', 'getScout', id);
-    const params = new URLSearchParams();
-    if (kikuKey) params.set('kikuKey', kikuKey);
-    const extraHeaders: Record<string, string> = {};
-    if (kikuKey) extraHeaders['X-Akropolys-Kiku-Key'] = kikuKey;
-    const qs = params.toString() ? `?${params.toString()}` : '';
-    return this.get<GetScoutResponse>(`/scouts/${encodeURIComponent(id)}${qs}`, extraHeaders, signal);
-  }
-
-  async pauseScout(id: string, kikuKey?: string, signal?: AbortSignal): Promise<ScoutActionResponse> {
-    log('info', 'pauseScout', id);
-    const extraHeaders: Record<string, string> = {};
-    if (kikuKey) extraHeaders['X-Akropolys-Kiku-Key'] = kikuKey;
-    return this.post<ScoutActionResponse>(`/scouts/${encodeURIComponent(id)}/pause`, {}, 0, signal, false, extraHeaders);
-  }
-
-  async resumeScout(id: string, kikuKey?: string, signal?: AbortSignal): Promise<ScoutActionResponse> {
-    log('info', 'resumeScout', id);
-    const extraHeaders: Record<string, string> = {};
-    if (kikuKey) extraHeaders['X-Akropolys-Kiku-Key'] = kikuKey;
-    return this.post<ScoutActionResponse>(`/scouts/${encodeURIComponent(id)}/resume`, {}, 0, signal, false, extraHeaders);
-  }
-
-  async cancelScout(id: string, kikuKey?: string, signal?: AbortSignal): Promise<ScoutActionResponse> {
-    log('info', 'cancelScout', id);
-    const extraHeaders: Record<string, string> = {};
-    if (kikuKey) extraHeaders['X-Akropolys-Kiku-Key'] = kikuKey;
-    return this.del<ScoutActionResponse>(`/scouts/${encodeURIComponent(id)}`, extraHeaders, signal);
   }
 }

@@ -20,8 +20,6 @@ export function setSoundsEnabled(on: boolean): void {
 
 export function primeChimes(): void {
   if (typeof window === 'undefined') return;
-  // Without this iOS routes Web Audio through the ambient session, which the
-  // hardware ring/silent switch mutes outright. Safari 16.4+ / iOS 17.
   try {
     const session = (navigator as any).audioSession;
     if (session && session.type !== 'playback') session.type = 'playback';
@@ -37,9 +35,6 @@ export function primeChimes(): void {
     master = ctx.createGain();
     master.gain.value = 0.28;
     master.connect(ctx.destination);
-    // A context built inside the gesture still starts suspended on iOS, and
-    // resuming alone is not enough - it stays muted until something has
-    // actually played, so this pushes one silent frame through.
     const b = ctx.createBuffer(1, 1, ctx.sampleRate);
     const s = ctx.createBufferSource();
     s.buffer = b;
@@ -99,19 +94,6 @@ function tick(at: number, gain: number): void {
   src.start(at);
 }
 
-// Minor pentatonic off G, so any two scouts sound related rather than random.
-const STEPS = [0, 3, 5, 7, 10];
-const ROOT = 392;
-
-function pitchFor(seed: string): number {
-  let h = 5381;
-  for (let i = 0; i < seed.length; i++) h = ((h << 5) + h + seed.charCodeAt(i)) >>> 0;
-  const step = STEPS[h % STEPS.length];
-  const octave = (h >> 3) % 2;
-  return ROOT * Math.pow(2, step / 12 + octave);
-}
-
-
 /** 'off' | 'unsupported' | AudioContext state - so a silent phone can say why. */
 export function chimeState(): string {
   if (!soundsEnabled()) return 'off';
@@ -119,11 +101,32 @@ export function chimeState(): string {
   return ctx.state;
 }
 
-export type ChimeEvent = 'reply' | 'scout' | 'interrupt' | 'pin' | 'send';
+export type ChimeEvent = 'reply' | 'interrupt' | 'pin' | 'send' | 'connect' | 'heard';
 
-/** seed varies the pitch within an event - pass a scout's species id. */
+function connectChime(at: number): void {
+  if (!ctx || !master) return;
+
+  // D5 (587.33 Hz) warm initial chime
+  droplet(at, 587.33, 0.985, 0.16, 0.38);
+
+  // F#5 (739.99 Hz) ascending major third
+  droplet(at + 0.048, 739.99, 0.985, 0.18, 0.42);
+
+  // A5 (880.00 Hz) fifth + D6 (1174.66 Hz) high glass shimmer with silky decay
+  droplet(at + 0.096, 880.00, 0.985, 0.28, 0.46);
+  droplet(at + 0.105, 1174.66, 0.985, 0.22, 0.22);
+
+  // Subtle organic acoustic strike transient on the peak note
+  tick(at + 0.096, 0.16);
+}
+
+function heardChime(at: number): void {
+  if (!ctx || !master) return;
+  droplet(at, 659.25, 0.97, 0.09, 0.26);
+}
+
 /** force plays even while muted - the toggle has to be able to demonstrate itself. */
-export function chime(event: ChimeEvent, seed?: string, force = false): void {
+export function chime(event: ChimeEvent, force = false): void {
   if (!force && !soundsEnabled()) return;
   primeChimes();
   if (!ctx || !master || ctx.state === 'closed') return;
@@ -131,22 +134,20 @@ export function chime(event: ChimeEvent, seed?: string, force = false): void {
 
   const t = ctx.currentTime + 0.01;
   switch (event) {
+    case 'connect':
+      connectChime(t);
+      break;
+    case 'heard':
+      heardChime(t);
+      break;
     case 'reply':
       droplet(t, 440, 0.94, 0.13, 0.5);
       droplet(t + 0.09, 660, 0.94, 0.16, 0.42);
       break;
-    case 'scout': {
-      const f = pitchFor(seed || 'scout');
-      droplet(t, f, 0.92, 0.15, 0.45);
-      droplet(t + 0.075, f * 1.5, 0.93, 0.17, 0.32);
-      break;
-    }
     case 'interrupt':
       droplet(t, 520, 0.62, 0.17, 0.4);
       break;
     case 'send':
-      // Under everything else on purpose: a send is a confirmation you half
-      // notice, not an event that asks for you.
       droplet(t, 300, 1.16, 0.1, 0.22);
       break;
     case 'pin':

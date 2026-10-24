@@ -122,9 +122,27 @@ export const PlusIcon = () => (
   </svg>
 );
 
+// The dots bounce like someone typing when the control is hovered.
+export const MessageIcon = ({ size = 18 }: { size?: number } = {}) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 11.5a8.4 8.4 0 0 1-12.3 7.4L3 21l2.1-5.7A8.4 8.4 0 1 1 21 11.5Z"/>
+    {[8.9, 12.6, 16.3].map((cx, i) => (
+      <circle key={cx} className="hsk-mimi-dot" style={{ '--hsk-dot': i } as React.CSSProperties} cx={cx} cy="11.6" r="1.15" fill="currentColor" stroke="none" />
+    ))}
+  </svg>
+);
+
 export const PaperclipIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+  </svg>
+);
+
+export const ImageIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="4" />
+    <circle className="hsk-img-sun" cx="9" cy="9" r="1.8" />
+    <path className="hsk-img-ridge" d="m21 15-4.5-4.5L6 21" />
   </svg>
 );
 
@@ -205,7 +223,7 @@ export const MicIcon = ({ className, size = 18 }: { className?: string; size?: n
 
 export const MicOffIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="2" y1="2" x2="22" y2="22"/>
+    <line className="hsk-mic-slash" x1="2" y1="2" x2="22" y2="22"/>
     <path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2"/>
     <path d="M5 10v2a7 7 0 0 0 12 5"/>
     <path d="M15 9.34V5a3 3 0 0 0-5.68-1.33"/>

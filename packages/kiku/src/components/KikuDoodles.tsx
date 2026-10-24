@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 type Rng = () => number;
 
@@ -480,7 +480,41 @@ interface DoodleGlyph {
   size: number;
   seed: number;
   normDist: number;
+  bloom: number; // when the opening bloom reaches this doodle, 0 at the dock corner
+  glow: number; // how bright its glint is as it arrives; brighter on dark themes, where faint ink disappears
+  ux: number; // direction away from the dock corner
+  uy: number;
+  dx?: number;
+  dy?: number;
+  dr?: number;
+  hop?: number;
 }
+
+export interface Thump { x: number; y: number; strength: number }
+
+const thumpListeners = new Set<(t: Thump) => void>();
+
+// Something struck the table at a viewport point: the doodles lying on it jump and land a little moved.
+const bloomListeners = new Set<() => void>();
+
+// Starts the opening bloom of a canvas that is waiting for the chat's content to appear.
+export function bloomDoodles() {
+  for (const start of bloomListeners) start();
+}
+
+export function thumpDoodles(t: Thump) {
+  thumpListeners.forEach(l => l(t));
+}
+
+const JOLT_FRAME_MS = 83;
+const JOLT_FRAMES = [
+  { k: 0.45, hop: 1 },
+  { k: 1.15, hop: 0.55 },
+  { k: 0.95, hop: 0.12 },
+  { k: 1, hop: 0 },
+];
+const MAX_DRIFT = 7;
+const MAX_TURN = 0.28;
 
 function getShimmerColor(seed: number, normDist: number, isDarkMode: boolean): string {
   // Exact rainbow spectrum as the animated placeholder text (0 -> 300 hue)
@@ -498,6 +532,7 @@ function generateGlyphs(
   seed: number,
   isRTL: boolean,
   themeId?: string,
+  originY = h, // the visible bottom edge, where the dock corner is
 ): DoodleGlyph[] {
   const accent = themeId ? accents[themeId] : undefined;
   const rng = mulberry32(seed);
@@ -520,6 +555,9 @@ function generateGlyphs(
 
   const glyphs: DoodleGlyph[] = [];
   const maxDist = Math.hypot(w, h) || 1;
+  const jitter = mulberry32(seed ^ 0x5bd1e995);
+  const ox = isRTL ? w : 0;
+  const reachFromDock = Math.hypot(w, originY) || 1;
   // light ink means it is being drawn onto a dark surface
   const [ir, ig, ib] = ink.split(',').map(n => parseFloat(n) || 0);
   const isDarkMode = 0.2126 * ir + 0.7152 * ig + 0.0722 * ib > 128;
@@ -536,9 +574,8 @@ function generateGlyphs(
     const alpha = (alphaBase + rng() * (isLightMode ? 0.04 : 0.025)) * (0.75 + axis * 0.55) * (1 + bloom * 0.4);
 
     const baseColor = mix(ink, tint, bloom * 0.85);
-    const normDist = isRTL
-      ? (w - x + h - y) / (w + h || 1)
-      : (x + y) / (w + h || 1);
+    // The wave starts at the theme dock's bottom corner (left, or right in RTL) and sweeps to the opposite top corner.
+    const normDist = ((isRTL ? w - x : x) + h - y) / (w + h || 1);
 
     const glyphSeed = (rng() * 0xffffff) | 0;
     const shimmerColor = getShimmerColor(glyphSeed, normDist, isDarkMode);
@@ -585,10 +622,21 @@ function generateGlyphs(
       size,
       seed: glyphSeed,
       normDist,
+      bloom: Math.min(1, Math.hypot(x - ox, y - originY) / reachFromDock) * 0.62 + jitter() * 0.08,
+      glow: isDarkMode ? 0.2 : 0.06,
+      ux: (x - ox) / (Math.hypot(x - ox, y - originY) || 1),
+      uy: (y - originY) / (Math.hypot(x - ox, y - originY) || 1),
     });
   }
 
   return glyphs;
+}
+
+const BLOOM_SPAN = 0.3;
+
+function easeOutBack(t: number) {
+  const c = 1.2;
+  return 1 + (c + 1) * (t - 1) ** 3 + c * (t - 1) ** 2;
 }
 
 function renderDoodles(
@@ -597,12 +645,13 @@ function renderDoodles(
   w: number,
   h: number,
   shimmerProgress: number,
+  alphaScale = 1,
+  bloomT?: number, // the opening bloom's linear time, 0 to 1
 ) {
   ctx.clearRect(0, 0, w, h);
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
-  // Active smooth fluid shimmer wave (-0.2 to 1.4)
   const isShimmering = shimmerProgress >= 0 && shimmerProgress <= 1.4;
   const wavePos = isShimmering ? shimmerProgress * 1.4 - 0.2 : -999;
   const waveWidth = 0.30;
@@ -611,23 +660,35 @@ function renderDoodles(
     let alpha = g.alpha;
     let stroke = g.baseColor;
     let lw = g.lineWidth;
+    let grow = 1;
+    let driftX = 0;
+    let driftY = 0;
 
-    if (isShimmering) {
+    if (bloomT !== undefined) {
+      // Each doodle eases in on its own clock, so the bloom spreads like a breath instead of a line.
+      const lp = Math.min(1, Math.max(0, (bloomT - g.bloom) / BLOOM_SPAN));
+      if (lp <= 0) continue;
+      const settle = 1 - (1 - lp) ** 3;
+      const glint = Math.sin(lp * Math.PI) ** 2;
+      alpha = g.alpha * settle + glint * g.glow;
+      stroke = mix(g.baseColor, g.shimmerColor, glint * (g.glow > 0.1 ? 0.85 : 0.55));
+      lw = g.lineWidth * (1 + glint * 0.35);
+      grow = 0.86 + 0.14 * easeOutBack(lp);
+      driftX = -g.ux * (1 - settle) * 9;
+      driftY = -g.uy * (1 - settle) * 9;
+    } else if (isShimmering) {
       const diff = g.normDist - wavePos;
 
-      // Ahead of wave: subtle dormant state
       if (diff > waveWidth) {
         alpha = g.alpha * 0.45;
         stroke = g.baseColor;
         lw = g.lineWidth;
       }
-      // Behind wave (wake): permanently awake resting state
       else if (diff < -waveWidth) {
         alpha = g.alpha;
         stroke = g.baseColor;
         lw = g.lineWidth;
       }
-      // In wavefront beam: soft, delicate rainbow/silver glint
       else {
         const surge = Math.cos((diff / waveWidth) * (Math.PI / 2)) ** 2;
         alpha = g.alpha + surge * 0.08;
@@ -637,9 +698,14 @@ function renderDoodles(
     }
 
     ctx.save();
-    ctx.translate(g.x, g.y);
-    ctx.rotate(g.rotation);
-    ctx.globalAlpha = Math.min(alpha, 1.0);
+    ctx.translate(g.x + (g.dx ?? 0) + driftX, g.y + (g.dy ?? 0) + driftY);
+    ctx.rotate(g.rotation + (g.dr ?? 0));
+    if (grow !== 1) ctx.scale(grow, grow);
+    if (g.hop) {
+      ctx.scale(1 + g.hop, 1 + g.hop);
+      alpha *= 1 + g.hop * 2;
+    }
+    ctx.globalAlpha = Math.min(alpha * alphaScale, 1.0);
     ctx.strokeStyle = stroke;
     ctx.fillStyle = stroke;
     ctx.lineWidth = lw;
@@ -654,16 +720,20 @@ const KikuDoodles = React.memo(function KikuDoodles({
   seed = '',
   theme,
   dir,
+  waitForContent = false,
 }: {
   seed?: string;
   theme?: string;
   dir?: string;
+  waitForContent?: boolean; // hold the first bloom until bloomDoodles(), so it starts with what is on the chat
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const isAnimatingRef = useRef(false);
   const animFrameRef = useRef(0);
   const cachedGlyphsRef = useRef<DoodleGlyph[] | null>(null);
   const lastWidthRef = useRef<number>(0);
+  const coveredHeightRef = useRef<number>(0);
+  const waitingRef = useRef(waitForContent);
 
   useEffect(() => {
     const cv = ref.current;
@@ -672,14 +742,13 @@ const KikuDoodles = React.memo(function KikuDoodles({
     const numeric = hashSeed(seed || 'kiku');
     let timer = 0;
 
-    const tick = (startTime: number, duration: number, glyphs: DoodleGlyph[], isRTL: boolean) => (now: number) => {
-      const elapsed = now - startTime;
-      const rawProgress = Math.min(1, elapsed / duration);
-      const eased = (1 - Math.cos(rawProgress * Math.PI)) / 2;
-      const progress = eased * 1.4;
-
+    const tick = (startTime: number | null, duration: number, glyphs: DoodleGlyph[], isRTL: boolean) => () => {
+      const now = performance.now();
       const w = cv.clientWidth;
       const h = cv.clientHeight;
+      if (startTime === null && w && h) startTime = now;
+      const elapsed = startTime === null ? 0 : now - startTime;
+      const rawProgress = Math.min(1, elapsed / duration);
       if (w && h) {
         const dpr = Math.min(window.devicePixelRatio || 1, 3);
         const targetW = Math.round(w * dpr);
@@ -691,7 +760,7 @@ const KikuDoodles = React.memo(function KikuDoodles({
         const ctx = cv.getContext('2d');
         if (ctx) {
           ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-          renderDoodles(ctx, glyphs, w, h, progress);
+          renderDoodles(ctx, glyphs, w, h, -1, 1, rawProgress);
         }
       }
 
@@ -726,9 +795,10 @@ const KikuDoodles = React.memo(function KikuDoodles({
 
       const fullScreenH = typeof window !== 'undefined' ? Math.max(h, window.innerHeight || 0) : h;
 
-      const glyphs = generateGlyphs(w, fullScreenH, ink, tint, numeric, isRTL, theme);
+      const glyphs = generateGlyphs(w, fullScreenH, ink, tint, numeric, isRTL, theme, h);
       cachedGlyphsRef.current = glyphs;
       lastWidthRef.current = w;
+      coveredHeightRef.current = fullScreenH;
 
       const targetW = Math.round(w * dpr);
       const targetH = Math.round(h * dpr);
@@ -737,6 +807,11 @@ const KikuDoodles = React.memo(function KikuDoodles({
         cv.height = targetH;
       }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      if (waitingRef.current) {
+        ctx.clearRect(0, 0, w, h);
+        return;
+      }
 
       const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
 
@@ -747,17 +822,39 @@ const KikuDoodles = React.memo(function KikuDoodles({
 
       cancelAnimationFrame(animFrameRef.current);
       isAnimatingRef.current = true;
-      const duration = 1200;
-      const startTime = performance.now();
-      animFrameRef.current = requestAnimationFrame(tick(startTime, duration, glyphs, isRTL));
+      const duration = 1500;
+      animFrameRef.current = requestAnimationFrame(tick(null, duration, glyphs, isRTL));
     };
 
+    // A height-only change (the keyboard) keeps the same doodles in place; only a new width lays them out again.
     const handleResize = () => {
+      const glyphs = cachedGlyphsRef.current;
+      const w = cv.clientWidth;
+      const h = cv.clientHeight;
+      if (glyphs && w === lastWidthRef.current && h <= coveredHeightRef.current) {
+        if (isAnimatingRef.current || waitingRef.current || !h) return;
+        const ctx = cv.getContext('2d');
+        if (!ctx) return;
+        const dpr = Math.min(window.devicePixelRatio || 1, 3);
+        cv.width = Math.round(w * dpr);
+        cv.height = Math.round(h * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        renderDoodles(ctx, glyphs, w, h, -1);
+        return;
+      }
       clearTimeout(timer);
       timer = window.setTimeout(updateCanvas, 20);
     };
 
     updateCanvas();
+
+    const start = () => {
+      if (!waitingRef.current) return;
+      waitingRef.current = false;
+      updateCanvas();
+    };
+    bloomListeners.add(start);
+    const waitLimit = waitingRef.current ? window.setTimeout(start, 2000) : 0;
 
     const ro = new ResizeObserver(handleResize);
     ro.observe(cv);
@@ -767,7 +864,60 @@ const KikuDoodles = React.memo(function KikuDoodles({
     };
     scheme?.addEventListener?.('change', handleSchemeChange);
 
+    let joltTimer = 0;
+    const redraw = () => {
+      const glyphs = cachedGlyphsRef.current;
+      const ctx = cv.getContext('2d');
+      const w = cv.clientWidth;
+      const h = cv.clientHeight;
+      if (!glyphs || !ctx || !w || !h) return;
+      const dpr = Math.min(window.devicePixelRatio || 1, 3);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      renderDoodles(ctx, glyphs, w, h, -1);
+    };
+    const onThump = ({ x, y, strength }: Thump) => {
+      const glyphs = cachedGlyphsRef.current;
+      if (waitingRef.current || isAnimatingRef.current || !glyphs || window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return;
+      cancelAnimationFrame(animFrameRef.current);
+      isAnimatingRef.current = false;
+      clearTimeout(joltTimer);
+      const r = cv.getBoundingClientRect();
+      const ox = x - r.left;
+      const oy = y - r.top;
+      const rng = mulberry32((performance.now() * 997) | 0);
+      const clamp = (v: number, m: number) => Math.max(-m, Math.min(m, v));
+      const moves = glyphs.map(g => {
+        const fx = g.dx ?? 0, fy = g.dy ?? 0, fr = g.dr ?? 0;
+        const ax = g.x - ox, ay = g.y - oy;
+        const d = Math.hypot(ax, ay) || 1;
+        const s = strength * (0.18 + 0.82 * Math.exp(-d / 220));
+        const push = s * (0.6 + rng() * 1.8);
+        const tx = clamp(fx + (ax / d) * push + (rng() - 0.5) * s * 2, MAX_DRIFT);
+        const ty = clamp(fy + (ay / d) * push + (rng() - 0.5) * s * 2, MAX_DRIFT);
+        const tr = clamp(fr + (rng() - 0.5) * s * 0.12, MAX_TURN);
+        return { g, fx, fy, fr, tx, ty, tr, lift: s * 0.09 };
+      });
+      let i = 0;
+      const step = () => {
+        const f = JOLT_FRAMES[i];
+        for (const m of moves) {
+          m.g.dx = m.fx + (m.tx - m.fx) * f.k;
+          m.g.dy = m.fy + (m.ty - m.fy) * f.k;
+          m.g.dr = m.fr + (m.tr - m.fr) * f.k;
+          m.g.hop = m.lift * f.hop;
+        }
+        redraw();
+        if (++i < JOLT_FRAMES.length) joltTimer = window.setTimeout(step, JOLT_FRAME_MS);
+      };
+      step();
+    };
+    thumpListeners.add(onThump);
+
     return () => {
+      thumpListeners.delete(onThump);
+      bloomListeners.delete(start);
+      clearTimeout(waitLimit);
+      clearTimeout(joltTimer);
       clearTimeout(timer);
       cancelAnimationFrame(animFrameRef.current);
       isAnimatingRef.current = false;
@@ -776,7 +926,89 @@ const KikuDoodles = React.memo(function KikuDoodles({
     };
   }, [seed, theme, dir]);
 
+
   return <canvas className="hsk-cb-doodles" ref={ref} aria-hidden="true" />;
 });
+
+const SHIMMER_SCALE = 3; // the field is laid out three times larger, then drawn at a third: a miniature, not a crowd
+const SHIMMER_MS = 1800;
+
+export function DoodleShimmer({ seed = '', theme, alphaScale = 1.8, weight = 0.6 }: { seed?: string; theme?: string; alphaScale?: number; weight?: number }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const cv = ref.current;
+    const ctx = cv?.getContext('2d');
+    if (!cv || !ctx) return;
+    let raf = 0;
+
+    const start = () => {
+      const w = cv.clientWidth;
+      const h = cv.clientHeight;
+      const dpr = Math.min(window.devicePixelRatio || 1, 3);
+      cv.width = Math.round(w * dpr);
+      cv.height = Math.round(h * dpr);
+
+      const cs = getComputedStyle(cv);
+      const ink = cs.getPropertyValue('--hsk-doodle-ink').trim() || '31,31,31';
+      const tint = cs.getPropertyValue('--hsk-doodle-tint').trim() || ink;
+      const vw = w * SHIMMER_SCALE;
+      const vh = h * SHIMMER_SCALE;
+      const glyphs = generateGlyphs(vw, vh, ink, tint, hashSeed(seed || 'kiku'), false, theme);
+      for (const g of glyphs) g.lineWidth *= SHIMMER_SCALE * weight; // weight is the share of the page's stroke, not a third
+      ctx.setTransform(dpr / SHIMMER_SCALE, 0, 0, dpr / SHIMMER_SCALE, 0, 0);
+
+      if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) {
+        renderDoodles(ctx, glyphs, vw, vh, -1, alphaScale);
+        return;
+      }
+
+      const began = performance.now();
+      const loop = (now: number) => {
+        // Back and forth, so the wave never snaps the field dim at a restart.
+        const k = ((now - began) % (SHIMMER_MS * 2)) / SHIMMER_MS;
+        const tri = k < 1 ? k : 2 - k;
+        renderDoodles(ctx, glyphs, vw, vh, ((1 - Math.cos(tri * Math.PI)) / 2) * 1.4, alphaScale);
+        raf = requestAnimationFrame(loop);
+      };
+      raf = requestAnimationFrame(loop);
+    };
+
+    // Laid over a photo that may still be loading, so it waits for a real size.
+    const ro = new ResizeObserver(() => {
+      if (raf || !cv.clientWidth || !cv.clientHeight) return;
+      ro.disconnect();
+      start();
+    });
+    ro.observe(cv);
+    return () => {
+      ro.disconnect();
+      cancelAnimationFrame(raf);
+    };
+  }, [seed, theme, alphaScale, weight]);
+
+  return <canvas className="hsk-doodle-shimmer" ref={ref} aria-hidden="true" />;
+}
+
+const VEIL_EXIT_MS = 300;
+
+// The shimmer laid over an image that is being sent or reworked: see-through doodles and a breathing halo, the picture left clear.
+export function WorkingVeil({ active, seed, theme }: { active: boolean; seed?: string; theme?: string }) {
+  const [shown, setShown] = useState(active);
+  useEffect(() => {
+    if (active) {
+      setShown(true);
+      return;
+    }
+    const t = setTimeout(() => setShown(false), VEIL_EXIT_MS);
+    return () => clearTimeout(t);
+  }, [active]);
+  if (!shown) return null;
+  return (
+    <span className={`hsk-working-veil${active ? '' : ' is-leaving'}`} aria-hidden="true">
+      <DoodleShimmer seed={seed} theme={theme} alphaScale={18} weight={1.15} />
+    </span>
+  );
+}
 
 export default KikuDoodles;

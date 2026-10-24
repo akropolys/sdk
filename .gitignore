@@ -3,3 +3,10 @@ node_modules/
 .turbo/
 .env
 .env.*
+
+# Local notes, evaluation artifacts, and generated deployment output
+/evaluation/
+*.md
+/.wrangler/
+/.open-next/
+!packages/kiku/EMBED.md

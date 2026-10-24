@@ -18,6 +18,8 @@ export function useChatScroll({ messages, loading, streaming, messageRefs }: Use
   const glideScrollRef = useRef<((to: number) => void) | null>(null);
   const touchScrollingRef = useRef(false);
   const stickToBottomRef = useRef(true);
+  // The answer outgrew the view: the reader stays with its start, and new lines below are not announced.
+  const readingRef = useRef(false);
   const spacerRef = useRef<HTMLDivElement>(null);
   const anchorNodeRef = useRef<HTMLElement | null>(null);
   const prevLenRef = useRef(messages.length);
@@ -70,9 +72,11 @@ export function useChatScroll({ messages, loading, streaming, messageRefs }: Use
       queued = 0;
       const spacerH = spacerRef.current?.offsetHeight ?? 0;
       const distance = el.scrollHeight - spacerH - el.scrollTop - el.clientHeight;
-      if (distance <= STICK_ON) {
+      const readerMoved = performance.now() - lastExternalScrollRef.current < 400;
+      if (distance <= STICK_ON && (!readingRef.current || readerMoved)) {
         if (!stickToBottomRef.current) resetAlertArmingRef.current();
         stickToBottomRef.current = true;
+        readingRef.current = false;
         clearUnreadRef.current();
       }
 
@@ -201,9 +205,11 @@ export function useChatScroll({ messages, loading, streaming, messageRefs }: Use
     const need = top + el.clientHeight - (el.scrollHeight - spacer.offsetHeight);
 
     if (need <= 0) {
+      // Following the bottom from here dragged the reader away from the start of the answer on every new line.
       releaseAnchor();
-      stickToBottomRef.current = true;
-      followBottom();
+      stickToBottomRef.current = false;
+      readingRef.current = true;
+      move(top);
       return;
     }
 
@@ -221,10 +227,27 @@ export function useChatScroll({ messages, loading, streaming, messageRefs }: Use
     else el.scrollTo({ top: to, behavior: 'smooth' });
   }, [messageRefs]);
 
+  const revealMessage = useCallback((node: HTMLElement) => {
+    const el = msgsContainerRef.current;
+    if (!el || !el.contains(node)) return;
+    pendingAnchorRef.current = false;
+    anchorNodeRef.current = null;
+    stickToBottomRef.current = false;
+    readingRef.current = true;
+    const view = el.getBoundingClientRect();
+    const box = node.getBoundingClientRect();
+    const inset = Math.min(box.height > view.height ? 176 : 64, view.height / 3);
+    if (box.top >= view.top + inset && box.bottom <= view.bottom - 8) return;
+    const to = Math.max(0, Math.min(el.scrollHeight - el.clientHeight, el.scrollTop + box.top - view.top - inset));
+    if (glideScrollRef.current) glideScrollRef.current(to);
+    else el.scrollTo({ top: to, behavior: 'auto' });
+  }, []);
+
   const jumpToBottom = useCallback(() => {
     const el = msgsContainerRef.current;
     if (!el) return;
     stickToBottomRef.current = true;
+    readingRef.current = false;
     releaseAnchorRef.current();
     resetAlertArmingRef.current();
     const bottom = el.scrollHeight - el.clientHeight;
@@ -240,6 +263,7 @@ export function useChatScroll({ messages, loading, streaming, messageRefs }: Use
     prevLenRef.current = messages.length;
     if (added.some(m => m.role === 'user')) {
       stickToBottomRef.current = true;
+      readingRef.current = false;
       resetAlertArmingRef.current();
       anchorNodeRef.current = null;
       pendingAnchorRef.current = true;
@@ -257,8 +281,10 @@ export function useChatScroll({ messages, loading, streaming, messageRefs }: Use
 
     const before = container.scrollTop;
     if (!stickToBottomRef.current) {
-      markUnread();
-      notifyNewBelow(messages.length);
+      if (!readingRef.current) {
+        markUnread();
+        notifyNewBelow(messages.length);
+      }
     } else if (!touchScrollingRef.current) {
       followBottomRef.current(); // exact, not eased: easing lags growth and bobs the last line
       return;
@@ -399,6 +425,7 @@ export function useChatScroll({ messages, loading, streaming, messageRefs }: Use
     jumpAlert,
     unreadBelow,
     jumpToMessage,
+    revealMessage,
     jumpToBottom,
     resetAlertArming,
   };

@@ -1,12 +1,11 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { speciesFor, speciesNick } from './Scouts';
 import { createPortal } from 'react-dom';
 import { primeChimes } from '../utils/chime';
 import { getShadowContainer } from '../utils/shadowRoot';
 import type { AkropolysTheme, ChatSource } from '@akropolys/sdk';
-import { useAkropolysContext, useScouts, Scout } from '@akropolys/sdk';
+import { useAkropolysContext } from '@akropolys/sdk';
 import { cn } from '../utils/cn';
 import { resolveTheme } from '../utils/theme';
 import { warmChrome, warmLanguage } from '../utils/chromeWarm';
@@ -27,7 +26,6 @@ export interface KikuButtonProps {
   backdropBlur?: string | number;
   className?: string;
   onSelectSource?: (source: ChatSource) => void;
-  defaultCurrency?: string;
   chips?: string[];
   theme?: 'light' | 'dark' | AkropolysTheme;
   classNames?: {
@@ -58,8 +56,7 @@ export function KikuButton({
   backdropBlur,
   className,
   onSelectSource,
-  defaultCurrency = '$',
-  chips = DEFAULT_CHIPS,
+  chips,
   theme,
   classNames = {},
   enableVoice = false,
@@ -69,15 +66,17 @@ export function KikuButton({
 }: KikuButtonProps) {
   const client = useAkropolysContext();
   const [open, setOpen] = useState(false);
-  const { justTriggered } = useScouts();
-  const [arrivals, setArrivals] = useState<Scout[]>([]);
-  useEffect(() => {
-    if (open || !justTriggered.length) return;
-    setArrivals((prev) => [...prev, ...justTriggered.filter((s) => !prev.some((p) => p.id === s.id))]);
-  }, [justTriggered]);
-  const latest = arrivals[arrivals.length - 1];
   const [mounted, setMounted] = useState(false);
   const [origin, setOrigin] = useState<ModalOrigin | null>(null);
+
+  // Replies from the team that arrived while the chat was closed.
+  const [unread, setUnread] = useState(0);
+  useEffect(() => {
+    if (open) { setUnread(0); return; }
+    let current = true;
+    client?.api?.unreadFromTeam?.().then((n: number) => { if (current) setUnread(n); }).catch(() => {});
+    return () => { current = false; };
+  }, [open, client]);
 
   const warmShadow = useCallback(() => {
     getShadowContainer();
@@ -88,7 +87,7 @@ export function KikuButton({
           warmLanguage(client, settings.detectedLanguage, DEFAULT_UI_STRINGS);
         }
       }).catch(() => {});
-    } catch {  }
+    } catch {}
   }, [client]);
 
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -103,11 +102,7 @@ export function KikuButton({
 
   useEffect(() => {
     setMounted(true);
-    warmShadow(); // Eager warm immediately on mount so first click has 0ms CSS lag
-
-    // backstop for the first click when it arrives without a prior hover (touch, programmatic)
-    const ric = (window as any).requestIdleCallback;
-    const warmId = ric ? ric(warmShadow, { timeout: 2000 }) : setTimeout(warmShadow, 300);
+    warmShadow();
 
     if (typeof window !== 'undefined' && !(window as any).__akropolys_nav_patched) {
       (window as any).__akropolys_nav_patched = true;
@@ -140,12 +135,15 @@ export function KikuButton({
     window.addEventListener('akropolys:navigation', handleNavigation);
 
     return () => {
-      const cic = (window as any).cancelIdleCallback;
-      if (ric && cic) cic(warmId); else clearTimeout(warmId as any);
       window.removeEventListener('popstate', handleNavigation);
       window.removeEventListener('akropolys:navigation', handleNavigation);
     };
   }, [warmShadow]);
+
+  const close = useCallback(() => {
+    setOpen(false);
+    requestAnimationFrame(() => btnRef.current?.focus());
+  }, []);
 
   const { themeAttr: hskThemeAttr, vars: customStyles } = resolveTheme(theme);
   useHostFontFace(theme);
@@ -158,10 +156,11 @@ export function KikuButton({
         onClick={openFrom}
         onPointerEnter={warmShadow}
         onPointerDown={warmShadow}
-        style={latest ? { ...customStyles, ['--hsk-glow' as any]: speciesFor(latest.id, latest.avatar).shade } : customStyles}
+        style={customStyles}
         data-hsk-theme={hskThemeAttr}
-        data-scout-arrived={latest && !open ? '' : undefined}
-        aria-label={latest && !open ? `Open AI chat, ${speciesNick(latest.id, latest.avatar)} came back` : 'Open AI chat'}
+        aria-label="Open AI chat"
+        aria-haspopup="dialog"
+        aria-expanded={open}
       >
         {children !== undefined ? (
           children
@@ -175,6 +174,7 @@ export function KikuButton({
             {label}
           </>
         )}
+        {unread > 0 && <span className="hsk-cb-btn-badge" aria-label={`${unread} new replies`}>{unread}</span>}
       </button>
       {open && mounted && createPortal(
         <ChatModal
@@ -184,11 +184,9 @@ export function KikuButton({
           backdropColor={backdropColor}
           backdropBlur={backdropBlur}
           origin={origin}
-          arrivals={arrivals}
-          onClose={() => { setOpen(false); setArrivals([]); }}
+          onClose={close}
           onSelectSource={onSelectSource}
-          defaultCurrency={defaultCurrency}
-          chips={chips}
+          chips={chips ?? DEFAULT_CHIPS}
           theme={theme}
           classNames={classNames}
           enableVoice={enableVoice}

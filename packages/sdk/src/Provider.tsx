@@ -14,13 +14,9 @@ export function AkropolysProvider({
   voiceUrl,
   apiToken,
   shopperId,
-  vertical,
+  userProof,
   authLoading,
-  onAction,
-  onAddToCart,
-  getCart,
   onError,
-  display,
   children
 }: AkropolysProviderProps & { voiceUrl?: string }) {
   const clientRef = useRef<AkropolysClient | null>(null);
@@ -32,22 +28,16 @@ export function AkropolysProvider({
       voiceUrl,
       apiToken,
       shopperId,
-      vertical,
+      userProof,
       authLoading,
-      onAction,
-      onAddToCart,
-      getCart,
-      onError,
-      display
+      onError
     });
   } else {
     clientRef.current.updateConfig({
       siteId,
       apiUrl,
       voiceUrl,
-      apiToken,
-      vertical,
-      display
+      apiToken
     });
     clientRef.current.reRegister();
   }
@@ -57,17 +47,18 @@ export function AkropolysProvider({
   }, [shopperId]);
 
   useEffect(() => {
+    clientRef.current?.setUserProof(userProof);
+  }, [userProof]);
+
+  useEffect(() => {
     clientRef.current?.setAuthLoading(!!authLoading);
   }, [authLoading]);
 
   useEffect(() => {
     if (clientRef.current) {
       clientRef.current.onError = onError;
-      clientRef.current.onAction = onAction;
-      clientRef.current.onAddToCart = onAddToCart;
-      clientRef.current.getCart = getCart;
     }
-  }, [onError, onAction, onAddToCart, getCart]);
+  }, [onError]);
 
   useEffect(() => {
     clientRef.current?.reRegister();

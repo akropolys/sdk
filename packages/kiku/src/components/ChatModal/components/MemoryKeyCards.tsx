@@ -1,5 +1,5 @@
 import React from 'react';
-import { SparkleIcon } from '../icons';
+import { SparkleIcon, CopyIcon, CheckIcon } from '../icons';
 import type { UIStringKey } from '../types';
 
 export interface PromptKeyCardProps {
@@ -54,7 +54,6 @@ export function PromptKeyCard({
 
 export interface MintedKeyCardProps {
   mintedKey: string;
-  mintedPub: string | null;
   copied: string | null;
   keyCountdown: number;
   onDismiss: () => void;
@@ -64,7 +63,6 @@ export interface MintedKeyCardProps {
 
 export function MintedKeyCard({
   mintedKey,
-  mintedPub,
   copied,
   keyCountdown,
   onDismiss,
@@ -77,45 +75,17 @@ export function MintedKeyCard({
         <SparkleIcon />
       </div>
       <div className="hsk-cb-ai-body">
-        <div className="hsk-cb-ai-text">
-          <div style={{ padding: '4px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                <span style={{ fontSize: 12, fontWeight: 600 }}>{t('keySecretTitle')}</span>
-                <button
-                  className="hsk-cb-phone-submit"
-                  style={{ padding: '2px 8px', fontSize: 11, background: 'transparent', border: 0 }}
-                  onClick={onDismiss}
-                >
-                  {t('keyDismiss')} ✕
-                </button>
-              </div>
-              <code style={{ display: 'block', fontSize: 13, fontWeight: 700, marginBottom: 8, wordBreak: 'break-all' }}>{mintedKey}</code>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                <button className="hsk-cb-phone-submit" style={{ padding: '4px 10px', border: 0 }} onClick={() => copyValue(mintedKey, 'secret')}>
-                  {copied === 'secret' ? t('keyCopied') : t('keyCopySecret')}
-                </button>
-                <span style={{ fontSize: 11, opacity: 0.7, flex: '1 1 180px' }}>
-                  {t('keySecretHint')}
-                </span>
-              </div>
-            </div>
-            {mintedPub && (
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>{t('keyPublicTitle')}</div>
-                <code style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6, wordBreak: 'break-all', opacity: 0.85 }}>{mintedPub}</code>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <button className="hsk-cb-phone-submit" style={{ padding: '4px 10px', border: 0 }} onClick={() => copyValue(mintedPub, 'pub')}>
-                    {copied === 'pub' ? t('keyCopied') : t('keyCopyId')}
-                  </button>
-                  <span style={{ fontSize: 11, opacity: 0.7, flex: '1 1 180px' }}>
-                    {t('keyPublicHint')}
-                  </span>
-                </div>
-              </div>
-            )}
-            <div style={{ fontSize: 11, opacity: 0.6 }}>{t('keyAutoHide', { seconds: String(keyCountdown) })}</div>
+        <div className="hsk-cb-secret-card">
+          <div className="hsk-cb-secret-head">
+            <span className="hsk-cb-secret-title">{t('keySecretTitle')}</span>
+            <span className="hsk-cb-secret-timer">{keyCountdown}s</span>
+            <button type="button" className="hsk-cb-secret-dismiss" onClick={onDismiss} aria-label={t('keyDismiss')}>×</button>
           </div>
+          <button type="button" className="hsk-cb-secret-key" onClick={() => copyValue(mintedKey, 'secret')}>
+            <code>{mintedKey}</code>
+            <span className="hsk-cb-secret-copy">{copied === 'secret' ? <CheckIcon /> : <CopyIcon />}{copied === 'secret' ? t('keyCopied') : t('keyCopySecret')}</span>
+          </button>
+          <span className="hsk-cb-secret-hint">{t('keySecretHint')}</span>
         </div>
       </div>
     </div>

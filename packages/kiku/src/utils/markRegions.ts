@@ -1,13 +1,16 @@
 
 export interface Point { x: number; y: number }
 
-export type MarkGesture = 'ring' | 'cross' | 'scribble' | 'arrow' | 'text';
+export type MarkGesture = 'ring' | 'cross' | 'scribble' | 'arrow' | 'text' | 'selection' | 'pin';
 
 export interface MarkRegion {
   gesture: MarkGesture;
     box: [number, number, number, number];
   to?: [number, number];
   text?: string;
+  id?: string;
+  points?: [number, number][];
+  targetBox?: [number, number, number, number];
 }
 
 const dist = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -84,7 +87,7 @@ function classifyStroke(pts: Point[], w: number, h: number): Classified | null {
 }
 
 export function buildMarkRegions(
-  actions: ReadonlyArray<{ kind: string; points?: Point[]; x?: number; y?: number; value?: string; tool?: string }>,
+  actions: ReadonlyArray<{ kind: string; points?: Point[]; x?: number; y?: number; value?: string; tool?: string; id?: string; label?: string }>,
   width: number,
   height: number,
 ): MarkRegion[] {
@@ -92,8 +95,14 @@ export function buildMarkRegions(
 
   const strokes: Classified[] = [];
   const texts: MarkRegion[] = [];
+  const pins: MarkRegion[] = [];
 
   for (const a of actions) {
+    if (a.kind === 'pin' && typeof a.x === 'number' && typeof a.y === 'number') {
+      const p = { x: a.x, y: a.y };
+      pins.push({ gesture: 'pin', id: a.id, text: a.label, box: norm(bbox([p, p]), width, height) });
+      continue;
+    }
     if (a.kind === 'text' && a.value && typeof a.x === 'number' && typeof a.y === 'number') {
       const p = { x: a.x, y: a.y };
       texts.push({ gesture: 'text', box: norm(bbox([p, p]), width, height), text: a.value });
@@ -122,5 +131,5 @@ export function buildMarkRegions(
       : { gesture: cur.gesture, box: cur.box });
   }
 
-  return [...out, ...texts];
+  return [...pins, ...out, ...texts];
 }

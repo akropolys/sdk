@@ -1,18 +1,18 @@
+import { initialTheme } from '../../utils/themePreference';
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useId } from 'react';
-import { figure, when } from '../../utils/figure';
 import { flushSync } from 'react-dom';
-import { THEMES, isThemeId, themeDef, DEFAULT_DARK, DEFAULT_LIGHT, type ThemeId } from './themes';
-import { useKiku, useScouts, ChatSource, ChatAttachment, CaptureTarget, subscribeLiveStream } from '@akropolys/sdk';
-import { useAkropolysContext } from '@akropolys/sdk';
+import { THEMES, isThemeId, themeDef, DEFAULT_THEME, type ThemeId } from './themes';
+import { useKiku, ChatSource, ChatAttachment, CaptureTarget, subscribeLiveStream, type ChatMessage } from '@akropolys/sdk';
+import { useAkropolysContext, useCardFields } from '@akropolys/sdk';
+import { detailsOf, detailsText } from '../../utils/cardDetails';
 import { cn } from '../../utils/cn';
 import { resolveTheme } from '../../utils/theme';
 import { useHostFontFace, preloadScriptFont } from '../../utils/hostFont';
 import { useDragToDismiss } from '../../utils/sheetGesture';
 import { downscaleImage } from '../../utils/downscaleImage';
 import { MarkupEditor } from '../MarkupEditor';
-import { ScoutRail, ScoutReceipt, speciesNick, humanMinutes } from '../Scouts';
 import type { KikuState } from '../KikuAvatar';
-import KikuDoodles from '../KikuDoodles';
+import KikuDoodles, { bloomDoodles } from '../KikuDoodles';
 
 import {
   DEFAULT_CHIPS,
@@ -22,9 +22,8 @@ import {
   extractName,
   ChatModalProps,
   getLoadingMeta,
-  type Translate,
+  type ComposerAttachment,
 } from './types';
-import { warmLanguage } from '../../utils/chromeWarm';
 import { useScriptFont } from './hooks/useScriptFont';
 import { useChatScroll } from './hooks/useChatScroll';
 import { usePacedText } from './hooks/usePacedText';
@@ -32,14 +31,17 @@ import { useKikuKey } from './hooks/useKikuKey';
 import { useChatCommands } from './hooks/useChatCommands';
 import { useVoiceController } from './hooks/useVoiceController';
 import { ChatTopbar } from './ChatTopbar';
-import { CopyIcon, CheckIcon, CloseIcon } from './icons';
+import { CloseIcon, MessageIcon } from './icons';
 import { OnboardingView } from './OnboardingView';
 
-const THEME_MENU_EXIT_MS = 180;
+const THEME_MENU_EXIT_MS = 240; // outlasts the 220ms exit, or the menu is removed mid-fade and pops
 const TRAY_EXIT_CEILING_MS = 700;
 const OVERLAY_EXIT_MS = 200;
 import { chime, primeChimes } from '../../utils/chime';
 import { SoundToggle } from './components/SoundToggle';
+import { LayoutToggle } from './components/LayoutToggle';
+import { useChatLayout } from './hooks/useChatLayout';
+import { isTeamNote } from './components/ThinkingBlock';
 import { useDelayedClose } from './hooks/useDelayedClose';
 
 const RadarIcon = ({ size = 14 }: { size?: number }) => (
@@ -54,105 +56,7 @@ import { ChatComposer } from './ChatComposer';
 import { VoiceOverlay } from './VoiceOverlay';
 import { LightboxModal } from './components/LightboxModal';
 import { ConversationTimeline } from './components/ConversationTimeline';
-import { AudioWaveTimeline } from './components/AudioWaveTimeline';
 import { TapbackMenu } from './components/TapbackMenu';
-
-// Clicking a scout used to post `scout <uuid>` at the model, which answered with
-// an error because it is not a question. The scout's own log tells the story.
-// Every line is a UI string, so the tale arrives in the shopper's language; only
-// the numbers, the subject and the nickname stay as they are.
-function scoutBrief(scout: any, t: Translate): [string, string] {
-  const who = speciesNick(scout.id, scout.avatar);
-  const watch = scout.brief || scout.subject;
-
-  if (scout.status === "triggered") {
-    const at = scout.triggerValue ? ` ${figure(scout.triggerValue)}` : "";
-    return [t("scoutAskHowDid", { who }), t("scoutBriefCameIn", { who, watch, at })];
-  }
-  if (scout.status === "expired") {
-    return [t("scoutAskHowDid", { who }), t("scoutBriefRanOut", { who, watch })];
-  }
-  if (scout.status === "idle") {
-    return [t("scoutAskWhatDoing", { who }), t("scoutBriefWaiting", { who })];
-  }
-  return [t("scoutAskWhatDoing", { who }), t("scoutBriefWatching", { who, watch })];
-}
-
-// The tale: where the scout was sent, how the value moved, and where it stands.
-// The event log holds no ticks, only turns of the brief, so the value trail —
-// initialValue to triggerValue — carries the movement. Markdown stays in code:
-// the strings are machine-translated, and asterisks do not survive that.
-// One row per thing the scout did, oldest first. ✓ and ✗ stay in code so translation cannot drop them.
-function scoutLog(scout: any, events: any[], t: Translate, lang?: string): string[] {
-  const fig = (v: unknown) => figure(String(v), lang);
-  const briefed = events.some((e) => e.eventType === "briefed");
-  const rows: string[] = [];
-  const row = (iso: string, what: string) => rows.push(`| ${when(iso, lang)} | ${what} |`);
-  const sorted = [...events].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
-  for (const e of sorted) {
-    const p = e.payload || {};
-    if (e.eventType === "briefed" || (e.eventType === "spawned" && !briefed)) {
-      row(e.createdAt, scout.initialValue ? t("scoutLogSetOutAt", { v: fig(scout.initialValue) }) : t("scoutLogSetOut"));
-    } else if (e.eventType === "triggered") {
-      row(e.createdAt, `✓ ${p.triggerValue ? t("scoutLogMetAt", { v: fig(p.triggerValue) }) : t("scoutLogMet")}`);
-    } else if (e.eventType === "acted") {
-      row(e.createdAt, p.result?.status === "sent" ? `✓ ${t("scoutLogSent", { what: String(p.action ?? "") })}` : `✗ ${t("scoutLogNotSent")}`);
-    } else if (e.eventType === "refused") {
-      row(e.createdAt, `✗ ${t("scoutLogRefused")}`);
-    } else if (e.eventType === "paused") {
-      row(e.createdAt, t("scoutLogPaused"));
-    } else if (e.eventType === "resumed") {
-      row(e.createdAt, t("scoutLogResumed"));
-    } else if (e.eventType === "canceled") {
-      row(e.createdAt, t("scoutLogCanceled"));
-    }
-  }
-  return rows;
-}
-
-function scoutStory(scout: any, events: any[], balance: number, t: Translate, lang?: string): string {
-  const who = `**${speciesNick(scout.id, scout.avatar)}**`;
-  const spent = scout.minutesUsed ?? 0;
-  const used = humanMinutes(spent, t);
-  const left =
-    scout.dedicatedMinutes > 0 ? scout.dedicatedMinutes : scout.status === "expired" ? 0 : balance;
-  const budget =
-    left > 0
-      ? spent > 0
-        ? t("scoutBudgetLeft", { left: humanMinutes(left, t), used })
-        : t("scoutBudgetLeftOnly", { left: humanMinutes(left, t) })
-      : t("scoutBudgetSpent", { used });
-  if (scout.status === "idle") {
-    return [t("scoutStoryIdle", { who }), "", t("scoutStoryIdleLead", { budget })].join("\n");
-  }
-
-  const watch = scout.brief || scout.subject;
-  const done = scout.status === "triggered" || scout.status === "expired";
-  const lines: string[] = [t(done ? "scoutStoryWatched" : "scoutStoryWatching", { who, watch })];
-
-  const rows = scoutLog(scout, events, t, lang);
-  if (rows.length) lines.push("", `| ${t("scoutLogTime")} | ${t("scoutLogWhat")} |`, "|---|---|", ...rows);
-
-  const ending =
-    scout.status === "triggered"
-      ? t("scoutStoryReached")
-      : scout.status === "expired"
-        ? t("scoutStoryExpired")
-        : scout.status === "paused"
-          ? t("scoutStoryPaused")
-          : t("scoutStoryRunning");
-
-  lines.push("", `${ending} ${budget}`);
-  return lines.join("\n");
-}
-
-// The avatar's departure lands in the transcript rather than vanishing behind a
-// closed rail. Appended locally: the model has no notion of avatar nicknames,
-// and the brief the shopper types next is what actually deploys the scout.
-function sendOutExchange(avatar: string | undefined, t: Translate): [string, string] {
-  const who = avatar ? speciesNick(avatar, avatar) : 'a scout';
-  return [t('scoutSendOutAsk', { who }), t('scoutReady', { who })];
-}
 
 export function ChatModal({
   title = 'kiku',
@@ -162,20 +66,48 @@ export function ChatModal({
   backdropBlur,
   onClose,
   onSelectSource,
-  defaultCurrency = '',
   chips = DEFAULT_CHIPS,
   theme,
   classNames = {},
   enableVoice = false,
   voiceLang,
   enableVision = false,
-  ttsVoice = 'Puck',
+  ttsVoice = 'Algenib',
   origin,
-  arrivals,
 }: ChatModalProps) {
   const client = useAkropolysContext();
-  const { messages, sources, loading, streaming, error, errorCode, lastAction, lastIntent, allowedActions, send, queuedMessage, sendQueuedNow, appendSpokenExchange, stop, stopped, interrupted, continueGenerating, reset, referencedIds } = useKiku();
-  const { enabled: scoutsAllowed, scouts, activeScouts, balance, justTriggered, dispatchScout } = useScouts();
+  const cardFields = useCardFields();
+  const { messages, sources, loading, streaming, error, errorCode, lastAction, lastIntent, allowedActions, send, queuedMessage, sendQueuedNow, appendSpokenExchange, stop, stopped, interrupted, continueGenerating, reset, referencedIds, humanPending, leaveHuman } = useKiku();
+  const [leaveAsk, setLeaveAsk] = useState<'close' | 'reset' | null>(null);
+  const leaveRef = useRef<HTMLDivElement>(null);
+  // A side-to-side nudge when the visitor tries anything else while the warning waits for an answer.
+  const nudgeLeave = useCallback(() => {
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    leaveRef.current?.animate(
+      [0, -7, 6, -4, 2, 0].map(x => ({ transform: `translateX(${x}px)` })),
+      { duration: 380, easing: 'cubic-bezier(.36, .07, .19, .97)' },
+    );
+  }, []);
+  useEffect(() => {
+    if (!leaveAsk) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.length === 1 || e.key === 'Enter' || e.key === 'Backspace') nudgeLeave();
+    };
+    // The conversation is frozen too, so retry, edit and suggestions cannot send behind the warning.
+    const onPointer = (e: PointerEvent) => {
+      const hit = (cls: string) => e.composedPath().some(n => (n as Element).classList?.contains(cls));
+      if (!hit('hsk-cb-leave') && !hit('hsk-cb-topbar')) nudgeLeave();
+    };
+    const msgs = msgsContainerRef.current as HTMLElement | null;
+    msgs?.setAttribute('inert', '');
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onPointer, true);
+    return () => {
+      msgs?.removeAttribute('inert');
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onPointer, true);
+    };
+  }, [leaveAsk, nudgeLeave]);
 
   const [shopperName, setShopperNameState] = useState<string>(() => {
     try { return client.getShopperName?.() ?? ''; } catch { return ''; }
@@ -228,10 +160,32 @@ export function ChatModal({
   const [input, setInput] = useState('');
   const [showKikuPicker, setShowKikuPicker] = useState(false);
   const [showAtPicker, setShowAtPicker] = useState(false);
-  const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
+  const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
+  const photoReady = useRef(new Map<string, Promise<string>>());
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [vizState, setVizState] = useState<Record<string, 'ok' | 'err'>>({});
-  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const [lightboxData, setLightboxData] = useState<{
+    src?: string | null;
+    images?: import('./components/LightboxModal').LightboxImage[];
+    initialIndex?: number;
+    title?: string;
+  } | null>(null);
+
+  const handleOpenLightbox = useCallback((src: string | null, gallery?: import('./components/LightboxModal').LightboxGalleryData) => {
+    if (!src && !gallery) {
+      setLightboxData(null);
+      return;
+    }
+    if (gallery) {
+      setLightboxData({
+        images: gallery.images,
+        initialIndex: gallery.index ?? 0,
+        title: gallery.title,
+      });
+    } else {
+      setLightboxData({ src });
+    }
+  }, []);
   const [markupSrc, setMarkupSrc] = useState<string | null>(null);
 
   const [termsAgreed, setTermsAgreed] = useState<boolean>(() => {
@@ -254,10 +208,6 @@ export function ChatModal({
   const inOnboarding = awaitingLang || awaitingName || awaitingEntityLang || awaitingConsent || isLangPreparing;
   const inputLocked = awaitingEntityLang || awaitingConsent || isLangPreparing;
 
-  // Composer choreography:
-  // 1. isLangPreparing → true: immediately start composerExiting (slides UP with Apple blur),
-  //    then after 280ms hide it completely and start the spinner rise.
-  // 2. isLangPreparing → false: show immediately with composerRevealing (slides UP from below clearing blur).
   const [prevPreparingForComposer, setPrevPreparingForComposer] = useState(isLangPreparing);
   const [composerHidden,   setComposerHidden]   = useState(false);
   const [composerExiting,  setComposerExiting]  = useState(false);
@@ -271,7 +221,6 @@ export function ChatModal({
     if (isLangPreparing) {
       if (composerRevealTimer.current) clearTimeout(composerRevealTimer.current);
       setComposerRevealing(false);
-      // Start exit-up animation immediately (in sync with step1 flying away)
       setComposerExiting(true);
       composerHideTimer.current = setTimeout(() => {
         setComposerHidden(true);
@@ -296,16 +245,6 @@ export function ChatModal({
   }, []);
 
 
-  useEffect(() => {
-    if (!awaitingLang) return;
-    const trimmed = input.trim();
-    if (trimmed.length < 2) return;
-    const timer = setTimeout(() => {
-      warmLanguage(client, trimmed, DEFAULT_UI_STRINGS);
-    }, 150);
-    return () => clearTimeout(timer);
-  }, [awaitingLang, input, client]);
-
   const hasLiveData = React.useMemo(
     () => messages.some(m => (m as any).liveKeys?.length > 0),
     [messages]
@@ -317,7 +256,7 @@ export function ChatModal({
 
   const [isNarrow, setIsNarrow] = useState(false);
   useEffect(() => {
-    const mq = window.matchMedia?.('(max-width: 899px)');
+    const mq = window.matchMedia?.('(max-width: 1199px)');
     if (!mq) return;
     const apply = () => setIsNarrow(mq.matches);
     apply();
@@ -337,7 +276,6 @@ export function ChatModal({
     setPendingLanguage(v);
     setLangSwitching(true);
 
-    // English: no animation — instant transition (it's the default, nothing to "load")
     const isTargetEn = v.toLowerCase() === 'english' || v.toLowerCase() === 'en';
     if (isTargetEn) {
       setPreloadedStrings(DEFAULT_UI_STRINGS);
@@ -349,10 +287,6 @@ export function ChatModal({
       return;
     }
 
-    // For all non-English languages, enforce a minimum animation window so the
-    // goo spinner always has time to rise, orbit, and fall — even when strings
-    // are already cached.  Target: step1-exit (300ms) + spinner-rise (700ms) +
-    // min-steady (200ms) = 1200ms.  We start the clock now.
     const animStart = Date.now();
     const MIN_ANIM_MS = 1200;
 
@@ -378,7 +312,6 @@ export function ChatModal({
       }
     } catch {  }
 
-    // Hold the preparing state long enough for the spinner animation to feel intentional
     const elapsed = Date.now() - animStart;
     if (elapsed < MIN_ANIM_MS) {
       await new Promise((r) => setTimeout(r, MIN_ANIM_MS - elapsed));
@@ -428,26 +361,67 @@ export function ChatModal({
     : awaitingConsent ? 'focused'
     : 'happy';
 
-  const [currentTheme, setCurrentTheme] = useState<ThemeId>(() => {
-    if (isThemeId(theme)) return theme;
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('akropolys_theme');
-      if (isThemeId(saved)) return saved;
-      return window.matchMedia?.('(prefers-color-scheme: light)').matches ? DEFAULT_LIGHT : DEFAULT_DARK;
-    }
-    return DEFAULT_DARK;
-  });
+  const [currentTheme, setCurrentTheme] = useState<ThemeId>(() => initialTheme(theme));
 
   const [theming, setTheming] = useState(false);
   const themingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (themingTimer.current) clearTimeout(themingTimer.current); }, []);
 
-  // Fluid theme switch: updates active theme and lets CSS & canvas glyphs animate live
+  // When the doodle bloom from the dock reaches the chat, its content nudges up and away, then settles.
+  const nudgeRef = useRef<Animation | null>(null);
+  const nudgeContent = () => {
+    const msgs = msgsContainerRef.current as HTMLElement | null;
+    if (!msgs?.animate || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    const away = isRTL ? -3 : 3;
+    nudgeRef.current?.cancel(); // two nudges on one element fight each other and read as a shake
+    nudgeRef.current = msgs.animate(
+      [
+        { transform: 'translate(0, 0)', easing: 'cubic-bezier(.3, 0, .2, 1)' },
+        { offset: 0.26, transform: `translate(${away}px, -6px)`, easing: 'cubic-bezier(.45, 0, .35, 1)' },
+        { offset: 0.52, transform: `translate(${-away * 0.3}px, 1.6px)`, easing: 'cubic-bezier(.45, 0, .35, 1)' },
+        { offset: 0.74, transform: `translate(${away * 0.1}px, -0.6px)`, easing: 'cubic-bezier(.45, 0, .55, 1)' },
+        { transform: 'translate(0, 0)' },
+      ],
+      { duration: 1100, delay: 380 },
+    );
+  };
+  // The first bloom waits for the greeting or messages to appear, which can lag the panel on a first open.
+  // Text that has only just arrived must not nudge: it reads as landing in the wrong place.
+  const openBloomedRef = useRef(false);
+  useEffect(() => {
+    if (openBloomedRef.current) return;
+    const box = msgsContainerRef.current as HTMLElement | null;
+    if (!box) {
+      bloomDoodles();
+      return;
+    }
+    let done = false;
+    const shown = () => box.querySelector('.hsk-cb-hello-wrap, .hsk-cb-msg-group');
+    const fire = () => {
+      if (done) return;
+      done = true;
+      openBloomedRef.current = true;
+      observer.disconnect();
+      clearTimeout(limit);
+      bloomDoodles();
+    };
+    const observer = new MutationObserver(() => { if (shown()) fire(); });
+    observer.observe(box, { childList: true, subtree: true });
+    const limit = window.setTimeout(fire, 2000);
+    if (shown()) fire();
+    return () => {
+      done = true;
+      observer.disconnect();
+      clearTimeout(limit);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleToggleTheme = (next: ThemeId, alsoCloseMenu = false) => {
     setTheming(true);
     if (themingTimer.current) clearTimeout(themingTimer.current);
     themingTimer.current = setTimeout(() => setTheming(false), 420);
     setCurrentTheme(next);
+    nudgeContent();
     if (alsoCloseMenu) closeThemeMenuNow();
     try { localStorage.setItem('akropolys_theme', next); } catch { /* noop */ }
   };
@@ -459,77 +433,10 @@ export function ChatModal({
   const handleSendRef = useRef<(text: string) => void>(() => {});
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // A scout's page is its report: fetched fresh, told in the transcript.
-  const tellScoutStory = async (scout: any) => {
-    const [heard] = scoutBrief(scout, t);
-    try {
-      const full = await client?.scouts.get(scout.id);
-      const sc = full?.scout ?? scout;
-      appendSpokenExchange(heard, scoutStory(sc, full?.events ?? [], balance, t, shopperLanguage));
-    } catch {
-      appendSpokenExchange(...scoutBrief(scout, t));
-    }
-  };
-
-  // A scout that comes in says so in the thread, and if the shopper agreed it
-  // could send something, it goes now — from this tab, under their own login.
-  const announced = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    justTriggered.forEach(async (sc: any) => {
-      if (announced.current.has(sc.id)) return;
-      announced.current.add(sc.id);
-      await tellScoutStory(sc);
-      if (!sc.actionType || sc.actionType === 'alert') return;
-      try {
-        const ev = await dispatchScout(sc.id);
-        appendSpokenExchange(t('scoutSendingHeard'), t('scoutSent', { what: ev?.message ?? sc.actionType }));
-      } catch (err: any) {
-        appendSpokenExchange(t('scoutSendingHeard'), t('scoutCouldNotSend', { why: err?.message ?? '' }));
-      }
-    });
-  }, [justTriggered]);
-
-  // Arrivals while closed are told on open; the first poll would file them as history.
-  useEffect(() => {
-    (arrivals ?? []).forEach((sc: any) => {
-      if (announced.current.has(sc.id)) return;
-      announced.current.add(sc.id);
-      void tellScoutStory(sc);
-    });
-  }, []);
-
-  // A scout that fires while nobody is watching the rail used to change colour
-  // and chime into an empty room. It hands over a receipt instead, and the
-  // receipt stays until the shopper tears it off — reading the story does not
-  // count as dismissing it.
-  const DISMISSED_KEY = 'akropolys_scout_receipts_seen';
-  const [dismissed, setDismissed] = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem(DISMISSED_KEY) || '[]'); } catch { return []; }
-  });
-  const dismissReceipt = (id: string) => {
-    setDismissed((prev) => {
-      const next = prev.includes(id) ? prev : [...prev, id];
-      try { localStorage.setItem(DISMISSED_KEY, JSON.stringify(next.slice(-80))); } catch {  }
-      return next;
-    });
-  };
-  const receipts = scouts
-    .filter((s) => s.status === 'triggered' && !dismissed.includes(s.id))
-    .slice(-6);
-
-  // The stub says it happened; the detail is a real turn, so the model explains
-  // what the scout did — with the live value and its log — in the shopper's own
-  // language rather than a canned line.
-  const openReceipt = (scout: any) => {
-    const who = speciesNick(scout.id, scout.avatar);
-    const watch = scout.brief || scout.subject;
-    void handleSendRef.current?.(t('scoutExplainAsk', { who, watch }));
-  };
-
   const handleSend = async (text?: string, extraAttachments?: ChatAttachment[], forcedIntent?: string, captureTargets?: CaptureTarget[]) => {
     const raw = (text ?? input).trim();
-    const toSend = extraAttachments ?? attachments;
-    if ((!raw && toSend.length === 0) || !chromeReady || queuedMessage) return;
+    const picked = extraAttachments ?? attachments;
+    if ((!raw && picked.length === 0) || !chromeReady || queuedMessage) return;
 
     chime('send');
 
@@ -556,6 +463,12 @@ export function ChatModal({
     setShowAtPicker(false);
     setInput('');
     setAttachments([]);
+    // A photo sent before its copy is ready waits for it here, out of sight.
+    const toSend: ChatAttachment[] = (await Promise.all(picked.map(async ({ thumb, ...a }: ComposerAttachment) => {
+      const data = a.data || (thumb ? await photoReady.current.get(thumb)?.catch(() => '') : '') || '';
+      if (thumb) URL.revokeObjectURL(thumb);
+      return { ...a, data };
+    }))).filter(a => a.data);
     const queryToSend = raw || (toSend.some(a => a.type === 'image') ? 'Analyze this image' : 'What is this?');
     await send(queryToSend, raw, toSend.length > 0 ? toSend : undefined, forcedIntent, captureTargets);
   };
@@ -608,20 +521,11 @@ export function ChatModal({
     handleCreateKey,
   } = useKikuKey(lastAction, retryLastMessage);
 
-  const getStoredKikuId = useCallback((): string => {
-    if (typeof window === 'undefined') return 'N/A';
-    try {
-      const fromSession = sessionStorage.getItem('akropolys_kiku_pub') || sessionStorage.getItem('kiku_pub');
-      if (fromSession) return fromSession;
-      const fromLocal = localStorage.getItem('akropolys_kiku_pub') || localStorage.getItem('kiku_pub') || localStorage.getItem('kiku_id');
-      if (fromLocal) return fromLocal;
-      const match = document.cookie.match(/(?:^|;\s*)(?:akropolys_kiku_pub|kiku_pub|kiku_id)=([^;]+)/);
-      if (match) return decodeURIComponent(match[1]);
-    } catch {}
-    return 'N/A';
-  }, []);
-
-  const displayKikuPub = mintedPub ?? client?.getKikuPub?.() ?? getStoredKikuId();
+  // The key rides in the address fragment, which never leaves the browser; MiMi takes it and clears it.
+  const openMimi = useCallback(() => {
+    const key = client?.getKikuKey?.();
+    if (key) window.open(`https://mimi.akropolys.cloud/#k=${encodeURIComponent(key)}`, '_blank', 'noopener');
+  }, [client]);
 
   const [tapbackTarget, setTapbackTarget] = useState<{
     msg: any;
@@ -630,19 +534,14 @@ export function ChatModal({
     el?: HTMLElement;
   } | null>(null);
 
-  const handleLongPressMessage = useCallback((
-    msg: any,
-    rect: { top: number; left: number; width: number; height: number },
-    isUser: boolean,
-    el?: HTMLElement
-  ) => {
-    setTapbackTarget({ msg, rect, isUser, el });
-  }, []);
+
 
   const handlePinMessage = useCallback(async (msg: any) => {
-    const snippet = (msg.content || '').slice(0, 50).replace(/\n+/g, ' ');
+    // Pinning an earlier pin must not stack the command onto itself.
+    const text = (msg.content || '').replace(/^(@kiku pin\s*)+/i, '');
+    const snippet = text.slice(0, 50).replace(/\n+/g, ' ');
     const display = `@kiku pin ${snippet}`;
-    await send(msg.content || 'pin message', display, undefined, 'capture');
+    await send(text || 'pin message', display, undefined, 'capture');
   }, [send]);
 
   const {
@@ -655,7 +554,6 @@ export function ChatModal({
     setAttachments,
     setInput,
     send,
-    defaultCurrency,
     t,
   });
 
@@ -676,18 +574,28 @@ export function ChatModal({
     stopVoice,
     voice,
     live,
+    earlier,
+    newVoiceChat,
+    attachPhoto,
   } = useVoiceController({
     voiceLang,
     speechLang,
     shopperLanguage,
     ttsVoice,
+    messages,
     handleSendUtterance: (text) => handleSendRef.current(text),
     appendSpokenExchange,
   });
 
   const panelRef = useRef<HTMLDivElement>(null);
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
-  const [scoutsOpen, setScoutsOpen] = useState(false);
+  const layoutDockTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!themeMenuOpen && layoutDockTimer.current) clearTimeout(layoutDockTimer.current);
+    return () => { if (layoutDockTimer.current) clearTimeout(layoutDockTimer.current); };
+  }, [themeMenuOpen]);
+  // The grid marks the theme it opened on; a pick just closes it rather than moving the mark first.
+  const [themeMenuMark, setThemeMenuMark] = useState<ThemeId | null>(null);
   const themeMenuRef = useRef<HTMLDivElement>(null);
   const mobileThemeRef = useRef<HTMLDivElement>(null);
 
@@ -733,16 +641,35 @@ export function ChatModal({
     activeMsgIdx,
     unreadBelow,
     jumpToMessage,
+    revealMessage,
     jumpToBottom,
   } = useChatScroll({ messages, loading, streaming, messageRefs });
+  const handleLongPressMessage = useCallback((
+    msg: any,
+    rect: { top: number; left: number; width: number; height: number },
+    isUser: boolean,
+    el?: HTMLElement
+  ) => {
+    if (el) revealMessage(el);
+    setTapbackTarget({ msg, rect, isUser, el });
+  }, [revealMessage]);
+
+  const chatLayout = useChatLayout(msgsContainerRef);
 
   const { closing: overlayClosing, requestClose: exitOverlay } = useDelayedClose(OVERLAY_EXIT_MS, onClose);
-  const requestClose = useCallback(() => {
+  // end=true tells the team the visitor is done; otherwise the request is kept for when they come back.
+  const closeNow = useCallback((end: boolean) => {
+    if (end) leaveHuman();
     setThemeMenuOpen(false);
-    setScoutsOpen(false);
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) onClose();
     else exitOverlay();
-  }, [exitOverlay, onClose]);
+  }, [exitOverlay, onClose, leaveHuman]);
+  // While a person is on the request, the visitor chooses whether to keep it or end it.
+  const requestClose = useCallback(() => {
+    if (leaveAsk) nudgeLeave();
+    else if (humanPending) setLeaveAsk('close');
+    else closeNow(false);
+  }, [humanPending, closeNow, leaveAsk, nudgeLeave]);
 
   useDragToDismiss({
     panel: useCallback(() => panelRef.current, []),
@@ -791,17 +718,23 @@ export function ChatModal({
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
-      if (lightboxSrc) { setLightboxSrc(null); return; }
+      if (lightboxData) { setLightboxData(null); return; }
       requestClose();
     };
     document.addEventListener('keydown', h);
     return () => document.removeEventListener('keydown', h);
-  }, [lightboxSrc, requestClose]);
+  }, [lightboxData, requestClose]);
 
-  const handleReset = useCallback(() => {
+  const resetNow = useCallback((end: boolean) => {
+    if (end) leaveHuman();
     reset();
     setKeyPhase('idle');
-  }, [reset, setKeyPhase]);
+  }, [reset, setKeyPhase, leaveHuman]);
+  const handleReset = useCallback(() => {
+    if (leaveAsk) nudgeLeave();
+    else if (humanPending) setLeaveAsk('reset');
+    else resetNow(false);
+  }, [humanPending, resetNow, leaveAsk, nudgeLeave]);
 
   const handleSourceClick = (src: ChatSource) => {
     onSelectSource?.(src);
@@ -810,8 +743,7 @@ export function ChatModal({
       send(t('cardClickAnswer', { name: src.name }));
       return;
     }
-    const price = src.price ? ` (${src.currency ?? defaultCurrency} ${src.price})` : '';
-    send(t('cardClickQuery', { name: src.name, price }));
+    send(t('cardClickQuery', { name: src.name, details: detailsText(detailsOf(src, cardFields)) }));
   };
 
   const handleSelectExtension = (ext: string) => {
@@ -909,15 +841,23 @@ export function ChatModal({
     const list = Array.from(files);
     for (const file of list) {
       if (!file.type.startsWith('image/')) continue;
-      try {
-        const dataUrl = await downscaleImage(file);
-        setAttachments(prev => [...prev, { type: 'image', data: dataUrl }]);
-      } catch {  }
+      const thumb = URL.createObjectURL(file);
+      const ready = downscaleImage(file);
+      photoReady.current.set(thumb, ready);
+      setAttachments(prev => [...prev, { type: 'image', data: '', thumb }]);
+      ready
+        .then(data => setAttachments(prev => prev.map(a => (a.thumb === thumb ? { ...a, data } : a))))
+        .catch(() => setAttachments(prev => prev.filter(a => a.thumb !== thumb)))
+        .finally(() => photoReady.current.delete(thumb));
     }
   };
 
   const removeAttachment = (idx: number) => {
-    setAttachments(prev => prev.filter((_, i) => i !== idx));
+    setAttachments(prev => {
+      const gone = prev[idx]?.thumb;
+      if (gone) URL.revokeObjectURL(gone);
+      return prev.filter((_, i) => i !== idx);
+    });
   };
 
   const hasTranslucentBackdrop = backdropColor && (backdropColor.includes('rgba') || backdropColor.includes('hsla') || backdropColor === 'transparent');
@@ -948,14 +888,13 @@ export function ChatModal({
       const isLastMsg = i === messages.length - 1;
       if (isLastMsg && inFlight) return true;
       const hasBody = !!m.content || !!m.visualization || m.visualizing ||
-        (m.knowledgeImages?.length ?? 0) > 0 || (m.referencedIds?.length ?? 0) > 0;
+        (m.knowledgeImages?.length ?? 0) > 0 || (m.referencedIds?.length ?? 0) > 0 || isTeamNote(m.statusStage);
       return hasBody;
     });
     const last = kept.length - 1;
     if (last < 0 || kept[last].role !== 'assistant') return kept;
     if (kept[last] !== messages[messages.length - 1]) return kept;
-    // The stream ending is not the reveal ending: dropping the paced content
-    // here printed the whole remaining reply in one frame.
+    // stream end is not reveal end; dropping paced content here prints the rest in one frame
     const draining = pacedContent.length < (kept[last].content?.length ?? 0);
     if (!inFlight && !draining) return kept;
     return kept.map((m, i) => (i === last ? { ...m, content: pacedContent } : m));
@@ -972,38 +911,6 @@ export function ChatModal({
         });
       }
     });
-    return items;
-  }, [displayMessages]);
-
-  const audioWaveItems = React.useMemo(() => {
-    const items: Array<{
-      idx: number;
-      text?: string;
-      audioUrl?: string;
-      assistantAudioUrl?: string;
-      assistantIdx?: number;
-      duration?: number;
-      spoken?: boolean;
-    }> = [];
-
-    displayMessages.forEach((m, idx) => {
-      if (m.role === 'user' && !!m.content.trim()) {
-        const clean = m.content.replace(/^@kiku\s*/i, '').replace(/\s+/g, ' ').trim();
-        const nextMsg = displayMessages[idx + 1];
-        const assistantAudioUrl = nextMsg?.role === 'assistant' ? nextMsg.audioUrl : undefined;
-        const assistantIdx = nextMsg?.role === 'assistant' ? idx + 1 : undefined;
-        items.push({
-          idx,
-          text: clean,
-          audioUrl: m.audioUrl,
-          assistantAudioUrl,
-          assistantIdx,
-          duration: nextMsg?.thoughtForSeconds,
-          spoken: !!m.spoken || !!nextMsg?.spoken,
-        });
-      }
-    });
-
     return items;
   }, [displayMessages]);
 
@@ -1033,6 +940,7 @@ export function ChatModal({
           if (overlayRef.current) (overlayRef.current as any)._ptrDown = false;
         }}
         data-hsk-theme={hskThemeAttr}
+        data-hsk-layout={chatLayout.wide ? 'wide' : 'bubbles'}
         data-hsk-theming={theming ? '' : undefined}
         style={{
           ...(backdropFilterStyle),
@@ -1048,6 +956,7 @@ export function ChatModal({
           ref={panelRef}
           className={cn("hsk-cb-panel", classNames.panel)}
           dir={isRTL ? 'rtl' : 'ltr'}
+          lang={speechLang || undefined}
           data-script={isNonLatin ? 'nonlatin' : 'latin'}
           data-host-font={hostFontCovers ? 'covers' : 'gap'}
           data-nastaliq={(scriptFont?.family === 'Noto Nastaliq Urdu' || shopperLanguage?.toLowerCase() === 'urdu' || shopperLanguage?.toLowerCase() === 'ur' || shopperLanguage === 'اردو') ? 'true' : undefined}
@@ -1057,11 +966,17 @@ export function ChatModal({
             const target = e.target as HTMLElement;
             if (target.tagName === 'IMG' && (target.classList.contains('hsk-markdown-img') || target.classList.contains('hsk-cb-user-img-thumb'))) {
               const src = (target as HTMLImageElement).src;
-              if (src) setLightboxSrc(src);
+              if (src) handleOpenLightbox(src);
             }
           }}
         >
-          <LightboxModal src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
+          <LightboxModal
+            src={lightboxData?.src}
+            images={lightboxData?.images}
+            initialIndex={lightboxData?.initialIndex}
+            title={lightboxData?.title}
+            onClose={() => setLightboxData(null)}
+          />
 
           {markupSrc && (
             <div className="hsk-markup-overlay">
@@ -1072,8 +987,8 @@ export function ChatModal({
                 onSend={(dataUrl, instruction, marks, preview) => {
                   setMarkupSrc(null);
                   handleSend(
-                    instruction || t('markupApplyMarks'),
-                    [{ type: 'image', data: dataUrl, annotated: true, marks, instructed: !!instruction, preview }],
+                    instruction,
+                    [{ type: 'image', data: dataUrl, annotated: true, marks, instructed: true, preview }],
                   );
                 }}
               />
@@ -1081,9 +996,15 @@ export function ChatModal({
           )}
 
           <div className="hsk-cb-main">
-            <KikuDoodles seed={(client as any)?.api?.siteId ?? ''} theme={hskThemeAttr} dir={isRTL ? 'rtl' : 'ltr'} />
+            <KikuDoodles seed={(client as any)?.api?.siteId ?? ''} theme={hskThemeAttr} dir={isRTL ? 'rtl' : 'ltr'} waitForContent />
 
             <ChatTopbar
+              layoutControl={<LayoutToggle wide={chatLayout.wide} onToggle={() => {
+                chatLayout.toggle();
+                if (layoutDockTimer.current) clearTimeout(layoutDockTimer.current);
+                if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) closeThemeMenuNow();
+                else layoutDockTimer.current = setTimeout(closeThemeMenu, 400);
+              }} />}
               title={title}
               logo={logo}
               hasMessages={messages.length > 0}
@@ -1101,17 +1022,12 @@ export function ChatModal({
               onToggleThemeMenu={() => (themeMenuOpen ? closeThemeMenu() : setThemeMenuOpen(true))}
               onSelectTheme={(t) => { handleToggleTheme(t, true); }}
               themeAttr={hskThemeAttr}
-              onScoutNew={(avatar) => {
-                appendSpokenExchange(...sendOutExchange(avatar, t));
-                setTimeout(() => textareaRef.current?.focus(), 60);
-              }}
-              scoutsAllowed={scoutsAllowed}
-              onScoutAsk={(scout) => { void tellScoutStory(scout); }}
             />
 
             <div className="hsk-cb-msgs" ref={msgsContainerRef as any}>
               {displayMessages.length === 0 ? (
                 <OnboardingView
+                  theme={hskThemeAttr}
                   inOnboarding={inOnboarding}
                   justCompleted={justCompleted}
                   onboardingMood={onboardingMood}
@@ -1132,13 +1048,13 @@ export function ChatModal({
                   chooseLanguage={chooseLanguage}
                   langSwitching={langSwitching}
                   isLangPreparing={isLangPreparing}
-                  onPrewarmLanguage={(lang) => warmLanguage(client, lang, DEFAULT_UI_STRINGS)}
                   chooseEntityLang={chooseEntityLang}
                   agreeTerms={agreeTerms}
                   handleSend={handleSend}
                 />
               ) : (
                 <ChatMessages
+                  doodleTheme={hskThemeAttr}
                   displayMessages={displayMessages}
                   messageRefs={messageRefs}
                   isNarrow={isNarrow}
@@ -1149,7 +1065,6 @@ export function ChatModal({
                   discussedSources={discussedSources}
                   lastIntent={lastIntent}
                   lastAction={lastAction}
-                  defaultCurrency={defaultCurrency}
                   stopped={stopped}
                   interrupted={interrupted}
                   halted={halted}
@@ -1161,7 +1076,6 @@ export function ChatModal({
                   setKeyInput={setKeyInput}
                   mintedKey={mintedKey}
                   setMintedKey={setMintedKey}
-                  mintedPub={mintedPub}
                   setMintedPub={setMintedPub}
                   minting={minting}
                   copied={copied}
@@ -1171,7 +1085,7 @@ export function ChatModal({
                   copyValue={copyValue}
                   queuedMessage={queuedMessage}
                   sendQueuedNow={sendQueuedNow}
-                  setLightboxSrc={setLightboxSrc}
+                  setLightboxSrc={handleOpenLightbox}
                   setMarkupSrc={setMarkupSrc}
                   handleSend={handleSend}
                   handleSourceClick={handleSourceClick}
@@ -1190,11 +1104,27 @@ export function ChatModal({
             </div>
 
             {!composerHidden && (
-              <div className={cn(
-                composerExiting  && 'hsk-composer-exit-up',
-                composerRevealing && 'hsk-composer-reveal',
-              )}>
+              <div
+                className={cn(
+                  'hsk-cb-composer-wrapper',
+                  composerExiting  && 'hsk-composer-exit-up',
+                  composerRevealing && 'hsk-composer-reveal',
+                )}
+              >
                 <ChatComposer
+                  notice={leaveAsk && (
+                    <div className="hsk-cb-leave" role="alertdialog" ref={leaveRef}>
+                      <span>{t('leaveHumanWarning')}</span>
+                      <button type="button" className="hsk-cb-leave-btn" onClick={() => setLeaveAsk(null)}>{t('leaveHumanStay')}</button>
+                      <button
+                        type="button"
+                        className="hsk-cb-leave-btn hsk-cb-leave-btn--end"
+                        onClick={() => { const kind = leaveAsk; setLeaveAsk(null); if (kind === 'reset') resetNow(true); else closeNow(true); }}
+                      >
+                        {t('leaveHumanConfirm')}
+                      </button>
+                    </div>
+                  )}
                   gooId={gooId}
                   input={input}
                   setInput={setInput}
@@ -1204,7 +1134,6 @@ export function ChatModal({
                   setShowAtPicker={setShowAtPicker}
                   captureAllowed={captureAllowed}
                   discussedSources={discussedSources}
-                  defaultCurrency={defaultCurrency}
                   handleSelectExtension={handleSelectExtension}
                   handleKikuCapture={handleKikuCapture}
                   handleKikuCaptureAll={handleKikuCaptureAll}
@@ -1218,10 +1147,8 @@ export function ChatModal({
                   enableVision={enableVision && !inOnboarding}
                   enableVoice={enableVoice && !inOnboarding}
                   canConverse={canConverse}
-                  voiceMode={voiceMode}
                   startVoice={startVoice}
                   inputLocked={inputLocked}
-                  stopVoice={stopVoice}
                   voiceBlocked={voiceBlocked}
                   textareaRef={textareaRef}
                   classNames={classNames}
@@ -1236,15 +1163,15 @@ export function ChatModal({
                   handleSend={handleSend}
                   voiceError={voiceError}
                   setVoiceError={setVoiceError}
-                  shopperLanguage={shopperLanguage}
                   langSwitching={langSwitching || isLangPreparing}
                   t={t}
+                  onOpenMimi={client?.getKikuKey?.() ? openMimi : undefined}
                 />
               </div>
             )}
           </div>
 
-          {voiceMode === 'off' ? (
+          {voiceMode !== 'converse' && (
             <ConversationTimeline
               items={timelineItems}
               activeIdx={activeMsgIdx}
@@ -1252,93 +1179,55 @@ export function ChatModal({
               onJump={jumpToMessage}
               side={isRTL ? 'left' : 'right'}
             />
-          ) : (
-            <AudioWaveTimeline
-              items={audioWaveItems}
-              activeIdx={activeMsgIdx}
-              progress={scrollProgress}
-              onJump={jumpToMessage}
-              side={isRTL ? 'left' : 'right'}
-              voiceMuted={voiceMuted}
-              setVoiceMuted={setVoiceMuted}
-              voiceMode={voiceMode}
-              voicePhase={voicePhase}
-              live={live}
-            />
           )}
 
-          {/* Allowance pills removed: no upfront usage limit display */}
 
           <div className={cn("hsk-cb-kiku-id-rail", isRTL ? "hsk-cb-kiku-id-rail--right" : "hsk-cb-kiku-id-rail--left")}>
             <div className="hsk-cb-dock-frost" aria-hidden="true" />
-            {scoutsAllowed && <ScoutReceipt
-              scouts={receipts}
-              isNarrow={isNarrow}
-              lang={shopperLanguage}
-              onOpen={openReceipt}
-              onDismiss={dismissReceipt}
-            />}
-
-            {scoutsAllowed && <ScoutRail
-              themeAttr={hskThemeAttr}
-              open={scoutsOpen}
-              onOpenChange={(v) => {
-                setScoutsOpen(v);
-                if (v && themeMenuOpen) closeThemeMenuNow();
-              }}
-              onAsk={(scout) => { void tellScoutStory(scout); }}
-              onNew={(avatar) => {
-                appendSpokenExchange(...sendOutExchange(avatar, t));
-                setTimeout(() => textareaRef.current?.focus(), 60);
-              }}
-            />}
-
             <SoundToggle />
 
-            {/* Themes Expandable Selection */}
-            <div className={cn("hsk-cb-theme-squircle-wrap", themeMenuOpen && "is-open", themeMenuClosing && "is-closing")} ref={themeMenuRef}>
-              {!themeMenuOpen ? (
-                <button
-                  type="button"
-                  className="hsk-cb-theme-squircle-trigger"
-                  onClick={() => { setScoutsOpen(false); setThemeMenuOpen(true); }}
-                  aria-label="Themes"
-                  aria-expanded="false"
-                >
-                  <span className="hsk-cb-theme-trigger-icon">
-                    {React.createElement(themeDef(currentTheme).Icon)}
-                  </span>
-                  <span className="hsk-cb-theme-trigger-label">
-                    {themeDef(currentTheme).label}
-                  </span>
-                </button>
-              ) : (
-                <div className="hsk-cb-theme-2x2-grid" role="dialog" aria-label="Theme selector">
-                  {THEMES.map(({ id, label, Icon }) => (
-                    <button
-                      key={id}
-                      type="button"
-                      className={cn("hsk-cb-theme-grid-item", currentTheme === id && "is-active")}
-                      onClick={(e) => { e.stopPropagation(); handleToggleTheme(id, true); }}
-                    >
-                      <Icon />
-                      <span>{label}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
+            {/* One pill that grows into the theme grid and shrinks back, like the voices pill. */}
+            <div className={cn("hsk-cb-theme-squircle-wrap", themeMenuOpen && !themeMenuClosing && "is-open")} ref={themeMenuRef}>
+              <div
+                className="hsk-cb-theme-2x2-grid"
+                role="dialog"
+                aria-label="Theme selector"
+                ref={(el) => { if (el) el.inert = !themeMenuOpen || themeMenuClosing; }}
+              >
+                {THEMES.map(({ id, label, Icon }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    className={cn("hsk-cb-theme-grid-item", (themeMenuMark ?? currentTheme) === id && "is-active")}
+                    onClick={(e) => { e.stopPropagation(); handleToggleTheme(id, true); }}
+                  >
+                    <Icon />
+                    <span>{label}</span>
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="hsk-cb-theme-squircle-trigger"
+                onClick={() => {
+                  if (themeMenuOpen) { closeThemeMenuNow(); return; }
+                  setThemeMenuMark(currentTheme);
+                  setThemeMenuOpen(true);
+                }}
+                aria-label="Themes"
+                aria-expanded={themeMenuOpen}
+              >
+                <span className="hsk-cb-theme-trigger-icon">
+                  {React.createElement(themeDef(currentTheme).Icon)}
+                </span>
+                <span className="hsk-cb-theme-trigger-label">
+                  {themeDef(currentTheme).label}
+                </span>
+              </button>
             </div>
 
-            {/* Kiku ID Pill */}
-            <button
-              type="button"
-              className="hsk-cb-kiku-id-pill"
-              onClick={() => displayKikuPub !== 'N/A' && copyValue(displayKikuPub, 'pub')}
-              aria-label={t('keyCopyId')}
-            >
-              <span className="hsk-cb-kiku-id-rail-val">{displayKikuPub}</span>
-              {copied === 'pub' ? <CheckIcon /> : <CopyIcon />}
-            </button>
+            <LayoutToggle wide={chatLayout.wide} onToggle={() => { chatLayout.toggle(); }} />
+
           </div>
 
           {voiceMode === 'converse' && (
@@ -1352,9 +1241,16 @@ export function ChatModal({
               voiceConnecting={voiceConnecting}
               voicePhase={voicePhase}
               live={live}
+              earlier={earlier}
+              newVoiceChat={newVoiceChat}
               voiceMuted={voiceMuted}
               setVoiceMuted={setVoiceMuted}
               voiceError={voiceError}
+              attachPhoto={attachPhoto}
+              onSelectSource={(src: ChatSource) => {
+                onSelectSource?.(src);
+                live.ask(t('cardClickQuery', { name: src.name, details: detailsText(detailsOf(src, cardFields)) }));
+              }}
               t={t}
             />
           )}
@@ -1365,6 +1261,7 @@ export function ChatModal({
               rect={tapbackTarget.rect}
               anchorEl={tapbackTarget.el}
               containerEl={panelRef.current}
+              scrollEl={msgsContainerRef.current}
               containerRect={panelRef.current?.getBoundingClientRect()}
               isUser={tapbackTarget.isUser}
               isRTL={isRTL}

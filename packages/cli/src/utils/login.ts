@@ -23,8 +23,7 @@ function readBody(req: http.IncomingMessage): Promise<string> {
   });
 }
 
-// The token is POSTed from the browser rather than carried in a redirect URL, so
-// it never reaches browser history or an access log.
+// The token is POSTed, not carried in a redirect URL, so it never reaches browser history or an access log.
 export async function startHandshake(shellUrl: string): Promise<Handshake> {
   const state = crypto.randomBytes(24).toString('hex');
   const code = crypto.randomBytes(3).toString('hex').toUpperCase();

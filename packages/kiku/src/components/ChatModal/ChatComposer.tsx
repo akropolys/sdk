@@ -1,15 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
-import type { ChatSource, ChatAttachment } from '@akropolys/sdk';
+import { createPortal } from 'react-dom';
+import { useAkropolysContext, useCardFields, type ChatSource, type ChatAttachment } from '@akropolys/sdk';
 import { cn } from '../../utils/cn';
+import { detailsOf } from '../../utils/cardDetails';
 import {
   SparkleIcon,
   BookmarkIcon,
   HistoryIcon,
   TrashIcon,
   PaperclipIcon,
+  MessageIcon,
   WaveformIcon,
-  MicIcon,
-  MicOffIcon,
   StopIcon,
   ArrowUpIcon,
   PlusIcon,
@@ -17,7 +18,7 @@ import {
 } from './icons';
 import { ListeningWave } from './components/ListeningWave';
 import { AnimatedPlaceholder, HSK_STAGGER_MS, splitPlaceholder } from './components/AnimatedPlaceholder';
-import type { UIStringKey, VoicePhase } from './types';
+import type { UIStringKey, VoicePhase, ComposerAttachment } from './types';
 
 export interface ChatComposerProps {
   gooId: string;
@@ -29,13 +30,12 @@ export interface ChatComposerProps {
   setShowAtPicker: (show: boolean) => void;
   captureAllowed: boolean;
   discussedSources: ChatSource[];
-  defaultCurrency: string;
   handleSelectExtension: (ext: string) => void;
   handleKikuCapture: (product: ChatSource) => void;
   handleKikuCaptureAll: (products: ChatSource[]) => void;
   handleKikuViewHistory: () => void;
   handleKikuDelete: () => void;
-  attachments: ChatAttachment[];
+  attachments: ComposerAttachment[];
   removeAttachment: (idx: number) => void;
   chromeLoading: boolean;
   inputLocked: boolean;
@@ -44,9 +44,7 @@ export interface ChatComposerProps {
   enableVision: boolean;
   enableVoice: boolean;
   canConverse: boolean;
-  voiceMode: 'off' | 'dictate' | 'converse';
   startVoice: (mode: 'dictate' | 'converse') => void;
-  stopVoice: () => void;
   voiceBlocked: boolean;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   classNames?: { input?: string; sendButton?: string };
@@ -66,10 +64,11 @@ export interface ChatComposerProps {
   handleSend: (text?: string) => Promise<void>;
   voiceError: string;
   setVoiceError?: (err: string) => void;
-  shopperLanguage: string;
   langSwitching?: boolean;
   t: (key: UIStringKey, vars?: Record<string, string>) => string;
   rail?: React.ReactNode;
+  notice?: React.ReactNode; // sits on the input's top edge, like a status pill on a reply
+  onOpenMimi?: () => void;
 }
 
 export function ChatComposer({
@@ -82,7 +81,6 @@ export function ChatComposer({
   setShowAtPicker,
   captureAllowed,
   discussedSources,
-  defaultCurrency,
   handleSelectExtension,
   handleKikuCapture,
   handleKikuCaptureAll,
@@ -98,9 +96,7 @@ export function ChatComposer({
   enableVision,
   enableVoice,
   canConverse,
-  voiceMode,
   startVoice,
-  stopVoice,
   voiceBlocked,
   textareaRef,
   classNames = {},
@@ -115,10 +111,13 @@ export function ChatComposer({
   handleSend,
   voiceError,
   setVoiceError,
-  shopperLanguage,
   t,
   rail,
+  notice,
+  onOpenMimi,
 }: ChatComposerProps) {
+  const client = useAkropolysContext();
+  const cardFields = useCardFields();
   const [placeholderReplay, setPlaceholderReplay] = React.useState(0);
   const [toolsOpen, setToolsOpen] = React.useState(false);
 
@@ -130,16 +129,52 @@ export function ChatComposer({
     return () => clearTimeout(timer);
   }, [voiceError, setVoiceError]);
 
+  const toolsheetRef = React.useRef<HTMLDivElement>(null);
+
   React.useEffect(() => {
     if (!toolsOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setToolsOpen(false);
     };
+    const handleOutside = (e: MouseEvent | TouchEvent) => {
+      const path = (e.composedPath ? e.composedPath() : []) as EventTarget[];
+      const targetEl = e.target as HTMLElement | null;
+      const isInsideToggle = targetEl?.closest?.('.hsk-cb-tools-toggle') || path.some((el: any) => el?.classList?.contains?.('hsk-cb-tools-toggle'));
+      const isInsideSheet = toolsheetRef.current && (path.includes(toolsheetRef.current) || toolsheetRef.current.contains(e.target as Node));
+      if (isInsideToggle || isInsideSheet) {
+        return;
+      }
+      setToolsOpen(false);
+    };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    document.addEventListener('mousedown', handleOutside);
+    document.addEventListener('touchstart', handleOutside, { passive: true });
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('touchstart', handleOutside);
+    };
   }, [toolsOpen]);
 
   const placeholderText = activePlaceholder || 'Ask me anything…';
+
+  const fieldRef = useRef<HTMLDivElement>(null);
+  const [phWraps, setPhWraps] = useState(() => placeholderText.length > 26); // a first guess the measurement corrects
+  useEffect(() => {
+    const field = fieldRef.current;
+    if (!field || input) return;
+    const measure = () => {
+      const units = field.querySelectorAll<HTMLElement>('.hsk-animated-placeholder__char');
+      if (units.length < 2) return setPhWraps(false);
+      const first = units[0].offsetTop;
+      const last = units[units.length - 1].offsetTop;
+      setPhWraps(last - first > units[0].offsetHeight / 2);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(field);
+    return () => ro.disconnect();
+  }, [placeholderText, input]);
   const placeholderSweepMs =
     Math.max(splitPlaceholder(placeholderText).length - 1, 0) * HSK_STAGGER_MS;
 
@@ -156,12 +191,21 @@ export function ChatComposer({
   };
   useEffect(() => () => { if (launchTimer.current) clearTimeout(launchTimer.current); }, []);
 
+  // While a notice asks for a decision, the input takes no typing or clicks.
+  const cardRef = useRef<HTMLDivElement>(null);
+  const blocked = !!notice;
+  useEffect(() => { cardRef.current?.toggleAttribute('inert', blocked); }, [blocked]);
+
   return (
-    <div className="hsk-cb-input-wrap">
+    <div className="hsk-cb-input-wrap" data-tools-open={toolsOpen ? 'true' : undefined}>
       {toolsOpen && (
         <>
-          <div className="hsk-cb-toolsheet-scrim" onClick={() => setToolsOpen(false)} />
-          <div className="hsk-cb-toolsheet-wrap">
+          <div
+            className="hsk-cb-toolsheet-scrim"
+            onClick={() => setToolsOpen(false)}
+            aria-hidden="true"
+          />
+          <div className="hsk-cb-toolsheet-wrap" ref={toolsheetRef}>
             <div className="hsk-cb-toolsheet" role="menu">
               {enableVision && (
                 <button
@@ -178,18 +222,29 @@ export function ChatComposer({
                 <button
                   className="hsk-cb-toolsheet-item"
                   role="menuitem"
-                  onClick={() => { setToolsOpen(false); voiceMode === 'converse' ? stopVoice() : startVoice('converse'); }}
-                  disabled={loading || chromeLoading || voiceBlocked}
+                  onClick={() => {
+                    setToolsOpen(false);
+                    if (voiceBlocked) setVoiceError?.(t('errAccountRequired'));
+                    else startVoice('converse');
+                  }}
+                  disabled={loading || chromeLoading}
                 >
-                  <WaveformIcon active={voiceMode === 'converse'} />
-                  <span>{voiceMode === 'converse' ? t('voiceModeExit') : t('voiceModeStart')}</span>
+                  <WaveformIcon />
+                  <span>{t('voiceModeStart')}</span>
+                </button>
+              )}
+              {onOpenMimi && (
+                <button className="hsk-cb-toolsheet-item" role="menuitem" onClick={() => { setToolsOpen(false); onOpenMimi(); }}>
+                  <MessageIcon />
+                  <span>MiMi</span>
                 </button>
               )}
             </div>
           </div>
         </>
       )}
-      <div className="hsk-cb-input-card">
+      {notice}
+      <div className="hsk-cb-input-card" ref={cardRef}>
         {(/^@kiku\b/i.test(input) || showKikuPicker || showAtPicker) && (
             <div className="hsk-cb-docked-header">
               <span className="hsk-cb-docked-sub">{t('captureAndRemember')}</span>
@@ -235,10 +290,8 @@ export function ChatComposer({
                         {src.image ? <img src={src.image} alt="" /> : <BookmarkIcon />}
                       </span>
                       <span className="hsk-cb-docked-option-title">{src.name}</span>
-                      {src.price && (
-                        <span className="hsk-cb-docked-option-price">
-                          {src.currency ?? defaultCurrency} {parseFloat(String(src.price).replace(/[^0-9.]/g, '') || '0').toLocaleString()}
-                        </span>
+                      {detailsOf(src, cardFields)[0] && (
+                        <span className="hsk-cb-docked-option-detail">{detailsOf(src, cardFields)[0].value}</span>
                       )}
                     </button>
                   ))}
@@ -287,7 +340,7 @@ export function ChatComposer({
             <div className="hsk-cb-img-strip">
               {attachments.map((att, i) => (
                 <div key={i} className="hsk-cb-img-thumb-wrap">
-                  <img src={att.data} alt={`attachment ${i + 1}`} className="hsk-cb-img-thumb" />
+                  <img src={att.thumb || att.data} alt={`attachment ${i + 1}`} className="hsk-cb-img-thumb" />
                   <button
                     type="button"
                     className="hsk-cb-img-thumb-remove"
@@ -317,7 +370,7 @@ export function ChatComposer({
                 e.target.value = '';
               }}
             />
-            {(enableVision || (enableVoice && canConverse)) && (
+            {(onOpenMimi || enableVision || (enableVoice && canConverse)) && (
               <button
                 className={cn('hsk-cb-tools-toggle', toolsOpen && 'hsk-cb-tools-toggle--open')}
                 onClick={() => setToolsOpen(o => !o)}
@@ -339,18 +392,8 @@ export function ChatComposer({
                   <PaperclipIcon />
                 </button>
               )}
-              {enableVoice && canConverse && (
-                <button
-                  className={cn("hsk-cb-voice-mode-btn", voiceBlocked && "hsk-cb-voice-mode-btn--blocked")}
-                  onClick={() => voiceBlocked ? setVoiceError?.(t('errAccountRequired')) : startVoice('converse')}
-                  disabled={loading || chromeLoading}
-                  aria-label="Voice conversation"
-                >
-                  <WaveformIcon />
-                </button>
-              )}
             </>
-            <div className="hsk-cb-field" data-ph-lines={!input && placeholderText.length > 26 ? '2' : undefined}>
+            <div className="hsk-cb-field" ref={fieldRef} data-ph-lines={!input && phWraps ? '2' : undefined}>
               <textarea
                 ref={textareaRef as any}
                 value={input}
@@ -369,24 +412,14 @@ export function ChatComposer({
                 replaySeed={placeholderReplay}
               />
             </div>
-            {enableVoice && (
+            {enableVoice && canConverse && (
               <button
-                className={cn("hsk-cb-mic-btn", (voiceMode === 'converse' || voiceMode === 'dictate') && "hsk-cb-mic-btn--active", voiceBlocked && "hsk-cb-mic-btn--blocked")}
-                onClick={() => {
-                  if (voiceMode !== 'off') {
-                    stopVoice();
-                  } else if (voiceBlocked) {
-                    setVoiceError?.('errAccountRequired');
-                  } else if (canConverse) {
-                    startVoice('converse');
-                  } else {
-                    startVoice('dictate');
-                  }
-                }}
-                disabled={loading || chromeLoading || langSwitching}
-                aria-label={voiceMode === 'off' ? 'Start voice mode' : 'Stop voice'}
+                className={cn("hsk-cb-voice-mode-btn", voiceBlocked && "hsk-cb-voice-mode-btn--blocked")}
+                onClick={() => voiceBlocked ? setVoiceError?.(t('errAccountRequired')) : startVoice('converse')}
+                disabled={loading || chromeLoading}
+                aria-label="Voice conversation"
               >
-                {voiceMode === 'off' ? <MicIcon /> : <MicOffIcon />}
+                <WaveformIcon />
               </button>
             )}
             {(loading || streaming) && !launching ? (
@@ -402,16 +435,14 @@ export function ChatComposer({
                 className={cn(
                   "hsk-cb-send",
                   launching && "is-launching",
-                  langSwitching && "is-morph-spinning",
                   classNames.sendButton
                 )}
                 onClick={() => {
-                  if (langSwitching) return;
                   launch();
                   handleSend();
                 }}
-                disabled={!langSwitching && (inputLocked || chromeLoading || (!input.trim() && attachments.length === 0))}
-                aria-label={langSwitching ? "Preparing language…" : "Send message"}
+                disabled={langSwitching || inputLocked || chromeLoading || (!input.trim() && attachments.length === 0)}
+                aria-label="Send message"
               >
                 <svg width="0" height="0" aria-hidden="true" focusable="false" style={{ position: 'absolute' }}>
                   <defs>
@@ -427,15 +458,7 @@ export function ChatComposer({
                 <span className="hsk-cb-send-stage" style={{ filter: `url(#${gooId})` }}>
                   <span className="hsk-cb-send-seam" aria-hidden="true" />
                   <span className="hsk-cb-send-kite">
-                    {langSwitching ? (
-                      <span className="hsk-cb-send-spinner-dots" aria-hidden="true">
-                        <span className="hsk-goo-orb hsk-goo-orb--1" />
-                        <span className="hsk-goo-orb hsk-goo-orb--2" />
-                        <span className="hsk-goo-orb hsk-goo-orb--3" />
-                      </span>
-                    ) : (
-                      <ArrowUpIcon />
-                    )}
+                    <ArrowUpIcon />
                   </span>
                 </span>
               </button>
@@ -467,7 +490,6 @@ export function ChatComposer({
           </button>
         </div>
       )}
-      <div className="hsk-cb-hint">{shopperLanguage ? t('footerHint') : 'kiku · searches the whole catalogue in real time'}</div>
     </div>
   );
 }

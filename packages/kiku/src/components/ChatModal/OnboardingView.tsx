@@ -2,10 +2,22 @@ import React from 'react';
 import { cn } from '../../utils/cn';
 import type { KikuState } from '../KikuAvatar';
 import { LANGUAGE_CHOICES, endonymFor, getLoadingMeta, type UIStringKey } from './types';
+import { ClayLoader } from './ClayLoader';
+
+function CheckMark() {
+  return (
+    <span className="hsk-cb-check" aria-hidden="true">
+      <svg viewBox="0 0 16 16">
+        <path d="M3.5 8.4 6.6 11.4 12.6 4.8" />
+      </svg>
+    </span>
+  );
+}
 
 type SpinnerPhase = 'idle' | 'step1-exit' | 'spinner-enter' | 'spinner-steady' | 'spinner-exit';
 
 export interface OnboardingViewProps {
+  theme?: string;
   inOnboarding: boolean;
   justCompleted: boolean;
   onboardingMood?: KikuState;
@@ -22,18 +34,17 @@ export interface OnboardingViewProps {
   activeChips: string[];
   speechLang?: string;
   t: (key: UIStringKey, vars?: Record<string, string>) => string;
-  tNode: (key: UIStringKey, vars?: Record<string, React.ReactNode>) => React.ReactNode;
+  tNode: (key: UIStringKey, vars?: Record<string, string>) => React.ReactNode;
   chooseLanguage: (lang: string) => void;
   langSwitching?: boolean;
-  /** Passed directly from ChatModal so phase machine sees the same value */
   isLangPreparing?: boolean;
-  onPrewarmLanguage?: (lang: string) => void;
   chooseEntityLang: (mode: 'translated' | 'original') => void;
   agreeTerms: () => void;
   handleSend: (text: string) => void;
 }
 
 export function OnboardingView({
+  theme,
   inOnboarding,
   justCompleted,
   onboardingMood,
@@ -54,7 +65,6 @@ export function OnboardingView({
   chooseLanguage,
   langSwitching = false,
   isLangPreparing: isLangPreparingProp,
-  onPrewarmLanguage,
   chooseEntityLang,
   agreeTerms,
   handleSend,
@@ -66,10 +76,6 @@ export function OnboardingView({
     (langSwitching || !!pendingLanguage || (!!shopperLanguage && !chromeReady && !isEn));
   const loadingMeta = getLoadingMeta(targetLang);
 
-  const rawGooId = React.useId();
-  const gooFilterId = React.useMemo(() => 'hsk_goo_' + rawGooId.replace(/[^a-zA-Z0-9_-]/g, '_'), [rawGooId]);
-
-  // ── Phase state machine (Synchronous for Zero-Flash Apple Fluid Transitions) ─
   const [prevPreparing, setPrevPreparing] = React.useState(isLangPreparing);
   const [spinnerPhase, setSpinnerPhase] = React.useState<SpinnerPhase>(() =>
     isLangPreparing ? 'spinner-steady' : 'idle',
@@ -85,19 +91,16 @@ export function OnboardingView({
     setPrevPreparing(isLangPreparing);
     clearPhaseTimers();
     if (isLangPreparing) {
-      // Step 1 content glides UP out of frame with Apple duo blur (280ms)
       setSpinnerPhase('step1-exit');
       phaseTimers.current.push(setTimeout(() => setSpinnerPhase('spinner-enter'), 280));
       phaseTimers.current.push(setTimeout(() => setSpinnerPhase('spinner-steady'), 280 + 680));
     } else {
-      // Strings ready: Spinner drops back DOWN toward send button (460ms)
       setSpinnerPhase('spinner-exit');
       phaseTimers.current.push(setTimeout(() => setSpinnerPhase('idle'), 460));
     }
   }
 
   React.useEffect(() => () => clearPhaseTimers(), []);
-  // ─────────────────────────────────────────────────────────────────────────
 
   const showSpinner = (
     spinnerPhase === 'spinner-enter' ||
@@ -114,25 +117,8 @@ export function OnboardingView({
     : (!termsAgreed || awaitingConsent) ? '4'
     : null;
 
-  const [consentExpanded, setConsentExpanded] = React.useState(false);
+  const [picked, setPicked] = React.useState<'translated' | 'original' | null>(null);
   const [countdown, setCountdown] = React.useState(3);
-  const displayShopperLang = shopperLanguage
-    ? (endonymFor(shopperLanguage, speechLang) ||
-       (shopperLanguage.charAt(0).toUpperCase() + shopperLanguage.slice(1)))
-    : '';
-
-  React.useEffect(() => {
-    if (awaitingLang && onPrewarmLanguage) {
-      const ric = typeof window !== 'undefined' ? (window as any).requestIdleCallback : undefined;
-      const id = ric
-        ? ric(() => onPrewarmLanguage('Urdu'), { timeout: 2000 })
-        : setTimeout(() => onPrewarmLanguage('Urdu'), 500);
-      return () => {
-        if (ric && typeof window !== 'undefined') (window as any).cancelIdleCallback?.(id);
-        else clearTimeout(id);
-      };
-    }
-  }, [awaitingLang, onPrewarmLanguage]);
 
   React.useEffect(() => {
     if (!awaitingConsent) return;
@@ -145,6 +131,11 @@ export function OnboardingView({
     }, 1000);
     return () => clearInterval(timer);
   }, [awaitingConsent]);
+  const displayShopperLang = shopperLanguage
+    ? (endonymFor(shopperLanguage, speechLang) ||
+       (shopperLanguage.charAt(0).toUpperCase() + shopperLanguage.slice(1)))
+    : '';
+
 
   return (
     <div className="hsk-cb-empty">
@@ -158,7 +149,6 @@ export function OnboardingView({
         )}
 
         {showSpinner ? (
-          /* ── Large organic goo loader ─────────────────────────────────── */
           <div
             className={cn(
               'hsk-lang-loader',
@@ -167,52 +157,19 @@ export function OnboardingView({
             )}
             key="spinner-loading"
           >
-            {/* Direct SVG goo filter: Gaussian blur + alpha threshold for organic liquid merge */}
-            <svg
-              width="0" height="0"
-              aria-hidden="true"
-              style={{ position: 'absolute', pointerEvents: 'none' }}
-            >
-              <defs>
-                <filter
-                  id={gooFilterId}
-                  x="-60%" y="-60%"
-                  width="220%" height="220%"
-                  colorInterpolationFilters="sRGB"
-                >
-                  <feGaussianBlur in="SourceGraphic" stdDeviation="6.5" result="blur" />
-                  <feColorMatrix
-                    in="blur" type="matrix"
-                    values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -8"
-                  />
-                </filter>
-              </defs>
-            </svg>
-            <div
-              className="hsk-lang-goo-stage"
-              style={{ filter: `url(#${gooFilterId})` }}
-            >
-              <div className="hsk-lang-core-blob" />
-              <div className="hsk-lang-orbit-arm hsk-lang-orbit-arm--1">
-                <div className="hsk-lang-satellite hsk-lang-satellite--1" />
-              </div>
-              <div className="hsk-lang-orbit-arm hsk-lang-orbit-arm--2">
-                <div className="hsk-lang-satellite hsk-lang-satellite--2" />
-              </div>
-              <div className="hsk-lang-orbit-arm hsk-lang-orbit-arm--3">
-                <div className="hsk-lang-satellite hsk-lang-satellite--3" />
-              </div>
-            </div>
-            <p className="hsk-lang-preparing">{loadingMeta.preparing}</p>
+            <ClayLoader
+              theme={theme}
+              phase={spinnerPhase === 'spinner-exit' ? 'exit' : spinnerPhase === 'spinner-enter' ? 'enter' : 'steady'}
+              label={loadingMeta.preparing}
+            />
           </div>
 
         ) : (showStep1Exiting || awaitingLang || !shopperLanguage) ? (
-          /* ── Step 1: Language selection (+ exit-up animation on dismiss) ── */
           <div
             className={cn('hsk-cb-hello-wrap', showStep1Exiting && 'hsk-step1-exit')}
             key="step-lang"
           >
-            <h2 className="hsk-cb-hello">What language should we chat in?</h2>
+            <h2 className="hsk-cb-hello">Which language do you want to use?</h2>
             <div className="hsk-cb-lang-chips">
               {LANGUAGE_CHOICES.map((l, i) => (
                 <button
@@ -223,8 +180,6 @@ export function OnboardingView({
                   lang={l.tag}
                   dir={l.rtl ? 'rtl' : 'ltr'}
                   disabled={langSwitching}
-                  onPointerEnter={() => !langSwitching && onPrewarmLanguage?.(l.value)}
-                  onPointerDown={() => !langSwitching && onPrewarmLanguage?.(l.value)}
                   onClick={() => !langSwitching && chooseLanguage(l.value)}
                 >
                   {l.native}
@@ -234,16 +189,16 @@ export function OnboardingView({
                 className="hsk-cb-lang-chips-hint"
                 style={{ '--hsk-pill-idx': LANGUAGE_CHOICES.length } as React.CSSProperties}
               >
-                or type any other
+                or type another one
               </span>
             </div>
           </div>
 
         ) : (awaitingName || !shopperName) ? (
-          <div className="hsk-cb-hello-wrap hsk-step-enter" key="step-name">
+          <div className="hsk-cb-hello-wrap hsk-cb-name-step hsk-step-enter" key="step-name">
             <h2 className="hsk-cb-hello">{t('nameStepTitle')}</h2>
-            <p className="hsk-cb-hello-lead">{t('nameStepLead')}</p>
             <p className="hsk-cb-hello-ask">{t('nameStepAsk')}</p>
+            <p className="hsk-cb-hello-hint">{t('nameStepHint')}</p>
           </div>
 
         ) : awaitingEntityLang ? (
@@ -256,14 +211,12 @@ export function OnboardingView({
                   key={mode}
                   type="button"
                   role="radio"
-                  aria-checked={entityLangPref === mode}
-                  className={cn('hsk-cb-entlang-opt', entityLangPref === mode && 'is-selected')}
+                  aria-checked={(picked ?? entityLangPref) === mode}
+                  className={cn('hsk-cb-entlang-opt', (picked ?? entityLangPref) === mode && 'is-selected')}
                   style={{ '--hsk-opt-idx': i } as React.CSSProperties}
-                  onClick={() => chooseEntityLang(mode)}
+                  onClick={() => setPicked(mode)}
                 >
-                  <span className="hsk-cb-entlang-radio" aria-hidden="true">
-                    <span className="hsk-cb-entlang-radio-dot" />
-                  </span>
+                  <CheckMark />
                   <span className="hsk-cb-entlang-opt-text">
                     <span className="hsk-cb-entlang-opt-title">
                       {mode === 'translated' ? tNode('inLanguage', { lang: displayShopperLang }) : t('asWritten')}
@@ -274,6 +227,16 @@ export function OnboardingView({
                   </span>
                 </button>
               ))}
+            </div>
+            <div className="hsk-cb-terms-action-wrap">
+              <button
+                type="button"
+                className={cn('hsk-cb-terms-agree-btn', picked && 'is-active')}
+                disabled={!picked}
+                onClick={() => picked && chooseEntityLang(picked)}
+              >
+                {t('continueButton')}
+              </button>
             </div>
           </div>
 
@@ -313,7 +276,21 @@ export function OnboardingView({
                 </div>
                 <p className="hsk-cb-terms-desc">{t('termsCookieDesc')}</p>
               </div>
+              <div className="hsk-cb-terms-divider" />
+              <div className="hsk-cb-terms-item" style={{ '--hsk-row-idx': 4 } as React.CSSProperties}>
+                <div className="hsk-cb-terms-head">
+                  <span className="hsk-cb-terms-numeral">V</span>
+                  <h3 className="hsk-cb-terms-title">{t('termsAiTitle')}</h3>
+                </div>
+                <p className="hsk-cb-terms-desc">{t('termsAiDesc')}</p>
+              </div>
             </div>
+            <p className="hsk-cb-terms-more">
+              {t('privacyMore')}{' '}
+              <a href="https://akropolys.cloud/privacy" target="_blank" rel="noopener noreferrer" dir="ltr">
+                akropolys.cloud/privacy
+              </a>
+            </p>
             <div className="hsk-cb-terms-action-wrap">
               <button
                 type="button"
@@ -346,9 +323,9 @@ export function OnboardingView({
 
         ) : (
           <div className="hsk-cb-hello-wrap" key="step-initial">
-            <h2 className="hsk-cb-hello">Hi, I'm <b>kiku</b>.</h2>
+            <h2 className="hsk-cb-hello">Hello, I am <b>kiku</b>.</h2>
             <p className="hsk-cb-hello-lead">
-              Ask me to search, visualize, or capture anything — I look across the whole site in real time.
+              Ask me to find, show or save anything. I look through this whole website for you.
             </p>
           </div>
         )}

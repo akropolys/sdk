@@ -1,15 +1,13 @@
 import React from 'react';
 import { useT } from './types';
-import { ChevronLeftIcon, CloseIcon } from './icons';
+import { ChevronLeftIcon, CloseIcon, TrashIcon } from './icons';
 import { THEMES, type ThemeId } from './themes';
 import { KikuAvatar, type KikuState } from '../KikuAvatar';
-import { ScoutRail } from '../Scouts';
 import { SoundToggle } from './components/SoundToggle';
 import { cn } from '../../utils/cn';
 import { useIslandMorph } from '../../utils/island';
 
 export interface ChatTopbarProps {
-  scoutsAllowed?: boolean;
   title: string;
   logo?: string;
   hasMessages: boolean;
@@ -27,8 +25,8 @@ export interface ChatTopbarProps {
   onToggleThemeMenu?: () => void;
   onSelectTheme?: (theme: ThemeId) => void;
   themeAttr?: string;
-  onScoutNew?: (avatar: string) => void;
-  onScoutAsk?: (scout: any) => void;
+  layoutControl?: React.ReactNode;
+  below?: React.ReactNode; // shown under the open phone dock
 }
 
 let droppedIn = false;
@@ -42,7 +40,6 @@ const RadarIcon = ({ size = 15 }: { size?: number }) => (
 );
 
 export function ChatTopbar({
-  scoutsAllowed,
   title,
   logo,
   hasMessages,
@@ -60,8 +57,8 @@ export function ChatTopbar({
   onToggleThemeMenu,
   onSelectTheme,
   themeAttr,
-  onScoutNew,
-  onScoutAsk,
+  below,
+  layoutControl,
 }: ChatTopbarProps) {
   const tr = useT();
   const barRef = React.useRef<HTMLDivElement>(null);
@@ -69,6 +66,38 @@ export function ChatTopbar({
   const shadowRef = React.useRef<HTMLDivElement>(null);
   const nameRef = React.useRef<HTMLElement | null>(null);
   const [dropIn] = React.useState(() => { const first = !droppedIn; droppedIn = true; return first; });
+  const clearRef = React.useRef<HTMLButtonElement>(null);
+  const clearMeasureRef = React.useRef<HTMLSpanElement>(null);
+  const clearLabel = tr('clearChat');
+  const [clearFit, setClearFit] = React.useState({ size: 12, compact: false });
+  React.useLayoutEffect(() => {
+    const bar = barRef.current, button = clearRef.current, measure = clearMeasureRef.current;
+    if (!bar || !button || !measure) return;
+    let active = true;
+    const fit = () => {
+      if (!active) return;
+      const actions = button.parentElement!;
+      const columns = getComputedStyle(bar).gridTemplateColumns.split(' ');
+      const slot = parseFloat(columns[2]) || actions.clientWidth;
+      const close = actions.querySelector<HTMLElement>('.hsk-cb-exit-btn');
+      const gap = parseFloat(getComputedStyle(actions).gap) || 0;
+      const available = Math.max(0, slot - (close ? close.offsetWidth + gap : 0) - 30);
+      const size = Math.min(12, Math.floor(1200 * available / Math.max(1, measure.scrollWidth)) / 100);
+      const compact = size < 10;
+      setClearFit(previous => previous.size === size && previous.compact === compact ? previous : { size, compact });
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(bar);
+    if (nameRef.current) observer.observe(nameRef.current);
+    document.fonts?.ready.then(fit).catch(() => {});
+    document.fonts?.addEventListener('loadingdone', fit);
+    return () => {
+      active = false;
+      observer.disconnect();
+      document.fonts?.removeEventListener('loadingdone', fit);
+    };
+  }, [clearLabel, hasMessages, isNarrow, title, logo]);
   // The dock's top border runs through the middle of the name pill, like the thinking tab on a reply.
   React.useLayoutEffect(() => {
     const bar = barRef.current, name = nameRef.current, dock = trayRef.current;
@@ -172,7 +201,6 @@ export function ChatTopbar({
 
   return (
     <div ref={barRef} className={cn("hsk-cb-topbar", isNarrow && themeMenuOpen && "is-docked")}>
-      {/* Left Column: Back button on mobile, clean spacer on desktop */}
       <div className="hsk-cb-topbar-left" style={{ minWidth: '34px' }}>
         {isNarrow && (
           <button
@@ -186,7 +214,6 @@ export function ChatTopbar({
         )}
       </div>
 
-      {/* Center Column: Avatar & Name */}
       <div
         className={cn("hsk-cb-topbar-mark", isNarrow && themeMenuOpen && "is-oozing")}
         data-impacting={isImpacting ? 'true' : 'false'}
@@ -202,7 +229,7 @@ export function ChatTopbar({
         onClick={handleClick}
         role="button"
         tabIndex={0}
-        aria-label={awayFromBottom ? tr('jumpToLatest') : `${title} (tap for scouts and themes)`}
+        aria-label={awayFromBottom ? tr('jumpToLatest') : `${title} (tap for themes)`}
       >
         <KikuAvatar
           state={avatarState}
@@ -213,22 +240,23 @@ export function ChatTopbar({
           triggerRef={triggerRef}
           dropIn={dropIn}
         />
-        {logo ? (
-          <img ref={nameRef as React.Ref<HTMLImageElement>} className="hsk-cb-topbar-logo" src={logo} alt={title} />
-        ) : (
-          <span ref={nameRef as React.Ref<HTMLSpanElement>} className="hsk-cb-topbar-name">{title}</span>
-        )}
+        <div className="hsk-cb-topbar-identity">
+          {logo ? (
+            <img ref={nameRef as React.Ref<HTMLImageElement>} className="hsk-cb-topbar-logo" src={logo} alt={title} />
+          ) : (
+            <span ref={nameRef as React.Ref<HTMLSpanElement>} className="hsk-cb-topbar-name">{title}</span>
+          )}
+        </div>
       </div>
 
-      {/* Right Column: Actions (desktop exit button) */}
       <div className="hsk-cb-topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
         {hasMessages && (
-          <button className="hsk-cb-topbar-btn" onClick={onReset}>
-            {tr('clearChat')}
+          <button ref={clearRef} type="button" className={cn("hsk-cb-topbar-btn", clearFit.compact && "is-compact")} onClick={onReset} title={clearLabel} aria-label={clearLabel}>
+            <span ref={clearMeasureRef} className="hsk-cb-clear-measure" aria-hidden="true">{clearLabel}</span>
+            {clearFit.compact ? <TrashIcon /> : <span className="hsk-cb-topbar-btn-label" style={{ fontSize: clearFit.size }}>{clearLabel}</span>}
           </button>
         )}
 
-        {/* Desktop: Exit button */}
         {!isNarrow && (
           <button
             type="button"
@@ -249,7 +277,6 @@ export function ChatTopbar({
         />
       )}
 
-      {/* Mobile Tray: Ooze menu above 2x2 theme grid */}
       {trayMounted && (
         <div className={cn("hsk-cb-tray-shadow", !themeMenuOpen && "is-parked")} aria-hidden="true"><div ref={shadowRef} /></div>
       )}
@@ -258,7 +285,7 @@ export function ChatTopbar({
           ref={trayRef}
           className={cn("hsk-cb-topbar-ooze-menu", themeMenuClosing && "is-closing", trayMotion && "is-island", !themeMenuOpen && "is-parked")}
           role="dialog"
-          aria-label="Scouts and theme selector"
+          aria-label="Theme selector"
           style={{
             position: 'absolute',
             left: '50%',
@@ -269,15 +296,6 @@ export function ChatTopbar({
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
         >
-          {scoutsAllowed && <ScoutRail
-            className="hsk-cb-scout-tray"
-            compact
-            paused={!themeMenuOpen}
-            themeAttr={themeAttr}
-            onNew={onScoutNew}
-            onAsk={onScoutAsk}
-          />}
-
           <div className="hsk-cb-theme-block">
             <div className="hsk-cb-tray-aside">
               <SoundToggle compact />
@@ -297,8 +315,12 @@ export function ChatTopbar({
               </button>
               ))}
             </div>
+          {layoutControl && <div className="hsk-cb-dock-layout"><span className="hsk-cb-layout-label">RESPONSIVE LAYOUT</span>{layoutControl}</div>}
           </div>
         </div>
+      )}
+      {isNarrow && themeMenuOpen && below && (
+        <div className={cn("hsk-cb-tray-below", themeMenuClosing && "is-closing")}>{below}</div>
       )}
     </div>
   );

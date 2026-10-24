@@ -14,7 +14,7 @@ import { banner, box, bold, dim, gradient } from '../utils/theme';
 
 const SHELL_LOGIN_URL = 'https://shell.akropolys.cloud/cli-login';
 const SETUP_URL = 'https://shell.akropolys.cloud/sdk-setup';
-const DEFAULT_API_URL = 'https://agora-740936679905.europe-west1.run.app/v1';
+const DEFAULT_API_URL = 'https://api.akropolys.cloud/v1';
 const PACKAGES = ['@akropolys/sdk', '@akropolys/kiku'];
 
 interface InitOptions {
@@ -51,8 +51,7 @@ function run(cmd: string, args: string[]): Promise<void> {
   });
 }
 
-// /health is public, so it proves nothing about the key. /agent/manifest is the
-// cheapest endpoint behind the site-key middleware.
+// /health is public and proves nothing about the key; /agent/manifest is the cheapest call behind the site-key check.
 async function verify(apiUrl: string, siteId: string, apiKey: string): Promise<string | null> {
   try {
     const res = await fetch(`${apiUrl}/agent/manifest`, {
@@ -126,8 +125,7 @@ async function installPackages(pm: PackageManager) {
   }
 }
 
-// The token lives in this process only — the backend issues no refresh token, and
-// a 15-minute credential on disk is a footgun rather than a session.
+// The token lives in this process only: it expires in 15 minutes and is never written to disk.
 async function signIn(shellUrl: string): Promise<string> {
   const handshake = await startHandshake(shellUrl);
 

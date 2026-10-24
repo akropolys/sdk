@@ -36,7 +36,6 @@ export function warmChrome(client: any, shopperLanguage: string, defaults: Recor
   }
 }
 
-// Speculatively prefetches UI strings and preloads the target script font into document cache.
 export function warmLanguage(client: any, language: string, defaults: Record<string, string>): void {
   if (!client || !language) return;
   try {

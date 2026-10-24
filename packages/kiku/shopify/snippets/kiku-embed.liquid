@@ -15,10 +15,10 @@
     enableAudioResponse: true,
     {% if product %}
     product: {
-      id: {{ product.id | json }},
+      id: {{ product.id | append: '' | json }},
       title: {{ product.title | json }},
       handle: {{ product.handle | json }},
-      url: {{ product.url | json }},
+      fields: { url: {{ product.url | json }} },
       price: {{ product.price | json }},
       compare_at_price: {{ product.compare_at_price | json }},
       featured_image: {{ product.featured_image | image_url: width: 800 | json }},

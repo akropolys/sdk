@@ -58,13 +58,15 @@ akropolys doctor -v     # also print the resolved config
 
 ### `akropolys inspect [file]`
 
-Statically checks a catalog JSON payload for ingestion issues — missing stable identifier, sparse attributes — before you push it.
+Statically checks a catalog JSON payload for ingestion issues — missing or invalid required `id`, sparse attributes — before you push it.
 
 ```bash
 akropolys inspect catalog.json
 cat catalog.json | akropolys inspect --stdin
 akropolys inspect catalog.json --strict   # exit 3 if any warning fires
 ```
+
+Every catalogue record needs a stable top-level `id` (non-empty string or safe integer, including `0`). `fields.url` is optional but recommended and is never an ID fallback. Missing URLs do not trigger a warning. Use `--strict` to fail validation before an import.
 
 ## License
 

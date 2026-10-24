@@ -34,7 +34,23 @@ export function parseThinking(text: string): { thinking: string; content: string
   };
 }
 
-export function ThinkingBlock({ text, isComplete, seconds: fixedSeconds }: { text: string; isComplete: boolean; seconds?: number }) {
+// Stages that stand on their own line with no reply text beneath them.
+export const isTeamNote = (stage?: string) => stage === 'with_team' || stage === 'back_with_kiku' || stage === 'team_closed' || stage === 'team_joined';
+
+// A person can take minutes or hours to answer, so the wait reads in the largest whole unit.
+export function replyWait(seconds: number): string {
+  if (seconds < 60) return `${Math.max(1, Math.round(seconds))}s`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)} min`;
+  return `${Math.round(seconds / 3600)} h`;
+}
+
+export function ThinkingBlock({ text, isComplete, seconds: fixedSeconds, stage, repliedSeconds }: {
+  text: string;
+  isComplete: boolean;
+  seconds?: number;
+  stage?: string;
+  repliedSeconds?: number;
+}) {
   const tr = useT();
   const startRef = useRef(Date.now());
   const [seconds, setSeconds] = useState<number | null>(() => (isComplete ? null : 0));
@@ -56,15 +72,27 @@ export function ThinkingBlock({ text, isComplete, seconds: fixedSeconds }: { tex
   }, [isComplete]);
 
   const finalSeconds = fixedSeconds ?? seconds;
-  const label = isComplete
-    ? (finalSeconds !== null && finalSeconds !== undefined
-        ? tr('thoughtForSeconds', { duration: `${finalSeconds}s` })
-        : tr('thoughtProcess'))
-    : `${tr('thinking')}${seconds ? ` · ${seconds}s` : '…'}`;
+  const label = repliedSeconds != null
+    ? tr('repliedIn', { duration: replyWait(repliedSeconds) })
+    : stage === 'with_team'
+      ? tr('withTeam')
+      : stage === 'back_with_kiku'
+      ? tr('backWithKiku')
+      : stage === 'team_closed'
+      ? tr('teamClosed')
+      : stage === 'team_joined'
+      ? tr('teamJoined')
+      : stage === 'reaching_team'
+        ? (isComplete ? tr('passedToTeam') : `${tr('reachingTeam')}…`)
+        : isComplete
+          ? (finalSeconds !== null && finalSeconds !== undefined
+              ? tr('thoughtForSeconds', { duration: `${finalSeconds}s` })
+              : tr('thoughtProcess'))
+          : `${tr('thinking')}${seconds ? ` · ${seconds}s` : '…'}`;
   const expandable = !!text;
 
   return (
-    <div className={cn('hsk-cb-think', !isComplete && 'hsk-cb-think--live')}>
+    <div className={cn('hsk-cb-think', !isComplete && 'hsk-cb-think--live', repliedSeconds == null && isTeamNote(stage) && 'hsk-cb-think--note')}>
       <button
         type="button"
         className={cn('hsk-cb-think-head', !expandable && 'hsk-cb-think-head--static')}

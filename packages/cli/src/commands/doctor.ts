@@ -48,7 +48,6 @@ export async function runDoctor(options: { verbose?: boolean }) {
     console.log(pc.dim(`[Verbose] API URL: ${apiUrl}`));
   }
 
-  // 1. Configuration check
   if (!siteId) {
     console.log(pc.red('❌ Configuration: Site ID is missing. Set NEXT_PUBLIC_AKROPOLYS_SITE_ID in your env.'));
     process.exit(1);
@@ -61,7 +60,6 @@ export async function runDoctor(options: { verbose?: boolean }) {
   }
   console.log(pc.green('✓ Environment: API key detected'));
 
-  // 2. Connectivity check
   const start = Date.now();
   try {
     const res = await fetch(`${apiUrl}/health`, {
@@ -71,7 +69,6 @@ export async function runDoctor(options: { verbose?: boolean }) {
         'X-Akropolys-Site': siteId,
       },
     }).catch(err => {
-      // Throw fetch failures
       throw new Error(`Fetch failed: ${err.message}`);
     });
 

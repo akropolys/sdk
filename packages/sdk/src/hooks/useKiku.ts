@@ -1,9 +1,12 @@
+import { normalizeEntityImages } from '../entityImages';
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import type { VisitorRequest } from '../conversation';
 import { useAkropolysContext } from '../Provider';
 import { ChatMessage, ChatSource, VizEvent } from '../stream';
 import { ChatAction, ChatAttachment, CaptureTarget } from '../types';
 import { resolveDisplayFields } from '../client';
 import { setLiveValue } from '../liveValues';
+import { useCardFields } from './useCardFields';
 
 interface UseKikuOptions {
   initialMessages?: ChatMessage[];
@@ -30,13 +33,19 @@ interface UseKikuReturn {
 
   sendQueuedNow: () => void;
 
-  appendSpokenExchange: (heard: string, said: string, duration?: number, userAudioUrl?: string, assistantAudioUrl?: string) => void;
+  appendSpokenExchange: (heard: string, said: string, duration?: number, userAudioUrl?: string, assistantAudioUrl?: string, media?: SpokenMedia) => void;
   stop: () => void;
   stopped: boolean;
 
   interrupted: boolean;
   continueGenerating: () => void;
   reset: () => void;
+  humanPending: boolean; // a person from the site's team has been asked for or is replying
+  leaveHuman: () => void;
+  requests: VisitorRequest[]; // the visitor's requests for a person on this site, newest first
+  activeRequestId: string | null;
+  openRequest: (id: string) => void;
+  // A key Kiku made for the visitor with their request, until it has been shown to them.
 }
 
 interface PendingSend {
@@ -47,23 +56,35 @@ interface PendingSend {
   captureTargets?: CaptureTarget[];
 }
 
+// What a voice turn showed: photos the visitor attached, and the image the model rendered.
+export interface SpokenMedia {
+  images?: string[];
+  visualization?: string;
+  live?: string;
+}
+
 interface SpokenExchange {
   heard: string;
   said: string;
   duration?: number;
   userAudioUrl?: string;
   assistantAudioUrl?: string;
+  media?: SpokenMedia;
 }
 
-function appendSpoken(prev: ChatMessage[], heard: string, said: string, duration?: number, userAudioUrl?: string, assistantAudioUrl?: string): ChatMessage[] {
+function appendSpoken(prev: ChatMessage[], heard: string, said: string, duration?: number, userAudioUrl?: string, assistantAudioUrl?: string, media?: SpokenMedia): ChatMessage[] {
   const next = [...prev];
-  if (heard) next.push({ role: 'user', content: heard, spoken: true, audioUrl: userAudioUrl });
-  if (said) next.push({
+  const images = media?.images?.length ? media.images : undefined;
+  const live = media?.live;
+  if (heard || images) next.push({ role: 'user', content: heard, spoken: true, live, audioUrl: userAudioUrl, images });
+  if (said || media?.visualization) next.push({
     role: 'assistant',
     content: said,
     spoken: true,
+    live,
     thoughtForSeconds: duration && duration > 0 ? Math.round(duration * 10) / 10 : undefined,
     audioUrl: assistantAudioUrl,
+    visualization: media?.visualization,
   });
   return next;
 }
@@ -71,26 +92,22 @@ function appendSpoken(prev: ChatMessage[], heard: string, said: string, duration
 const CONTINUE_QUERY =
   'Continue your previous answer exactly where it stopped. Do not repeat anything already written — just carry on from the last character.';
 
-function enrichSources(sources: ChatSource[], display?: import('../types').DisplayConfig): ChatSource[] {
+function enrichSources(sources: ChatSource[], cardFields: string[]): ChatSource[] {
   return sources.map(s => {
-    const d = resolveDisplayFields(s.fields || s, display);
+    const d = resolveDisplayFields(s.fields || s, cardFields);
     return {
       ...s,
       name: s.name || d.title,
-      price: s.price || d.price,
-      image: s.image || d.image,
-      brand: s.brand || d.subtitle,
-      currency:
-        s.currency ||
-        (typeof (s.fields as any)?.currency === 'string' ? (s.fields as any).currency : '') ||
-        (typeof d.price === 'string' ? d.price.match(/[A-Z]{3}/)?.[0] : '') ||
-        undefined,
+      image: s.image || d.image || normalizeEntityImages(s.images, undefined, s.url)[0]?.url,
+      images: normalizeEntityImages(s.images ?? s.fields?.images ?? d.images, s.image || d.image, s.url),
+      details: d.details,
     };
   });
 }
 
 export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
   const client = useAkropolysContext();
+  const cardFields = useCardFields();
   const [messages, setMessages] = useState<ChatMessage[]>(options.initialMessages ?? []);
   const [sources, setSources] = useState<ChatSource[]>([]);
   const [referencedIds, setReferencedIds] = useState<string[]>([]);
@@ -128,6 +145,144 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
   const onMetaRef = useRef(options.onMeta);
   const onDoneRef = useRef(options.onDone);
   const onErrorRef = useRef(options.onError);
+
+  const [conversationId, setConversationId] = useState<string | null>(() => client?.api.conversation?.id ?? null);
+  const lastSentAtRef = useRef(0);
+  const [humanStatus, setHumanStatus] = useState<string | null>(null);
+  // A request found at mount is replayed once, so a reload or page change keeps what was said to the team.
+  const resumeRef = useRef({ id: conversationId, upTo: client?.api.conversation?.cursor ?? 0, shown: 0, auto: true });
+
+  const [requests, setRequests] = useState<VisitorRequest[]>([]);
+  const [attached, setAttached] = useState(0);
+
+  const loadRequests = useCallback(async (): Promise<VisitorRequest[]> => {
+    if (!client) return [];
+    const list = await client.api.myRequests().catch(() => [] as VisitorRequest[]);
+    setRequests(list);
+    return list;
+  }, [client]);
+
+  // Lets go of the request in this browser without ending it; it stays in the visitor's requests.
+  const detach = useCallback(() => {
+    client?.api.forgetConversation();
+    resumeRef.current = { id: null, upTo: 0, shown: 0, auto: false };
+    setConversationId(null);
+    setHumanStatus(null);
+    loadRequests();
+  }, [client, loadRequests]);
+
+  // Shows one of the visitor's requests in the chat, replacing whatever was on screen.
+  const openRequest = useCallback(async (id: string) => {
+    if (!client) return;
+    const last = await client.api.resumeRequest(id);
+    if (last === null) return;
+    activeStreamRef.current?.destroy();
+    stopFlush();
+    streamDoneRef.current = true;
+    pendingRef.current = null;
+    setQueuedMessage(null);
+    setLoading(false);
+    setStreaming(false);
+    setMessages([]);
+    resumeRef.current = { id, upTo: last, shown: 0, auto: false };
+    setHumanStatus(null);
+    setConversationId(id);
+    setAttached(n => n + 1);
+  }, [client, stopFlush]);
+
+  useEffect(() => { loadRequests(); }, [loadRequests]);
+
+  const leaveHuman = useCallback(() => {
+    client?.api.leaveConversation();
+    setConversationId(null);
+    setHumanStatus(null);
+    setTimeout(loadRequests, 600);
+  }, [client, loadRequests]);
+
+  // While a person may reply, keep one live connection and add each human reply to the conversation.
+  useEffect(() => {
+    if (!client || !conversationId) return;
+    const abort = new AbortController();
+    let status: string | null = null;
+    const resume = resumeRef.current;
+    let askedAt = 0;
+    // Nobody replies once the team has handed back or closed; asking again reattaches.
+    let finished = false;
+    const replaying = () => resume.id === conversationId && resume.shown < resume.upTo;
+    const onEvent = (e: { type: string; message?: { id: number; role: string; text: string; at: string; kind?: string }; status?: string }) => {
+      if (abort.signal.aborted) return;
+      if (e.type === 'message' && e.message) {
+        client.api.seenConversationMessage(e.message.id);
+        if (replaying()) {
+          if (e.message.id <= resume.shown) return;
+          resume.shown = e.message.id;
+          const { role, text } = e.message;
+          const at = new Date(e.message.at).getTime();
+          if (e.message.kind === 'joined') setMessages(prev => [...prev, { role: 'assistant', content: '', statusStage: 'team_joined' }]);
+          if (role === 'visitor' && text) setMessages(prev => [...prev, { role: 'user', content: text }]);
+          if (role === 'human') {
+            const waited = askedAt ? Math.max(1, Math.round((at - askedAt) / 1000)) : undefined;
+            setMessages(prev => [...prev, { role: 'assistant', content: text, human: true, repliedSeconds: waited }]);
+            setReferencedIds([]);
+            setSources([]);
+          }
+          if (role === 'visitor') { askedAt = at; lastSentAtRef.current = Math.max(lastSentAtRef.current, at); }
+          if (!replaying() && role === 'visitor' && (status === 'waiting' || status === 'human')) {
+            setMessages(prev => [...prev, { role: 'assistant', content: '', statusStage: 'with_team' }]);
+          }
+          return;
+        }
+        if (e.message.kind === 'joined') {
+          setMessages(prev => [...prev, { role: 'assistant', content: '', statusStage: 'team_joined' }]);
+          return;
+        }
+        if (e.message.role === 'system' && (status === 'kiku' || status === 'closed')) {
+          const stage = status === 'kiku' ? 'back_with_kiku' : 'team_closed';
+          setMessages(prev => [...prev, { role: 'assistant', content: '', statusStage: stage }]);
+          finished = true;
+          abort.abort();
+          return;
+        }
+        if (e.message.role !== 'human') return;
+        const waited = lastSentAtRef.current ? Math.max(1, Math.round((new Date(e.message.at).getTime() - lastSentAtRef.current) / 1000)) : undefined;
+        const text = e.message.text;
+        setMessages(prev => [...prev, { role: 'assistant', content: text, human: true, repliedSeconds: waited && waited > 0 ? waited : undefined }]);
+        setReferencedIds([]);
+        setSources([]);
+        return;
+      }
+      if (e.type === 'status' && e.status) {
+        if (status !== null && status !== e.status) loadRequests();
+        status = e.status;
+        setHumanStatus(e.status);
+      }
+    };
+    (async () => {
+      // A remembered request nobody is on any more comes back only if it holds a reply not yet seen.
+      if (resume.auto && resume.id === conversationId) {
+        const state = await client.api.conversationState().catch(() => null);
+        if (abort.signal.aborted) return;
+        resume.auto = false;
+        if (state && state.status !== 'waiting' && state.status !== 'human' && state.unread === 0) {
+          detach();
+          return;
+        }
+      }
+      let wait = 3000;
+      while (!abort.signal.aborted) {
+        const code = await client.api.conversationEvents(onEvent, abort.signal, replaying() ? resume.shown : undefined).catch(() => 0);
+        if (finished || (code === 200 && (status === 'kiku' || status === 'closed'))) return;
+        if (code === 404) {
+          client.api.forgetConversation();
+          setConversationId(null);
+          return;
+        }
+        wait = code === 200 ? 3000 : Math.min(wait * 2, 60000);
+        await new Promise(r => setTimeout(r, wait));
+      }
+    })();
+    return () => abort.abort();
+  }, [client, conversationId, attached, loadRequests, detach]);
 
   useEffect(() => {
     onTokenRef.current = options.onToken;
@@ -270,6 +425,19 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
       if (meta.intent) setLastIntent(meta.intent);
       if (Array.isArray(meta.allowedActions)) setAllowedActions(meta.allowedActions);
       if (meta.action) setLastAction(meta.action);
+      // A key Kiku made quietly, with a save or a request for a person, is kept here without asking anything of the visitor.
+      if (meta.action?.kikuKey && client) {
+        client.setKikuKey(meta.action.kikuKey);
+        if (meta.action.kikuPub) client.setKikuPub(meta.action.kikuPub);
+      }
+      if (meta.action?.type === 'request_human' && meta.action.conversationId && client) {
+
+        client.api.openConversation(meta.action.conversationId, meta.action.conversationToken);
+        setConversationId(client.api.conversation?.id ?? null);
+        setAttached(n => n + 1);
+        setHumanStatus('waiting');
+        loadRequests();
+      }
       onMetaRef.current?.(meta);
     });
 
@@ -280,7 +448,7 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
           const next = [...prev];
           const last = next[next.length - 1];
           if (last?.role === 'assistant') {
-            next[next.length - 1] = { ...last, statusMessage: st.message };
+            next[next.length - 1] = { ...last, statusMessage: st.message, statusStage: st.stage };
           }
           return next;
         });
@@ -375,6 +543,7 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
             next[next.length - 1] = {
               ...next[next.length - 1],
               visualizing: true,
+              visualizationType: viz.status === 'generating_video' ? 'video' : 'image',
               visualizingText: viz.status === 'generating_video' ? 'Generating video…' : 'Visualizing…'
             };
           }
@@ -418,27 +587,13 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
           const rawSources: ChatSource[] = lastMeta?.sources ?? [];
           next[next.length - 1] = {
             ...next[next.length - 1],
-            sources: enrichSources(rawSources, client?.display),
+            sources: enrichSources(rawSources, client?.api.cardFields ?? []),
             referencedIds: turnRefs,
             intent: lastMeta?.intent,
           };
         }
         return next;
       });
-
-      const metaAction = lastMeta?.action;
-      const builtin = ['search', 'capture', 'capture_all', 'delete', 'view_history', 'request_kiku_key', 'visualize', 'open_memory'];
-
-      if (metaAction?.type && !builtin.includes(metaAction.type)) {
-        const items = (lastMeta?.sources ?? []).filter((s: any) => s?.id && turnRefs.includes(s.id));
-        const detail = { ...metaAction, items };
-        window.dispatchEvent(new CustomEvent('akropolys:action', { detail }));
-        client.onAction?.(detail);
-        const kind = String(metaAction.type).replace(/[^a-z]/gi, '').toLowerCase();
-        if ((kind === 'addtocart' || kind === 'cart') && client.onAddToCart && items.length > 0) {
-          client.onAddToCart(items);
-        }
-      }
 
       onDoneRef.current?.(fullMessage);
     });
@@ -509,6 +664,7 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
 
   const send = useCallback(async (query: string, displayQuery?: string, attachments?: ChatAttachment[], forcedIntent?: string, captureTargets?: CaptureTarget[]) => {
     if (!query.trim()) return;
+    lastSentAtRef.current = Date.now();
 
     const userMsg: ChatMessage = {
       role: 'user',
@@ -535,10 +691,10 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     if (spokenQueueRef.current.length > 0) {
       const spoken = spokenQueueRef.current;
       spokenQueueRef.current = [];
-      for (const ex of spoken) settled = appendSpoken(settled, ex.heard, ex.said, ex.duration, ex.userAudioUrl, ex.assistantAudioUrl);
+      for (const ex of spoken) settled = appendSpoken(settled, ex.heard, ex.said, ex.duration, ex.userAudioUrl, ex.assistantAudioUrl, ex.media);
       setMessages(prev => {
         let next = prev;
-        for (const ex of spoken) next = appendSpoken(next, ex.heard, ex.said, ex.duration, ex.userAudioUrl, ex.assistantAudioUrl);
+        for (const ex of spoken) next = appendSpoken(next, ex.heard, ex.said, ex.duration, ex.userAudioUrl, ex.assistantAudioUrl, ex.media);
         return next;
       });
     }
@@ -610,7 +766,8 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     setLoading(false);
     setLastAction(null);
     setLastIntent(null);
-  }, []);
+    detach();
+  }, [detach, stopFlush]);
 
   const stop = useCallback(() => {
     activeStreamRef.current?.destroy();
@@ -638,21 +795,24 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     stop();
   }, [stop]);
 
-  const appendSpokenExchange = useCallback((heard: string, said: string, duration?: number, userAudioUrl?: string, assistantAudioUrl?: string) => {
+  const appendSpokenExchange = useCallback((heard: string, said: string, duration?: number, userAudioUrl?: string, assistantAudioUrl?: string, media?: SpokenMedia) => {
     const h = heard.trim();
     const s = said.trim();
-    if (!h && !s) return;
+    if (!h && !s && !media?.images?.length && !media?.visualization) return;
     if (loadingRef.current || streamingRef.current) {
-      spokenQueueRef.current.push({ heard: h, said: s, duration, userAudioUrl, assistantAudioUrl });
+      spokenQueueRef.current.push({ heard: h, said: s, duration, userAudioUrl, assistantAudioUrl, media });
       return;
     }
-    setMessages(prev => appendSpoken(prev, h, s, duration, userAudioUrl, assistantAudioUrl));
+    setMessages(prev => appendSpoken(prev, h, s, duration, userAudioUrl, assistantAudioUrl, media));
   }, []);
 
   const resolvedSources = useMemo(
-    () => enrichSources(sources, client?.display),
-    [sources, client?.display]
+    () => enrichSources(sources, cardFields),
+    [sources, cardFields]
   );
 
-  return { messages, sources: resolvedSources, referencedIds, loading, streaming, error, errorCode, lastAction, lastIntent, allowedActions, send, queuedMessage, sendQueuedNow, appendSpokenExchange, stop, stopped, interrupted, continueGenerating, reset };
+  return { messages, sources: resolvedSources, referencedIds, loading, streaming, error, errorCode, lastAction, lastIntent, allowedActions, send, queuedMessage, sendQueuedNow, appendSpokenExchange, stop, stopped, interrupted, continueGenerating, reset, humanPending: !!conversationId && (humanStatus === 'waiting' || humanStatus === 'human'), leaveHuman,
+    // A visitor with no Kiku identity still sees the one request this browser remembers.
+    requests: requests.length > 0 || !conversationId ? requests : [{ id: conversationId, status: (humanStatus ?? 'waiting') as VisitorRequest['status'], summary: '' }],
+    activeRequestId: conversationId, openRequest };
 }

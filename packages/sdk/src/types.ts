@@ -1,6 +1,22 @@
+/** Stable publisher identity is required. fields.url is optional and recommended for navigation. */
+export type IngestRecord = {
+  id: string | number;
+  fields?: Record<string, any>;
+  [key: string]: any;
+};
+
+export interface EntityImage {
+  url: string;
+  alt?: string;
+  caption?: string;
+}
+export type EntityImageInput = EntityImage | string;
+
 export type Entity<T extends Record<string, any> = Record<string, any>> = {
   url?: string;
   id?: string;
+  image?: string;
+  images?: EntityImageInput[];
 } & T;
 
 /** @deprecated Use Entity<T> instead */
@@ -57,7 +73,6 @@ export type RawProductInput<T extends Record<string, any> = Record<string, any>>
   metadata?: Record<string, any>;
 } & T;
 
-export type DisplayConfig = Record<string, string>;
 
 export interface AkropolysConfig {
 
@@ -69,14 +84,10 @@ export interface AkropolysConfig {
   apiToken?: string;
 
   shopperId?: string;
+  /** From signUser() on your server; only needed when your site requires signed user ids. */
+  userProof?: string;
 
-  vertical?: 'commerce' | 'property' | 'motor' | 'blog' | string;
 
-  onAction?: (action: ChatAction) => void;
-
-  onAddToCart?: (items: import('./stream').ChatSource[]) => void;
-
-  getCart?: () => unknown;
 
   onError?: (error: AkropolysError) => void;
 
@@ -84,7 +95,6 @@ export interface AkropolysConfig {
 
   indexContent?: boolean;
 
-  display?: DisplayConfig;
 
   kikuKey?: string;
 }
@@ -107,6 +117,11 @@ export interface SearchResponse {
 }
 
 export interface IngestResponse {
+  indexed?: number;
+  updated?: number;
+  skipped?: number;
+  queued?: number;
+  code?: 'reindex_queued';
   success: boolean;
   message?: string;
   count?: number;
@@ -150,18 +165,21 @@ export interface ChatAttachment {
 }
 
 export interface ImageMarkRegion {
-  gesture: 'ring' | 'cross' | 'scribble' | 'arrow' | 'text';
+  gesture: 'ring' | 'cross' | 'scribble' | 'arrow' | 'text' | 'selection' | 'pin';
   box: [number, number, number, number];
   to?: [number, number];
   text?: string;
+  id?: string;
+  points?: [number, number][];
+  targetBox?: [number, number, number, number];
 }
 
 export interface CaptureTarget {
+  id: string;
   name: string;
-  url: string;
+  url?: string;
   image?: string;
-  price?: string;
-  currency?: string;
+  fields?: Record<string, any>;
 }
 
 export interface ContentIngestPayload {
@@ -201,93 +219,4 @@ export interface SignedPayload<T = Record<string, any>> {
   siteId?: string;
   envelope: SignedEnvelope<T>;
   sig: string;
-}
-
-// 'idle' is a paid avatar that has not been told what to watch yet.
-export type ScoutStatus = 'idle' | 'active' | 'paused' | 'triggered' | 'expired' | 'canceled';
-
-// One check a scout makes against a record. Compiled from the shopper's
-// words when the scout is briefed, and never shown to them.
-export interface ScoutRule {
-  field: string;
-  op: string;
-  value: string;
-}
-
-export interface Scout {
-  id: string;
-  siteId: string;
-  shopperId: string;
-  name: string;
-  // What the shopper asked for, in their words. The fields below are what it
-  // compiled to.
-  brief: string;
-  // The entity being watched. Empty for a watch over a set.
-  subject: string;
-  rules: ScoutRule[];
-  actionType: string;
-  status: ScoutStatus;
-  // Which animal the shopper put on this scout. Empty means "derive one".
-  avatar: string;
-  dedicatedMinutes: number;
-  // Minutes this scout has burned, written in the same tick that spends them.
-  minutesUsed: number;
-  initialValue?: string;
-  triggerValue?: string;
-  createdAt: string;
-  updatedAt: string;
-  triggeredAt?: string;
-}
-
-export interface ScoutQuote {
-  minutes: number;
-  priceUSD: number;
-  unitPriceUSD: number;
-  // The gateway will not take less than minChargeUSD, whatever the quote says.
-  minChargeableMinutes: number;
-  minChargeUSD: number;
-}
-
-export interface ScoutCheckout {
-  url: string;
-  minutes: number;
-  priceUSD: number;
-}
-
-export interface ScoutEvent {
-  id: string;
-  scoutId: string;
-  eventType: string;
-  message: string;
-  payload?: Record<string, any>;
-  createdAt: string;
-}
-
-export interface CreateScoutInput {
-  name?: string;
-  brief: string;
-  subject: string;
-  rules: ScoutRule[];
-  actionType?: string;
-  dedicatedMinutes?: number;
-  initialValue?: string;
-  siteId?: string;
-  kikuKey?: string;
-}
-
-export interface ListScoutsResponse {
-  count: number;
-  scouts: Scout[];
-  balance: number;
-}
-
-export interface GetScoutResponse {
-  scout: Scout;
-  events: ScoutEvent[];
-}
-
-export interface ScoutActionResponse {
-  ok: boolean;
-  id: string;
-  status: ScoutStatus;
 }

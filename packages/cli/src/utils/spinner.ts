@@ -9,8 +9,7 @@ const SHOW_CURSOR = '\x1b[?25h';
 
 const CHARS: Record<string, string> = { '11': '█', '10': '▀', '01': '▄', '00': '·' };
 
-// A 2-row grid drawn with half-blocks, so the whole thing stays on one line and
-// clears with a single carriage return.
+// A 2-row grid drawn with half-blocks, so it stays on one line and clears with one carriage return.
 function frame(tick: number): string {
   const cycle = COLS + 3;
   const head = tick % cycle;

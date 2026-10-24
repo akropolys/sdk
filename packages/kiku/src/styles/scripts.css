@@ -13,7 +13,6 @@
 .hsk-cb-panel[data-script="nonlatin"] .hsk-cb-hello-ask,
 .hsk-cb-panel[data-script="nonlatin"] .hsk-cb-ai-text,
 .hsk-cb-panel[data-script="nonlatin"] .hsk-cb-user-bubble,
-.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-hint,
 .hsk-cb-panel[data-script="nonlatin"] .hsk-cb-chip,
 .hsk-cb-panel[data-script="nonlatin"] .hsk-cb-topbar-btn,
 .hsk-cb-panel[data-script="nonlatin"] .hsk-cb-textarea,
@@ -28,7 +27,6 @@
   line-height: 1.9;
 }
 
-.hsk-cb-panel[data-script="nonlatin"] .hsk-cb-hint { font-size: 11px; line-height: 16px; bottom: 4px; }
 .hsk-cb-panel[data-script="nonlatin"] .hsk-cb-voice-error {
   font-size: 12px;
   line-height: 1.7;
@@ -86,7 +84,6 @@
 .hsk-cb-panel[data-nastaliq="true"] .hsk-cb-hello-ask,
 .hsk-cb-panel[data-nastaliq="true"] .hsk-cb-ai-text,
 .hsk-cb-panel[data-nastaliq="true"] .hsk-cb-user-bubble,
-.hsk-cb-panel[data-nastaliq="true"] .hsk-cb-hint,
 .hsk-cb-panel[data-nastaliq="true"] .hsk-cb-chip,
 .hsk-cb-panel[data-nastaliq="true"] .hsk-cb-topbar-btn,
 .hsk-cb-panel[data-nastaliq="true"] .hsk-cb-textarea,
@@ -166,17 +163,6 @@
   border-radius: 12px;
 }
 
-.hsk-msg-audio-btn {
-  background: transparent;
-  border: none;
-  color: #888;
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  display: inline-flex;
-  align-items: center;
-}
-
 .hsk-cb-voice-mode-btn {
   width: 36px;
   height: 36px;
@@ -194,8 +180,7 @@
   font-family: inherit;
 }
 
-.hsk-cb-voice-mode-btn:hover:not(:disabled),
-.hsk-cb-mic-btn:hover:not(:disabled) {
+.hsk-cb-voice-mode-btn:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--hsk-primary, #ff6a33) 25%, transparent);
   color: var(--hsk-primary, #ff6a33);
   background: color-mix(in srgb, var(--hsk-primary, #ff6a33) 8%, transparent);
@@ -203,14 +188,6 @@
 }
 
 .hsk-cb-voice-mode-btn:disabled { opacity: .35; cursor: not-allowed; }
-
-.hsk-cb-voice-mode-btn--active,
-.hsk-cb-mic-btn--listening {
-  color: var(--hsk-primary, #ff6a33);
-  background: color-mix(in srgb, var(--hsk-primary, #ff6a33) 12%, transparent);
-}
-
-.hsk-cb-mic-btn--processing { color: var(--hsk-primary, #ff6a33); opacity: .7; }
 
 .hsk-cb-panel[data-script="nonlatin"] .hsk-animated-placeholder[data-fit="2"] { --hsk-ph-font-size: 13.5px; }
 .hsk-cb-panel[data-script="nonlatin"] .hsk-animated-placeholder[data-fit="3"] { --hsk-ph-font-size: 12px; }
@@ -223,9 +200,6 @@
   line-height: 1.35;
 }
 
-/* The loading screen must not restyle itself as the font it is waiting for
-   arrives, so it is pinned to the one stack guaranteed to be present.
-   Specificity has to beat [data-script="nonlatin"] *. */
 .hsk-cb-panel[data-script] .hsk-cb-chrome-loading,
 .hsk-cb-panel[data-script] .hsk-cb-chrome-loading * {
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;

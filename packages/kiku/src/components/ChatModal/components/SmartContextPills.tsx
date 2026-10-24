@@ -7,7 +7,6 @@ export interface SmartContextPillsProps {
   sources: ChatSource[];
   onSend: (text: string) => void;
   loading: boolean;
-  defaultCurrency?: string;
 }
 
 export function SmartContextPills({
@@ -15,37 +14,14 @@ export function SmartContextPills({
   sources,
   onSend,
   loading,
-  defaultCurrency = '',
 }: SmartContextPillsProps) {
   const tr = useT();
   if (!intent) return null;
 
   const pills: { label: string; query: string; emoji: string }[] = [];
 
-  const cheapest =
-    sources.length > 0
-      ? sources.reduce((min, s) => {
-          const p = parseFloat(String(s.price ?? '').replace(/[^0-9.]/g, ''));
-          const m = parseFloat(String(min.price ?? '').replace(/[^0-9.]/g, ''));
-          return !isNaN(p) && (isNaN(m) || p < m) ? s : min;
-        }, sources[0])
-      : null;
-
   const firstName = sources[0]?.name ?? '';
   const firstTwo = sources.slice(0, 2).map(s => s.name);
-
-  const priceCeiling = (): string | null => {
-    const nums = sources
-      .map(s => parseFloat(String(s.price ?? '').replace(/[^0-9.]/g, '')))
-      .filter(n => !isNaN(n) && n > 0);
-    if (nums.length === 0) return null;
-    const max = Math.max(...nums);
-    const mag = Math.pow(10, Math.floor(Math.log10(max)));
-    const rounded = Math.ceil(max / mag) * mag;
-    const raw = String(sources.find(s => s.price)?.price ?? '');
-    const symbol = raw.replace(/[0-9.,\s]/g, '') || defaultCurrency;
-    return `${symbol} ${rounded.toLocaleString()}`.trim();
-  };
 
   if (intent === 'search' && sources.length > 0) {
     if (firstTwo.length >= 2) {
@@ -55,20 +31,12 @@ export function SmartContextPills({
         query: tr('pillCompareTop2Query', { a: firstTwo[0], b: firstTwo[1] }),
       });
     }
-    if (cheapest?.name) {
-      const short = cheapest.name.split(' ').slice(0, 3).join(' ');
+    if (firstName) {
+      const short = firstName.split(' ').slice(0, 3).join(' ');
       pills.push({
         emoji: '💡',
         label: tr('pillMoreOn', { name: short }),
-        query: tr('pillMoreOnQuery', { name: cheapest.name }),
-      });
-    }
-    const ceiling = priceCeiling();
-    if (ceiling) {
-      pills.push({
-        emoji: '💰',
-        label: tr('pillUnder', { amount: ceiling }),
-        query: tr('pillUnderQuery', { amount: ceiling }),
+        query: tr('pillMoreOnQuery', { name: firstName }),
       });
     }
   } else if (intent === 'compare' && sources.length > 0) {

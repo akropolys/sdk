@@ -3,7 +3,7 @@
 Kiku is an intelligent shopping assistant that runs directly on Shopify storefronts with:
 - **Zero theme CSS conflict** via Web Component Shadow DOM isolation
 - **Automated Catalog Ingestion** on product views (`{{ product | json }}`)
-- **Native Shopify Cart Integration** via AJAX `/cart/add.js` and `/cart.js`
+- **Site actions** configured in Shell with your backend endpoint and request fields; cart operations require an endpoint that identifies the customer's cart
 - **Voice & Visual Search** built-in with multilingual support
 
 ---
@@ -45,6 +45,8 @@ If you are packaging Kiku as a Shopify App:
 
 ## JavaScript API (`window.Kiku`)
 
+Each product requires its stable Shopify product ID. The snippets serialize it as a string to preserve large IDs exactly. `fields.url` is optional but recommended for the product page; it is navigation metadata, not identity. Kiku can show and save a record without a URL.
+
 Once loaded, Kiku exposes `window.Kiku`:
 
 ```javascript
@@ -61,9 +63,8 @@ window.Kiku.toggle();
 window.Kiku.ingest({
   id: "12345",
   title: "Custom Hoodie",
-  price: "49.99",
   image: "https://example.com/image.jpg",
-  url: "/products/custom-hoodie"
+  fields: { price: "49.99", url: "/products/custom-hoodie" }
 });
 
 // Access underlying AkropolysClient instance

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useSearch, SearchResult, AkropolysTheme, useAkropolysContext } from '@akropolys/sdk';
+import { useSearch, SearchResult, AkropolysTheme, useAkropolysContext, useCardFields } from '@akropolys/sdk';
+import { detailsOf } from '../utils/cardDetails';
 import { cn } from '../utils/cn';
 
 export interface SearchBarProps {
@@ -43,6 +44,7 @@ export function SearchBar({
   const [open, setOpen] = useState(false);
   const { results, loading, search, clear } = useSearch({ debounceMs });
   const client = useAkropolysContext();
+  const cardFields = useCardFields();
   const wrap = useRef<HTMLDivElement>(null);
   const ignoreNextQueryChange = useRef(false);
 
@@ -81,9 +83,10 @@ export function SearchBar({
 
   const handleCommitSearch = () => {
     if (!query.trim()) return;
-    client.api.searchVector(query, 1, undefined, true).catch(() => {});
     if (results.length > 0) {
       handleSelect(results[0]);
+    } else {
+      client.api.searchVector(query, 1, undefined, true).catch(() => {});
     }
   };
 
@@ -177,9 +180,9 @@ export function SearchBar({
                     </span>
                     <div className="hsk-sb-row-body">
                       <div className="hsk-sb-row-title">{r.entity.title ?? r.entity.name}</div>
-                      {(r.entity.category || r.entity.brand) && (
+                      {detailsOf({ fields: r.entity.fields ?? r.entity }, cardFields)[0] && (
                         <div className="hsk-sb-row-sub">
-                          {r.entity.category ?? r.entity.brand}
+                          {detailsOf({ fields: r.entity.fields ?? r.entity }, cardFields)[0].value}
                         </div>
                       )}
                     </div>

@@ -3,20 +3,20 @@ export type { DisplayFields } from './client';
 export { AkropolysAPI } from './api';
 export type { UIStrings, ScriptFont, SpeechResult, VoiceRefusal } from './api';
 export { KikuStream } from './stream';
-export { AkropolysProvider, useAkropolysContext } from './Provider';
+export { AkropolysContext, AkropolysProvider, useAkropolysContext } from './Provider';
 export { useAkropolys } from './hooks/useAkropolys';
 export { useSearch } from './hooks/useSearch';
 export { useIngest } from './hooks/useIngest';
 export { useListIngest } from './hooks/useListIngest';
 export { usePageIngest } from './hooks/usePageIngest';
 export { useKiku } from './hooks/useKiku';
+export { useCardFields } from './hooks/useCardFields';
+export type { SpokenMedia } from './hooks/useKiku';
 export { useLiveContext } from './hooks/useLiveContext';
 export { useLiveValue, useLiveValues } from './hooks/useLiveValues';
 export { useLiveData } from './hooks/useLiveData';
-export { useScouts } from './hooks/useScouts';
 export { useAllowance } from './hooks/useAllowance';
 export type { UseAllowanceReturn } from './hooks/useAllowance';
-export type { UseScoutsOptions, UseScoutsReturn } from './hooks/useScouts';
 export {
   setLiveValue,
   getLiveValue,
@@ -33,20 +33,23 @@ export {
 } from './liveValues';
 export type { LiveValue, FieldSplit } from './liveValues';
 export { pipeLiveData, stopLiveData } from './liveIngest';
-export type { LiveRecord } from './liveIngest';
+export type { LiveRecord, LiveSkipped, LiveIngestResult, PipeOptions } from './liveIngest';
+export type { UseLiveDataReturn } from './hooks/useLiveData';
 export { subscribeLiveStream } from './liveStream';
 export type { LiveStreamOptions } from './liveStream';
-export type { ChatMessage, ChatSource, ChatMetadata, StaleNotice } from './stream';
+export type { ChatMessage, ChatSource, ChatMetadata, StaleNotice, CardDetail } from './stream';
 export type {
   Entity,
+  EntityImage,
+  EntityImageInput,
   Product,
   RawProductInput,
   AkropolysConfig,
-  DisplayConfig,
   SearchRequest,
   SearchResult,
   SearchResponse,
   IngestResponse,
+  IngestRecord,
   AkropolysError,
   AkropolysTheme,
   ChatAction,
@@ -58,11 +61,7 @@ export type {
   CaptureTarget,
   SignedPayload,
   SignedEnvelope,
-  Scout,
-  ScoutEvent,
-  ScoutStatus,
-  CreateScoutInput,
-  ListScoutsResponse,
-  GetScoutResponse,
-  ScoutActionResponse,
 } from './types';
+export type { VisitorRequest } from './conversation';
+
+export { normalizeEntityImages } from './entityImages';

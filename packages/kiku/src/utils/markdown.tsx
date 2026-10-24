@@ -10,8 +10,27 @@ const SPACING_UNIT_REGEX = /(\d+)\s+(MP|mAh|W|GB|MB|KHz|Hz|KSh|KES|USD|EUR)\b/gi
 const TOKEN_SPLIT_REGEX = /(!\[[^\]]*\]\([^)]+\)|\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*|`[^`]+`)/g;
 const IMAGE_PARSE_REGEX = /^!\[([^\]]*)\]\(([^)]+)\)$/;
 const LINK_PARSE_REGEX = /^\[([^\]]+)\]\(([^)]+)\)$/;
-const SAFE_IMG_REGEX = /^(https?|data:image|blob):/i;
+const LOCAL_IMG_REGEX = /^(data:image|blob):/i;
 const SAFE_LINK_REGEX = /^(https?|mailto|tel):/i;
+
+// Only web, mail and phone links, or paths on this site: a javascript: address would run in the host page.
+export function safeHref(url: unknown): string | undefined {
+  const u = String(url ?? '').trim();
+  return SAFE_LINK_REGEX.test(u) || (u.startsWith('/') && !u.startsWith('//')) ? u : undefined;
+}
+let imageHosts: ReadonlySet<string> | null = null;
+
+// A reply's image loads only from this site or a host the caller names: any other address could carry the chat out.
+function safeImage(url: string): boolean {
+  if (LOCAL_IMG_REGEX.test(url)) return true;
+  if (typeof location === 'undefined') return false;
+  try {
+    const u = new URL(url, location.href);
+    return /^https?:$/.test(u.protocol) && (u.host === location.host || !!imageHosts?.has(u.host));
+  } catch {
+    return false;
+  }
+}
 const MEMORY_LINK_FILTER_REGEX = /memory|mimi/i;
 const MEMORY_URL_FILTER_REGEX = /mimi\.akropolys/i;
 
@@ -49,8 +68,7 @@ const parseInline = (text: string, keyPrefix: string): React.ReactNode => {
     if (imageMatch) {
       const alt = imageMatch[1];
       const url = imageMatch[2];
-      const isSafeUrl = SAFE_IMG_REGEX.test(url) || url.startsWith('/');
-      if (isSafeUrl) {
+      if (safeImage(url)) {
         return (
           <img
             key={key}
@@ -175,15 +193,18 @@ export function TableWrapper({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function renderMarkdown(content: string, streaming = false): React.ReactNode {
-  return buildMarkdown(content, streaming);
+export function renderMarkdown(content: string, streaming = false, hosts?: ReadonlySet<string>): React.ReactNode {
+  imageHosts = hosts ?? null;
+  try {
+    return buildMarkdown(content, streaming);
+  } finally {
+    imageHosts = null;
+  }
 }
 
 function buildMarkdown(content: string, streaming: boolean): React.ReactNode {
   const lines = content.split('\n');
   if (streaming && lines.length > 0) {
-    // A table renders only once it can render whole: a row still being typed,
-    // or a header whose separator has not landed, is held back a beat.
     if (!content.endsWith('\n') && lines[lines.length - 1].trim().startsWith('|')) {
       lines.pop();
     }
@@ -227,8 +248,7 @@ function buildMarkdown(content: string, streaming: boolean): React.ReactNode {
       flushTextBubble();
       const alt = standaloneImageMatch[1];
       const url = standaloneImageMatch[2];
-      const isSafeUrl = /^(https?|data:image|blob):/i.test(url) || url.startsWith('/');
-      if (isSafeUrl) {
+      if (safeImage(url)) {
         blocks.push(
           <div key={key} className="hsk-markdown-img-block">
             <img

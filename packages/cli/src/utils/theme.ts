@@ -37,8 +37,7 @@ export function gradient(text: string, from: RGB = BRAND, to: RGB = EMBER): stri
 export const dim = (text: string) => rgb(MUTED, text);
 export const bold = (text: string) => (NO_COLOR ? text : `\x1b[1m${text}\x1b[22m`);
 
-// The arch is kiku's mark; the wordmark carries the same ramp as the loader so
-// the whole run reads as one object.
+// The arch is kiku's mark; the wordmark carries the same ramp as the loader.
 export function banner(): string {
   const arch = [' ▟███▙ ', '▐█   █▌'];
   const left = arch.map((row, i) => rgb(mix(BRAND, EMBER, i / 2), row));

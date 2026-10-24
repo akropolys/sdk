@@ -1,13 +1,40 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { cn } from '../../../utils/cn';
 import { useT } from '../types';
 
+export interface TimelineExchangeItem {
+  idx: number;
+  text: string;
+}
+
 export interface ConversationTimelineProps {
-  items: { idx: number; text: string }[];
+  items: TimelineExchangeItem[];
   activeIdx: number;
   progress: number;
   onJump: (idx: number) => void;
   side?: 'left' | 'right';
+}
+
+const WAVE_X = 14;
+const WAVE_SWAY = 6;
+
+// Sinusoidal curve connecting each exchange along the vertical axis
+function buildWave(items: (HTMLButtonElement | null)[], anchor: number) {
+  const nodes = items.filter(Boolean) as HTMLButtonElement[];
+  if (nodes.length < 2) return null;
+  const centre = (n: HTMLButtonElement) => n.offsetTop + n.offsetHeight / 2;
+  const height = centre(nodes[nodes.length - 1]) + 10;
+  const sway = (i: number) => (i === anchor ? WAVE_SWAY * 1.3 : WAVE_SWAY * 0.6) * (i % 2 ? 1 : -1);
+
+  let d = `M ${WAVE_X} 0`;
+  let prevY = 0;
+  nodes.forEach((n, i) => {
+    const y = centre(n);
+    const mid = prevY + (y - prevY) / 2;
+    d += ` C ${WAVE_X + sway(i)} ${mid}, ${WAVE_X + sway(i)} ${mid}, ${WAVE_X} ${y}`;
+    prevY = y;
+  });
+  return { d: d + ` L ${WAVE_X} ${height}`, height };
 }
 
 export function ConversationTimeline({
@@ -22,6 +49,7 @@ export function ConversationTimeline({
   const trackRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const cursorRef = useRef<HTMLSpanElement>(null);
+  const [wave, setWave] = useState<{ d: string; height: number } | null>(null);
 
   let anchor = 0;
   for (let i = 0; i < items.length; i++) {
@@ -38,6 +66,8 @@ export function ConversationTimeline({
     if (cursor) {
       cursor.style.transform = `translateY(${node.offsetTop + node.offsetHeight / 2}px)`;
     }
+
+    setWave(buildWave(itemRefs.current, anchor));
 
     if (track && container) {
       const containerHeight = container.clientHeight;
@@ -65,6 +95,17 @@ export function ConversationTimeline({
         className="hsk-cb-timeline-track"
         style={{ '--hsk-tl-progress': progress } as React.CSSProperties}
       >
+        {wave && (
+          <svg
+            className="hsk-cb-tl-wave"
+            width="28"
+            height={wave.height}
+            viewBox={`0 0 28 ${wave.height}`}
+            aria-hidden="true"
+          >
+            <path d={wave.d} />
+          </svg>
+        )}
         <span className="hsk-cb-tl-cursor" ref={cursorRef} aria-hidden="true" />
         {items.map((item, i) => (
           <button

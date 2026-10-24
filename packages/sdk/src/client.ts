@@ -1,14 +1,10 @@
+import { ingestionKey, ingestionFingerprint, ingestionEntity, normalizeIngestRecord } from './ingestionRecord';
+import { normalizeEntityImages } from './entityImages';
 import {
   AkropolysConfig,
   ContentIngestPayload,
   ChatAttachment,
   CaptureTarget,
-  Scout,
-  ScoutEvent,
-  CreateScoutInput,
-  ListScoutsResponse,
-  GetScoutResponse,
-  ScoutActionResponse,
 } from './types';
 import { AkropolysAPI, UIStrings, ScriptFont } from './api';
 import { KikuStream } from './stream';
@@ -66,20 +62,27 @@ function generateUUID(): string {
 }
 
 export interface DisplayFields {
+  images?: import("./types").EntityImage[];
   title: string;
   image?: string;
-  price?: string;
-  subtitle?: string;
+  details: import('./stream').CardDetail[];
 }
 
-export function resolveDisplayFields(fields: Record<string, any>, display?: import('./types').DisplayConfig): DisplayFields {
-  const titleKey = display?.cardTitle || '';
-  const imageKey = display?.cardImage || '';
-  const subtitleKey = display?.cardSubtitle || '';
-  const priceKey = display?.cardPrice || '';
+// cardFields is the site's own list of the fields a card shows, in order, set in the catalogue; none by default.
+function cardDetails(fields: Record<string, any>, keys: string[]): import('./stream').CardDetail[] {
+  const out: import('./stream').CardDetail[] = [];
+  for (const k of keys) {
+    const v = fields[k];
+    if (v === undefined || v === null || v === '' || typeof v === 'object') continue;
+    out.push({ label: k.replace(/[_-]+/g, ' '), value: String(v) });
+  }
+  return out;
+}
+
+export function resolveDisplayFields(fields: Record<string, any>, cardFields: string[] = []): DisplayFields {
 
   const commonTitleKeys = ['title', 'name', 'label', 'headline', 'subject', 'job_title', 'listing_title', 'common_name'];
-  let title = fields[titleKey] || '';
+  let title = '';
   if (!title) {
     for (const k of commonTitleKeys) {
       if (typeof fields[k] === 'string' && fields[k].trim() !== '') {
@@ -100,7 +103,7 @@ export function resolveDisplayFields(fields: Record<string, any>, display?: impo
   }
 
   const commonImageKeys = ['image', 'images', 'thumbnail', 'photo', 'cover', 'featured_image'];
-  let image = fields[imageKey] || undefined;
+  let image: string | undefined;
   if (!image) {
     for (const k of commonImageKeys) {
       const v = fields[k];
@@ -114,20 +117,14 @@ export function resolveDisplayFields(fields: Record<string, any>, display?: impo
     }
   }
 
-  return {
-    title,
-    image,
-    price:    fields[priceKey] ?? fields.price ?? fields.cost ?? fields.listingPrice,
-    subtitle: fields[subtitleKey] ?? fields.brand ?? fields.category,
-  };
+  const images = normalizeEntityImages(fields.images, image);
+  return { title, image: image || images[0]?.url, images, details: cardDetails(fields, cardFields) };
 }
 
 export class AkropolysClient {
   readonly api: AkropolysAPI;
   get apiUrl(): string { return this.api.apiUrl; }
   voiceUrl?: string;
-  readonly vertical: string;
-  readonly display?: import('./types').DisplayConfig;
   readonly entities = {
     query: async (
       params: { q: string },
@@ -157,21 +154,6 @@ export class AkropolysClient {
     }
   };
 
-  readonly scouts = {
-    create: (input: CreateScoutInput, signal?: AbortSignal) => this.api.createScout(input, signal),
-    list: (filter?: { siteId?: string; status?: string; kikuKey?: string }, signal?: AbortSignal) => this.api.listScouts(filter, signal),
-    get: (id: string, kikuKey?: string, signal?: AbortSignal) => this.api.getScout(id, kikuKey, signal),
-    pause: (id: string, kikuKey?: string, signal?: AbortSignal) => this.api.pauseScout(id, kikuKey, signal),
-    resume: (id: string, kikuKey?: string, signal?: AbortSignal) => this.api.resumeScout(id, kikuKey, signal),
-    cancel: (id: string, kikuKey?: string, signal?: AbortSignal) => this.api.cancelScout(id, kikuKey, signal),
-    quote: (minutes: number, signal?: AbortSignal) => this.api.scoutQuote(minutes, signal),
-    checkout: (input: { minutes: number; avatar?: string; returnUrl?: string; siteId?: string }, signal?: AbortSignal) => this.api.scoutCheckout(input, signal),
-    setAvatar: (id: string, avatar: string, kikuKey?: string, signal?: AbortSignal) => this.api.setScoutAvatar(id, avatar, kikuKey, signal),
-    dispatch: (id: string, kikuKey?: string, signal?: AbortSignal) => this.api.dispatchScout(id, kikuKey, signal),
-    balance: (siteId?: string, kikuKey?: string, signal?: AbortSignal) => this.api.scoutBalance(siteId, kikuKey, signal),
-    addMinutes: (id: string, minutes: number, kikuKey?: string, signal?: AbortSignal) => this.api.addScoutMinutes(id, minutes, kikuKey, signal),
-  };
-
   allowance = (siteId?: string, signal?: AbortSignal) => this.api.allowance(siteId, signal);
 
   private ingestQueue: Record<string, any>[] = [];
@@ -179,15 +161,13 @@ export class AkropolysClient {
   private ingestedUrls = new Map<string, string>();
   private onlineHandler: (() => void) | null = null;
   private shopperId?: string;
+  private userProof?: string;
   private sessionId: string = '';
   private deviceId: string = '';
   private kikuPub: string | null = null;
   private kikuKey: string | null = null;
   private shopperName: string | null = null;
   private authLoading?: boolean;
-  public onAction?: (action: import('./types').ChatAction) => void;
-  public onAddToCart?: (items: import('./stream').ChatSource[]) => void;
-  public getCart?: () => unknown;
   public onError?: (error: import('./types').AkropolysError) => void;
 
   private contextProviders: Array<(signal?: AbortSignal) => Promise<Record<string, any>>> = [];
@@ -201,6 +181,7 @@ export class AkropolysClient {
   private contentRetryCount = 0;
   private contentIndexerCleanup: (() => void) | null = null;
   private lastIngestedItem: Record<string, any> | null = null;
+  private lastIngestedPageURL = '';
 
   private static INGEST_CACHE_KEY = 'akropolys_ingested_v3';
   private static INGEST_CACHE_TTL = 24 * 60 * 60 * 1000; // 24h
@@ -229,26 +210,22 @@ export class AkropolysClient {
     } catch {  }
   }
 
-  static readonly DEFAULT_API_URL = 'https://agora-740936679905.europe-west1.run.app/v1';
+  static readonly DEFAULT_API_URL = 'https://api.akropolys.cloud/v1';
+  static readonly DEFAULT_VOICE_URL = 'https://voice.akropolys.cloud';
 
   constructor(config: AkropolysConfig) {
     const siteId = config.siteId || getEnvVar('NEXT_PUBLIC_AKROPOLYS_SITE_ID') || '';
     const apiUrl = config.apiUrl || getEnvVar('NEXT_PUBLIC_AKROPOLYS_API_URL') || AkropolysClient.DEFAULT_API_URL;
     const apiToken = config.apiToken || getEnvVar('NEXT_PUBLIC_AKROPOLYS_API_TOKEN') || '';
-    const voiceUrl = config.voiceUrl || getEnvVar('NEXT_PUBLIC_AKROPOLYS_VOICE_URL');
-    if (voiceUrl) this.voiceUrl = voiceUrl;
+    this.voiceUrl = config.voiceUrl || getEnvVar('NEXT_PUBLIC_AKROPOLYS_VOICE_URL') || AkropolysClient.DEFAULT_VOICE_URL;
 
     if (!siteId) console.error('[Akropolys] Missing siteId — pass <AkropolysProvider siteId=…> or set NEXT_PUBLIC_AKROPOLYS_SITE_ID.');
     if (!apiToken) console.error('[Akropolys] Missing apiToken — pass <AkropolysProvider apiToken=…> or set NEXT_PUBLIC_AKROPOLYS_API_TOKEN.');
 
     this.shopperId = config.shopperId;
+    this.userProof = config.userProof;
     this.authLoading = config.authLoading;
-    this.onAction = config.onAction;
-    this.onAddToCart = config.onAddToCart;
-    this.getCart = config.getCart;
     this.onError = config.onError;
-    this.vertical = config.vertical || 'commerce';
-    this.display = config.display;
     if (config.kikuKey) this.kikuKey = config.kikuKey;
     this.initSession();
     this.initDevice();
@@ -264,15 +241,14 @@ export class AkropolysClient {
       apiToken,
       () => this.getShopperId(),
       () => this.sessionId,
-      this.vertical,
       () => this.deviceId,
       () => this.kikuPub ?? undefined,
       () => this.shopperName ?? undefined,
-      () => { try { return this.getCart?.(); } catch { return undefined; } },
       () => this.shopperLanguage ?? undefined,
       () => this.entityLanguageMode ?? undefined,
       () => this.kikuKey ?? undefined
     );
+    this.api.userProof = config.userProof;
     setInstance(this);
 
     if (typeof window !== 'undefined') {
@@ -325,30 +301,18 @@ export class AkropolysClient {
       raw: {}
     };
     if (this.lastIngestedItem) {
-      const itemUrl = this.lastIngestedItem.url;
+      const record = ingestionEntity(this.lastIngestedItem);
+      const itemUrl = record.fields?.url ?? record.url;
+      let onPage = this.lastIngestedPageURL === window.location.href;
       if (itemUrl) {
         try {
-          const parsedUrl = new URL(itemUrl, window.location.origin);
-          if (parsedUrl.pathname === window.location.pathname) {
-            ctx.raw = this.lastIngestedItem;
-            ctx.url = parsedUrl.href;
-            if (this.lastIngestedItem.name || this.lastIngestedItem.title) {
-              ctx.title = this.lastIngestedItem.name || this.lastIngestedItem.title;
-            }
-          }
-        } catch {
-          if (window.location.href.endsWith(itemUrl) || itemUrl.endsWith(window.location.pathname)) {
-            ctx.raw = this.lastIngestedItem;
-            try {
-              ctx.url = new URL(itemUrl, window.location.origin).href;
-            } catch {
-              ctx.url = itemUrl;
-            }
-            if (this.lastIngestedItem.name || this.lastIngestedItem.title) {
-              ctx.title = this.lastIngestedItem.name || this.lastIngestedItem.title;
-            }
-          }
-        }
+          const parsed = new URL(itemUrl, window.location.origin);
+          onPage = parsed.origin === window.location.origin && parsed.pathname === window.location.pathname;
+        } catch { onPage = false; }
+      }
+      if (onPage) {
+        ctx.raw = { ...(record.fields ?? {}), ...record };
+        ctx.title = record.title || record.name || record.fields?.title || record.fields?.name || ctx.title;
       }
     }
     return ctx;
@@ -391,13 +355,15 @@ export class AkropolysClient {
     if (config.siteId) this.api.siteId = config.siteId;
     if (config.apiToken) this.api.apiToken = config.apiToken;
     if (config.voiceUrl !== undefined) this.voiceUrl = config.voiceUrl;
-    if (config.vertical !== undefined) {
-      (this as any).vertical = config.vertical;
-      this.api.vertical = config.vertical;
-    }
-    if (config.display !== undefined) {
-      (this as any).display = config.display;
-    }
+  }
+
+  setUserProof(proof: string | undefined) {
+    this.userProof = proof;
+    this.api.userProof = proof;
+  }
+
+  getUserProof(): string | undefined {
+    return this.userProof;
   }
 
   setShopperId(id: string | undefined) {
@@ -601,6 +567,10 @@ export class AkropolysClient {
     return this.api.entityPreview(language);
   }
 
+  storeScene(image: string) {
+    return this.api.storeScene(image);
+  }
+
   baseFont() {
     return this.api.baseFont();
   }
@@ -609,7 +579,7 @@ export class AkropolysClient {
     return this.api.synthesizeSpeech(text, voice, language ?? this.getShopperLanguage(), signal);
   }
 
-  private static CHROME_STRINGS_CACHE_VERSION = 4;
+  private static CHROME_STRINGS_CACHE_VERSION = 6;
 
   getCachedUIStrings(language: string, defaults: Record<string, string>): UIStrings | null {
     if (typeof window === 'undefined' || !language) return null;
@@ -623,7 +593,6 @@ export class AkropolysClient {
           return {
             strings: cached.strings,
             complete: true,
-            curated: cached.curated !== false,
             dir: cached.dir === 'rtl' ? 'rtl' : 'ltr',
             bcp47: typeof cached.bcp47 === 'string' ? cached.bcp47 : '',
             font: cached.font?.family && cached.font?.faces?.length ? cached.font : null,
@@ -634,14 +603,27 @@ export class AkropolysClient {
     return null;
   }
 
-  async getUIStrings(language: string, defaults: Record<string, string>): Promise<UIStrings> {
+  private readonly uiStringsPending = new Map<string, Promise<UIStrings>>();
+
+  getUIStrings(language: string, defaults: Record<string, string>): Promise<UIStrings> {
+    const key = `${language.toLowerCase().trim()}:${AkropolysClient.hashStrings(defaults)}`;
+    const pending = this.uiStringsPending.get(key);
+    if (pending) return pending;
+    const request = this.loadUIStrings(language, defaults).finally(() => {
+      this.uiStringsPending.delete(key);
+    });
+    this.uiStringsPending.set(key, request);
+    return request;
+  }
+
+  private async loadUIStrings(language: string, defaults: Record<string, string>): Promise<UIStrings> {
     const fingerprint = AkropolysClient.hashStrings(defaults);
     const cacheKey = `akropolys_ui_strings_v${AkropolysClient.CHROME_STRINGS_CACHE_VERSION}_${language.toLowerCase().trim()}_${fingerprint}`;
 
     const cachedHit = this.getCachedUIStrings(language, defaults);
     if (cachedHit) return cachedHit;
 
-    const english: UIStrings = { strings: {}, complete: false, curated: true, dir: 'ltr', bcp47: '', font: null };
+    const english: UIStrings = { strings: {}, complete: false, dir: 'ltr', bcp47: '', font: null };
 
     if (typeof window !== 'undefined') {
       try {
@@ -652,7 +634,6 @@ export class AkropolysClient {
             return {
               strings: cached.strings,
               complete: true,
-              curated: cached.curated !== false,
               dir: cached.dir === 'rtl' ? 'rtl' : 'ltr',
               bcp47: typeof cached.bcp47 === 'string' ? cached.bcp47 : '',
               font: cached.font?.family && cached.font?.faces?.length ? cached.font : null,
@@ -678,7 +659,7 @@ export class AkropolysClient {
             localStorage.removeItem(k);
           }
         }
-        localStorage.setItem(cacheKey, JSON.stringify({ strings: translated, dir: result.dir, bcp47: result.bcp47, font: result.font, curated: result.curated }));
+        localStorage.setItem(cacheKey, JSON.stringify({ strings: translated, dir: result.dir, bcp47: result.bcp47, font: result.font }));
       } catch {  }
     }
     return result;
@@ -752,62 +733,33 @@ export class AkropolysClient {
   }
 
   async ingest<T extends Record<string, any>>(entity: T): Promise<void> {
-    this.lastIngestedItem = entity;
-    const target = (entity as any).envelope?.entity || entity;
-    const id = target.id ?? target.productId ?? target.slug ?? target.url ?? target.name ?? '';
-    const url = target.url || (typeof window !== 'undefined' ? window.location.href : '');
-
-    if (!id && !url) {
-      console.warn('[Akropolys] Ingestion warning: Item is missing both a stable identifier and a URL. Skipping.');
-      return;
-    }
-
-    const fingerprint = stableStringify(entity);
-    if (url) {
-      if (this.ingestedUrls.get(url) === fingerprint) {
-        return;
-      }
-      this.ingestedUrls.set(url, fingerprint);
-      this.saveIngestedCache();
-    }
-
-    this.ingestQueue.push(entity);
+    const key = ingestionKey(entity);
+    const fingerprint = ingestionFingerprint(entity);
+    const payload = entity.envelope ? entity : normalizeIngestRecord(entity);
+    this.lastIngestedItem = payload;
+    this.lastIngestedPageURL = typeof window !== 'undefined' ? window.location.href : '';
+    if (this.hasAcceptedOrPendingVersion(key, fingerprint)) return;
+    this.ingestQueue.push(payload);
     this.scheduleFlush();
   }
 
   async ingestMany<T extends Record<string, any>>(entities: T[]): Promise<void> {
-    if (entities.length > 0) {
-      this.lastIngestedItem = entities[entities.length - 1];
+    // Validate the entire input before touching the queue.
+    const prepared = entities.map(entity => ({ entity, key: ingestionKey(entity), fingerprint: ingestionFingerprint(entity) }));
+    for (const { entity, key, fingerprint } of prepared) {
+      const payload = entity.envelope ? entity : normalizeIngestRecord(entity);
+      if (this.hasAcceptedOrPendingVersion(key, fingerprint)) continue;
+      this.ingestQueue.push(payload);
     }
-    let hasNew = false;
-    entities.forEach(entity => {
-      const target = (entity as any).envelope?.entity || entity;
-      const id = target.id ?? target.productId ?? target.slug ?? target.url ?? target.name ?? '';
-      const url = target.url || (typeof window !== 'undefined' ? window.location.href : '');
+    if (this.ingestQueue.length > 0) this.scheduleFlush();
+  }
 
-      if (!id && !url) {
-        console.warn('[Akropolys] Ingestion warning: Item is missing both a stable identifier and a URL. Skipping.');
-        return;
-      }
-
-      const fingerprint = stableStringify(entity);
-      if (url) {
-        if (this.ingestedUrls.get(url) === fingerprint) {
-          return;
-        }
-        this.ingestedUrls.set(url, fingerprint);
-        hasNew = true;
-      }
-
-      this.ingestQueue.push(entity);
-    });
-
-    if (hasNew) {
-      this.saveIngestedCache();
+  private hasAcceptedOrPendingVersion(key: string, fingerprint: string): boolean {
+    for (let i = this.ingestQueue.length - 1; i >= 0; i--) {
+      const queued = this.ingestQueue[i];
+      if (ingestionKey(queued) === key) return ingestionFingerprint(queued) === fingerprint;
     }
-    if (this.ingestQueue.length > 0) {
-      this.scheduleFlush();
-    }
+    return this.ingestedUrls.get(key) === fingerprint;
   }
 
   private scheduleFlush() {
@@ -838,14 +790,19 @@ export class AkropolysClient {
       return;
     }
 
-    const maxBatchSize = 50;
+    // Page-ingestion queue entries are ordinary single-record submissions.
+    // Explicit bulk ingestion uses api.ingestBatch and the paid batch gate.
+    const maxBatchSize = 1;
 
     try {
       while (this.ingestQueue.length > 0) {
         const batch = this.ingestQueue.slice(0, maxBatchSize);
 
         try {
-          await this.api.ingestBatch(batch);
+          const result = await this.api.ingest(batch[0]);
+          if (result.success === false) throw { status: 500, message: result.message || 'Ingestion failed' };
+          this.ingestedUrls.set(ingestionKey(batch[0]), ingestionFingerprint(batch[0]));
+          this.saveIngestedCache();
           this.ingestQueue.splice(0, batch.length);
           this.retryCount = 0; // reset retry counter on success
         } catch (e: any) {
@@ -920,7 +877,9 @@ export class AkropolysClient {
       return;
     }
 
-    const maxBatchSize = 50;
+    // Automatically captured pages use the single-page allowance.
+    // Explicit ingestContentBatch calls still use the paid multi-page gate.
+    const maxBatchSize = 1;
 
     try {
       while (this.contentQueue.length > 0) {

@@ -49,8 +49,6 @@ export function AnimatedPlaceholder({
   if (!content) return null;
   const seed = replaySeed !== undefined ? replaySeed : replay;
 
-  // Long strings ride in as whole words. Per-grapheme, the stagger is still
-  // mid-flight across a long line and the text reads as a wave.
   const long = content.length > 26;
   const units = long ? (content.match(/\S+\s*/g) ?? [content]) : splitPlaceholder(content);
   const last = Math.max(units.length - 1, 1);

@@ -14,7 +14,10 @@ export function resolveTheme(theme: ThemeProp): {
     return { themeAttr: undefined, vars: undefined };
   }
   const vars: Record<string, string> = {};
-  if (theme.primaryColor) vars['--hsk-primary'] = theme.primaryColor;
+  if (theme.primaryColor) {
+    vars['--hsk-primary'] = theme.primaryColor;
+    vars['--hsk-selection-bg'] = theme.primaryColor;
+  }
   if (theme.backgroundColor) {
     vars['--hsk-bg'] = theme.backgroundColor;
     vars['--hsk-chat-bg'] = theme.backgroundColor;

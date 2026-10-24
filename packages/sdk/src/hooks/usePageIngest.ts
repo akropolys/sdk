@@ -1,23 +1,16 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { getAkropolysClient } from '../client';
 import { stableStringify } from '../utils/stableStringify';
 
 declare const process: any;
 
 export function usePageIngest(product: Record<string, any> | null | undefined): void {
-  const isSigned = !!(product as any)?.envelope;
-  const url = isSigned
-    ? (product as any)?.envelope?.entity?.url || (typeof window !== 'undefined' ? window.location.href : '')
-    : (product?.url || (typeof window !== 'undefined' ? window.location.href : ''));
-  const payloadToQueue = isSigned ? product : { ...product, url };
-  const fingerprint = product ? stableStringify(payloadToQueue) : '';
-  const fingerprintRef = useRef<string | null>(null);
+  const payloadToQueue = product;
+  // Request nonces may change while the underlying record stays unchanged.
+  const fingerprint = product ? stableStringify((product as any).envelope?.entity ?? product) : '';
 
   useEffect(() => {
     if (!payloadToQueue) return;
-    if (fingerprintRef.current === fingerprint) return;
-
-    fingerprintRef.current = fingerprint;
 
     getAkropolysClient()
       .queueIngest(payloadToQueue)
@@ -26,5 +19,5 @@ export function usePageIngest(product: Record<string, any> | null | undefined): 
           console.warn('[Akropolys] Ingestion failed inside usePageIngest:', err);
         }
       });
-  }, [fingerprint, url]);
+  }, [fingerprint]);
 }

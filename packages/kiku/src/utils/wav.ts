@@ -1,7 +1,3 @@
-/**
- * Fast in-browser conversion of Float32Array PCM samples (24kHz Gemini output)
- * or Int16Array PCM samples (16kHz microphone input) into standard 16-bit mono PCM WAV Blobs.
- */
 
 function writeAscii(view: DataView, offset: number, string: string): void {
   for (let i = 0; i < string.length; i++) {

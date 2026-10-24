@@ -1,7 +1,6 @@
 import { spawn } from 'child_process';
 
-// cmd.exe splits an unquoted & into a second command, so the URL must reach
-// `start` quoted and verbatim or the query string is truncated at the first one.
+// cmd.exe splits an unquoted & into a second command, so the URL reaches `start` quoted and verbatim.
 export function openBrowser(url: string): boolean {
   try {
     if (process.platform === 'win32') {

@@ -4,6 +4,7 @@ import { cn } from '../../utils/cn';
 import { ContinueIcon } from './icons';
 import { getFriendlyError, type UIStringKey } from './types';
 import { MessageItem } from './components/MessageItem';
+import { parseThinking } from './components/ThinkingBlock';
 import { PromptKeyCard, MintedKeyCard } from './components/MemoryKeyCards';
 
 export interface ChatMessagesProps {
@@ -17,7 +18,6 @@ export interface ChatMessagesProps {
   discussedSources: ChatSource[];
   lastIntent: string | null;
   lastAction: ChatAction | null;
-  defaultCurrency: string;
   stopped: boolean;
   interrupted: boolean;
   halted: boolean;
@@ -29,7 +29,6 @@ export interface ChatMessagesProps {
   setKeyInput: (val: string) => void;
   mintedKey: string | null;
   setMintedKey: (val: string | null) => void;
-  mintedPub: string | null;
   setMintedPub: (val: string | null) => void;
   minting: boolean;
   copied: string | null;
@@ -39,7 +38,7 @@ export interface ChatMessagesProps {
   copyValue: (val: string, type: 'secret' | 'pub') => void;
   queuedMessage: ChatMessage | null;
   sendQueuedNow: () => void;
-  setLightboxSrc: (src: string | null) => void;
+  setLightboxSrc: (src: string | null, gallery?: import('./components/LightboxModal').LightboxGalleryData) => void;
   setMarkupSrc: (src: string | null) => void;
   handleSend: (text?: string) => Promise<void>;
   handleSourceClick: (src: ChatSource) => void;
@@ -53,6 +52,16 @@ export interface ChatMessagesProps {
   vizState: Record<string, 'ok' | 'err'>;
   setVizState: React.Dispatch<React.SetStateAction<Record<string, 'ok' | 'err'>>>;
   messages: ChatMessage[];
+  doodleTheme?: string;
+}
+
+function latestPicture(messages: ChatMessage[], before: number): string | undefined {
+  for (let i = before - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.visualization && m.visualizationType !== 'video') return m.visualization;
+    if (m.images?.length) return m.images[m.images.length - 1];
+  }
+  return undefined;
 }
 
 export function ChatMessages({
@@ -66,7 +75,6 @@ export function ChatMessages({
   discussedSources,
   lastIntent,
   lastAction,
-  defaultCurrency,
   stopped,
   interrupted,
   halted,
@@ -78,7 +86,6 @@ export function ChatMessages({
   setKeyInput,
   mintedKey,
   setMintedKey,
-  mintedPub,
   setMintedPub,
   minting,
   copied,
@@ -102,6 +109,7 @@ export function ChatMessages({
   vizState,
   setVizState,
   messages,
+  doodleTheme,
 }: ChatMessagesProps) {
   return (
     <>
@@ -117,10 +125,15 @@ export function ChatMessages({
           const isLast = idx === displayMessages.length - 1;
           const isUser = msg.role === 'user';
           const isLastUser = isUser && idx === lastUserIdx;
-          const isRunEnd = isUser && displayMessages[idx + 1]?.role !== 'user';
-          const runMid = isUser && !isRunEnd;
-          const runCont = isUser && displayMessages[idx - 1]?.role === 'user';
+          // A voice turn often lands as filler then answer; both roles stack as one run.
+          const isRunEnd = displayMessages[idx + 1]?.role !== msg.role;
+          const runMid = !isRunEnd;
+          const runCont = displayMessages[idx - 1]?.role === msg.role;
           const key = (msg as any).id || `${msg.role}-${idx}`;
+          // The photo just sent is in flight until the reply starts; a render reworks the latest picture before it.
+          const reply = displayMessages[idx + 1]?.content ?? '';
+          const photosSending = isLastUser && (loading || streaming) && !parseThinking(reply).content.trim();
+          const workingOn = msg.visualizing ? latestPicture(displayMessages, idx) : undefined;
           const hasError = (isLastUser && Boolean(error)) ||
             (!isUser && isLast && Boolean(error)) ||
             (!isUser && Boolean(msg.content?.includes("We're experiencing high demand right now")));
@@ -145,7 +158,6 @@ export function ChatMessages({
               discussedSources={discussedSources}
               lastIntent={lastIntent}
               lastAction={lastAction}
-              defaultCurrency={defaultCurrency}
               vizState={vizState}
               setVizState={setVizState}
               setLightboxSrc={setLightboxSrc}
@@ -159,6 +171,9 @@ export function ChatMessages({
               retrying={retrying}
               t={t}
               messageRef={(el) => { messageRefs.current[idx] = el; }}
+              photosSending={photosSending}
+              workingOn={workingOn}
+              doodleTheme={doodleTheme}
             />
           );
         });
@@ -197,7 +212,6 @@ export function ChatMessages({
       {mintedKey && (
         <MintedKeyCard
           mintedKey={mintedKey}
-          mintedPub={mintedPub}
           copied={copied}
           keyCountdown={keyCountdown}
           onDismiss={() => { setMintedKey(null); setMintedPub(null); }}

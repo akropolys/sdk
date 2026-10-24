@@ -11,7 +11,7 @@ export function SoundToggle({ className = '', compact = false }: { className?: s
     setSoundsEnabled(next);
     setOn(next);
     // Both directions answer, or the control gives no sign it did anything.
-    chime(next ? 'scout' : 'interrupt', 'preview', true);
+    chime(next ? 'reply' : 'interrupt', true);
     setState(chimeState());
   };
 
@@ -28,13 +28,13 @@ export function SoundToggle({ className = '', compact = false }: { className?: s
         <path d="M11 5 6 9H3v6h3l5 4V5Z" />
         {on ? (
           <>
-            <path d="M15.5 8.5a5 5 0 0 1 0 7" />
-            <path d="M18.5 5.5a9 9 0 0 1 0 13" />
+            <path className="hsk-snd-wave" style={{ '--hsk-wave': 0 } as React.CSSProperties} d="M15.5 8.5a5 5 0 0 1 0 7" />
+            <path className="hsk-snd-wave" style={{ '--hsk-wave': 1 } as React.CSSProperties} d="M18.5 5.5a9 9 0 0 1 0 13" />
           </>
         ) : (
           <>
-            <line x1="16" y1="9" x2="21" y2="15" />
-            <line x1="21" y1="9" x2="16" y2="15" />
+            <line className="hsk-snd-x" x1="16" y1="9" x2="21" y2="15" />
+            <line className="hsk-snd-x" x1="21" y1="9" x2="16" y2="15" />
           </>
         )}
       </svg>

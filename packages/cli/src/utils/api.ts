@@ -29,7 +29,11 @@ export function api(apiUrl: string, token: string) {
       body: body ? JSON.stringify(body) : undefined,
     });
     const text = await res.text();
-    if (!res.ok) throw new ApiError(res.status, text.trim() || `${method} ${path} failed with ${res.status}`);
+    if (!res.ok) {
+      let message = text.trim();
+      try { message = JSON.parse(text).error || message; } catch {}
+      throw new ApiError(res.status, message || `${method} ${path} failed with ${res.status}`);
+    }
     return text ? JSON.parse(text) : null;
   };
 

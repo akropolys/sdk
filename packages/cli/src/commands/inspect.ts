@@ -29,7 +29,6 @@ export async function runInspect(
 
   let rawData = '';
 
-  // 1. Read input
   try {
     if (options.stdin || (!filePath && !process.stdin.isTTY)) {
       rawData = await readStdin();
@@ -48,7 +47,6 @@ export async function runInspect(
     process.exit(1);
   }
 
-  // 2. Parse JSON
   let items: any[] = [];
   try {
     const parsed = JSON.parse(rawData.trim());
@@ -63,24 +61,23 @@ export async function runInspect(
 
   let warningsCount = 0;
 
-  // 3. Scan items against Registry Rules
   items.forEach((item, index) => {
-    const identifier = item.id || item.productId || item.slug || item.url || item.name || `item at index ${index}`;
+    const record = item && typeof item === 'object' && !Array.isArray(item) ? item : {};
+    const identifier = record.id ?? `item at index ${index}`;
     
     // AP001: Missing Stable Identifier
-    const hasId = item.id !== undefined && item.id !== null && item.id !== '';
-    const hasProductId = item.productId !== undefined && item.productId !== null && item.productId !== '';
-    const hasSlug = item.slug !== undefined && item.slug !== null && item.slug !== '';
-    const hasUrl = item.url !== undefined && item.url !== null && item.url !== '';
-    const hasName = item.name !== undefined && item.name !== null && item.name !== '';
+    const id = record.id;
+    const hasId = (typeof id === 'number' && Number.isSafeInteger(id)) ||
+      (typeof id === 'string' && id.length > 0 && id.trim() === id &&
+        !/[\u0000-\u001f\u007f-\u009f]/.test(id) && Buffer.byteLength(id, 'utf8') <= 512);
 
-    if (!hasId && !hasProductId && !hasSlug && !hasUrl && !hasName) {
-      console.log(`  ${pc.yellow('⚠')} [AP001] Missing Stable Identifier: "${identifier}" ➔ Deduplication & correlation unavailable`);
+    if (!hasId) {
+      console.log(`  ${pc.yellow('⚠')} [AP001] Missing or Invalid Required ID: "${identifier}" ➔ Supply a top-level id (non-empty string or safe integer); URL, name and slug cannot replace it`);
       warningsCount++;
     }
 
     // AP002: Low-Signal Payload (sparse payload: fewer than 2 keys, or only identifier is defined)
-    const keysCount = Object.keys(item).length;
+    const keysCount = Object.keys(record).length;
     if (keysCount < 2) {
       console.log(`  ${pc.yellow('⚠')} [AP002] Low-Signal Payload: "${identifier}" has sparse attributes ➔ Search vector quality reduced`);
       warningsCount++;
@@ -90,7 +87,6 @@ export async function runInspect(
   console.log(pc.dim('\n─────────────────────────'));
   console.log(pc.bold(`Inspect complete: ${items.length} items checked, ${warningsCount} warnings flagged.`));
 
-  // 4. Exit codes: strict vs non-strict
   if (warningsCount > 0 && options.strict) {
     console.log(pc.red('Exit code 3: strict mode failed due to warnings.'));
     process.exit(3);

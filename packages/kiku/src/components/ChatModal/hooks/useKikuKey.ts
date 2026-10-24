@@ -15,7 +15,8 @@ export function useKikuKey(lastAction: ChatAction | null, retryLastMessage: () =
 
   const copyValue = useCallback(async (val: string, type: 'secret' | 'pub') => {
     try {
-      await navigator.clipboard.writeText(val);
+      if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(val);
+      else copyWithSelection(val);
       setCopied(type);
       setTimeout(() => setCopied(null), 2000);
     } catch {  }
@@ -85,4 +86,18 @@ export function useKikuKey(lastAction: ChatAction | null, retryLastMessage: () =
     handleUseExistingKey,
     handleCreateKey,
   };
+}
+
+// The async clipboard API is absent on plain-http pages, such as a phone preview over the LAN.
+function copyWithSelection(val: string) {
+  const area = document.createElement('textarea');
+  area.value = val;
+  area.setAttribute('readonly', '');
+  area.style.cssText = 'position:fixed;top:0;left:0;opacity:0;';
+  document.body.appendChild(area);
+  area.select();
+  area.setSelectionRange(0, val.length);
+  const ok = document.execCommand('copy');
+  area.remove();
+  if (!ok) throw new Error('copy failed');
 }

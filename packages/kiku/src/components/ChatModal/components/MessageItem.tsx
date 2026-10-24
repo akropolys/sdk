@@ -1,10 +1,12 @@
 import React from 'react';
-import type { ChatMessage, ChatSource, ChatAction } from '@akropolys/sdk';
+import { useAkropolysContext, type ChatMessage, type ChatSource, type ChatAction } from '@akropolys/sdk';
 import { cn } from '../../../utils/cn';
-import { renderMarkdown } from '../../../utils/markdown';
+import { stripToolMarkup } from '../../../utils/toolMarkup';
+import { renderMarkdown, safeHref } from '../../../utils/markdown';
 import { lineDirection } from '../../../utils/textDirection';
 import { LiveTable } from '../../LiveTable';
-import { ThinkingBlock, parseThinking } from './ThinkingBlock';
+import { WorkingVeil } from '../../KikuDoodles';
+import { ThinkingBlock, parseThinking, isTeamNote } from './ThinkingBlock';
 import { SourcesCarousel } from './SourcesCarousel';
 import { SmartContextPills } from './SmartContextPills';
 import {
@@ -18,10 +20,49 @@ import {
 import type { UIStringKey } from '../types';
 
 const MarkdownBlock = React.memo(
-  ({ content, streaming }: { content: string; streaming: boolean }) => <>{renderMarkdown(content, streaming)}</>,
-  (a, b) => a.content === b.content && a.streaming === b.streaming
+  ({ content, streaming, hosts }: { content: string; streaming: boolean; hosts: string }) =>
+    <>{renderMarkdown(content, streaming, new Set(hosts.split(',')))}</>,
+  (a, b) => a.content === b.content && a.streaming === b.streaming && a.hosts === b.hosts
 );
 MarkdownBlock.displayName = 'MarkdownBlock';
+
+function hostsOf(urls: Array<string | undefined>): string {
+  const hosts = new Set<string>();
+  for (const u of urls) {
+    if (!u) continue;
+    try { hosts.add(new URL(u, location.href).host); } catch { }
+  }
+  return [...hosts].sort().join(',');
+}
+
+// A wrapped bubble is as wide as its longest line, not as wide as it was allowed to grow.
+function useSnugWidth(ref: React.RefObject<HTMLElement | null>, text: string) {
+  React.useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const fit = () => {
+      el.style.width = '';
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const lines = Array.from(range.getClientRects());
+      const box = el.getBoundingClientRect();
+      if (!lines.length || !el.offsetWidth || !box.width) return;
+      const scale = box.width / el.offsetWidth; // the send animation scales the bubble while it is measured
+      const style = getComputedStyle(el);
+      const pad = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight) + parseFloat(style.borderLeftWidth) + parseFloat(style.borderRightWidth);
+      const longest = Math.max(...lines.map(r => r.right)) - Math.min(...lines.map(r => r.left));
+      const content = Math.ceil(longest / scale) + 1;
+      if (content + pad < el.offsetWidth) el.style.width = `${style.boxSizing === 'border-box' ? content + pad : content}px`;
+    };
+    fit();
+    document.fonts?.ready.then(fit).catch(() => {});
+    const row = el.closest('.hsk-cb-msg-group');
+    if (!row || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(fit);
+    observer.observe(row);
+    return () => observer.disconnect();
+  }, [ref, text]);
+}
 
 export interface MessageItemProps {
   msg: ChatMessage;
@@ -41,10 +82,9 @@ export interface MessageItemProps {
   discussedSources: ChatSource[];
   lastIntent: string | null;
   lastAction: ChatAction | null;
-  defaultCurrency: string;
   vizState: Record<string, 'ok' | 'err'>;
   setVizState: React.Dispatch<React.SetStateAction<Record<string, 'ok' | 'err'>>>;
-  setLightboxSrc: (src: string | null) => void;
+  setLightboxSrc: (src: string | null, gallery?: import('./LightboxModal').LightboxGalleryData) => void;
   setMarkupSrc: (src: string | null) => void;
   handleSend: (text?: string) => Promise<void>;
   handleSourceClick: (src: ChatSource) => void;
@@ -55,6 +95,9 @@ export interface MessageItemProps {
   retrying?: boolean;
   t: (key: UIStringKey, vars?: Record<string, string>) => string;
   messageRef: (el: HTMLDivElement | null) => void;
+  photosSending: boolean;
+  workingOn?: string;
+  doodleTheme?: string;
 }
 
 export function MessageItem({
@@ -75,7 +118,6 @@ export function MessageItem({
   discussedSources,
   lastIntent,
   lastAction,
-  defaultCurrency,
   vizState,
   setVizState,
   setLightboxSrc,
@@ -89,17 +131,26 @@ export function MessageItem({
   retrying,
   t,
   messageRef,
+  photosSending,
+  workingOn,
+  doodleTheme,
 }: MessageItemProps) {
+  const api = useAkropolysContext()?.api;
+  const doodleSeed = api?.siteId ?? '';
+  const imageHosts = hostsOf([api?.apiUrl, ...(isLast ? sources : (msg.sources ?? [])).flatMap(s => [s.image, s.url])]);
   const isUser = msg.role === 'user';
-  const displayContent = msg.content;
+  const displayContent = isUser ? msg.content : stripToolMarkup(msg.content);
+  const hiddenToolMarkup = !isUser && displayContent !== msg.content;
   const [copied, setCopied] = React.useState(false);
 
+  const bubbleRef = React.useRef<HTMLDivElement | null>(null);
+  useSnugWidth(bubbleRef, msg.content);
   const touchStartPos = React.useRef<{ x: number; y: number } | null>(null);
   const longPressTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const pressFired = React.useRef(false);
 
   const anchorFor = React.useCallback((el: HTMLElement): HTMLElement => {
-    const sel = isUser ? '.hsk-cb-user-bubble' : '.hsk-cb-ai-text';
+    const sel = isUser ? '.hsk-cb-user-bubble' : '.hsk-cb-ai-body';
     if (el.matches?.(sel)) return el;
     return (el.querySelector(sel) as HTMLElement) || el;
   }, [isUser]);
@@ -113,12 +164,12 @@ export function MessageItem({
         }
         const anchor = anchorFor(targetEl);
         const r = anchor.getBoundingClientRect();
-        onLongPress(msg, { top: r.top, left: r.left, width: r.width, height: r.height }, isUser, anchor);
+        onLongPress(isUser ? msg : { ...msg, content: displayContent }, { top: r.top, left: r.left, width: r.width, height: r.height }, isUser, anchor);
         pressFired.current = true;
       }
       longPressTimer.current = null;
     }, 420);
-  }, [msg, isUser, onLongPress, anchorFor]);
+  }, [msg, displayContent, isUser, onLongPress, anchorFor]);
 
   const handleTouchStart = React.useCallback((e: React.TouchEvent<HTMLElement>) => {
     if (e.touches.length !== 1) return;
@@ -153,8 +204,8 @@ export function MessageItem({
     if (pressFired.current) return;
     const el = anchorFor(e.currentTarget);
     const r = el.getBoundingClientRect();
-    onLongPress(msg, { top: r.top, left: r.left, width: r.width, height: r.height }, isUser, el);
-  }, [msg, isUser, onLongPress, anchorFor]);
+    onLongPress(isUser ? msg : { ...msg, content: displayContent }, { top: r.top, left: r.left, width: r.width, height: r.height }, isUser, el);
+  }, [msg, displayContent, isUser, onLongPress, anchorFor]);
 
   React.useEffect(() => {
     return () => {
@@ -172,7 +223,7 @@ export function MessageItem({
   }, []);
 
   const parsed = React.useMemo(() => parseThinking(displayContent), [displayContent]);
-  const thinking = msg.thinking || parsed.thinking;
+  const thinking = stripToolMarkup(msg.thinking || parsed.thinking);
   const CALC_DISCLAIMER_REGEX = /(?:^|\n+)(?:[>*_~`\s]*)(?:This is a calculation from live figures,?\s*not a guarantee\s*[—–-]\s*the market can move against it\.?)(?:[>*_~`\s]*)/gi;
   const hasCalcDisclaimer = CALC_DISCLAIMER_REGEX.test(parsed.content);
   const cleanContent = hasCalcDisclaimer ? parsed.content.replace(CALC_DISCLAIMER_REGEX, '').trimEnd() : parsed.content;
@@ -199,6 +250,7 @@ export function MessageItem({
                   onClick={() => setLightboxSrc(img)}
                 >
                   <img src={img} alt={`attachment ${i + 1}`} className="hsk-cb-user-img-thumb" />
+                  <WorkingVeil active={photosSending} seed={doodleSeed} theme={doodleTheme} />
                   {i === 3 && msg.images!.length > 4 && (
                     <span className="hsk-cb-user-img-more">+{msg.images!.length - 3}</span>
                   )}
@@ -208,6 +260,7 @@ export function MessageItem({
           )}
           {msg.content && (
             <div
+              ref={bubbleRef}
               className={cn(
                 'hsk-cb-user-bubble',
                 isRunEnd && 'hsk-cb-user-bubble--tail',
@@ -293,18 +346,21 @@ export function MessageItem({
               const isComplete = msg.thoughtForSeconds != null || cleanContent.length > 0 || !(isLast && (streaming || loading));
               return (
                 <>
-                  {!msg.spoken && (thinking || msg.thoughtForSeconds != null || (isLast && (streaming || loading))) && (
-                    <ThinkingBlock text={thinking} isComplete={isComplete} seconds={msg.thoughtForSeconds} />
+                  {!msg.spoken && (thinking || msg.thoughtForSeconds != null || msg.repliedSeconds != null || isTeamNote(msg.statusStage) || (isLast && (streaming || loading))) && (
+                    <ThinkingBlock text={thinking} isComplete={isComplete} seconds={msg.thoughtForSeconds} stage={msg.statusStage} repliedSeconds={msg.repliedSeconds} />
                   )}
                   {msg.spoken && typeof msg.thoughtForSeconds === 'number' && msg.thoughtForSeconds > 0 && (
-                    <div className="hsk-cb-spoken-timing">
-                      <MicIcon size={11} />
-                      <span>spoken · {msg.thoughtForSeconds.toFixed(1)}s</span>
+                    <div className="hsk-cb-think">
+                      <span className="hsk-cb-think-head hsk-cb-think-head--static">
+                        <MicIcon size={11} />
+                        <span>spoken · {msg.thoughtForSeconds.toFixed(1)}s</span>
+                      </span>
                     </div>
                   )}
+                  {!cleanContent && hiddenToolMarkup && !(isLast && (streaming || loading)) && <p className="hsk-cb-ai-content">{t('errStreamInterrupted')}</p>}
                   {cleanContent && (
                     <div className="hsk-cb-ai-content">
-                      <MarkdownBlock content={cleanContent} streaming={isLast && streaming} />
+                      <MarkdownBlock content={cleanContent} streaming={isLast && streaming} hosts={imageHosts} />
                     </div>
                   )}
                   {hasCalcDisclaimer && (
@@ -317,9 +373,11 @@ export function MessageItem({
             })()}
 
             {msg.visualizing && (
-              <div className="hsk-cb-viz hsk-cb-viz--loading">
-                <span className="hsk-cb-viz-spinner" />
-                <span>{msg.visualizingText || t('vizWorking')}</span>
+              <div className="hsk-cb-viz">
+                <div className={cn('hsk-cb-viz--working', !workingOn && 'is-blank', msg.visualizationType === 'video' && 'is-video')} role="status" aria-label={msg.visualizingText || t('vizWorking')}>
+                  {workingOn && <img src={workingOn} alt="" />}
+                  <WorkingVeil active seed={doodleSeed} theme={doodleTheme} />
+                </div>
               </div>
             )}
             {msg.visualization && (
@@ -408,8 +466,9 @@ export function MessageItem({
             )}
 
             {(() => {
-              const msgReferencedIds = isLast ? referencedIds : (msg.referencedIds ?? []);
-              const msgSources = isLast ? sources : (msg.sources ?? []);
+              const isLiveStreaming = isLast && (loading || streaming);
+              const msgReferencedIds = isLiveStreaming ? referencedIds : (msg.referencedIds ?? []);
+              const msgSources = isLiveStreaming ? sources : (msg.sources ?? []);
               const msgIntent = isLast ? lastIntent : msg.intent;
               const hiddenIntent = msgIntent === 'compare' || msgIntent === 'capture' ||
                 msgIntent === 'capture_all' || msgIntent === 'delete' || msgIntent === 'view_history';
@@ -418,19 +477,19 @@ export function MessageItem({
               return showCarousel && (
                 <SourcesCarousel
                   sources={msgSources}
-                  defaultCurrency={defaultCurrency}
                   onSelectSource={handleSourceClick}
                   onImageClick={setLightboxSrc}
                   referencedIds={msgReferencedIds}
                   compact={!!msg.visualization}
+                  targetLabel={t('swatchTarget')}
                 />
               );
             })()}
 
-            {isLast && !loading && !streaming && lastAction?.type === 'open_memory' && lastAction.url && (
+            {isLast && !loading && !streaming && lastAction?.type === 'open_memory' && safeHref(lastAction.url) && (
               <a
                 className="hsk-cb-memory-pill"
-                href={String(lastAction.url)}
+                href={safeHref(lastAction.url)}
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -439,10 +498,10 @@ export function MessageItem({
               </a>
             )}
 
-            {isLast && !loading && lastAction?.url && lastAction.type !== 'open_memory' && (
+            {isLast && !loading && safeHref(lastAction?.url) && lastAction?.type !== 'open_memory' && (
               <div className="hsk-action-pills">
-                <a className="hsk-action-pill" href={lastAction.url}>
-                  {String(lastAction.type || 'continue').replace(/_/g, ' ')} →
+                <a className="hsk-action-pill" href={safeHref(lastAction?.url)}>
+                  {String(lastAction?.type || 'continue').replace(/_/g, ' ')} →
                 </a>
               </div>
             )}
@@ -453,11 +512,10 @@ export function MessageItem({
                 sources={discussedSources}
                 onSend={handleSend}
                 loading={loading}
-                defaultCurrency={defaultCurrency}
               />
             )}
 
-            {!isUser && !streaming && cleanContent && (
+            {!isUser && isRunEnd && !streaming && cleanContent && (
               <div className="hsk-cb-ai-footer">
                 <div className="hsk-cb-msg-actions">
                   <button

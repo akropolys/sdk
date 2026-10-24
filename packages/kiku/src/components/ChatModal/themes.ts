@@ -20,12 +20,7 @@ export const THEMES: ThemeDef[] = [
 
 export type ThemeId = string;
 
-export const DEFAULT_DARK: ThemeId = 'dark';
-export const DEFAULT_LIGHT: ThemeId = 'light';
-
-export function isThemeId(value: unknown): value is ThemeId {
-  return typeof value === 'string' && THEMES.some(t => t.id === value);
-}
+export { DEFAULT_THEME, isThemeId } from '../../utils/themePreference';
 
 export function themeDef(id: ThemeId): ThemeDef {
   return THEMES.find(t => t.id === id) ?? THEMES[0];
