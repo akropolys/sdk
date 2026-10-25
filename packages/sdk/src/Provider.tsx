@@ -15,6 +15,8 @@ export function AkropolysProvider({
   apiToken,
   shopperId,
   userProof,
+  actionHeaders,
+  actionAuth,
   authLoading,
   onError,
   children
@@ -29,6 +31,8 @@ export function AkropolysProvider({
       apiToken,
       shopperId,
       userProof,
+      actionHeaders,
+      actionAuth,
       authLoading,
       onError
     });
@@ -37,7 +41,9 @@ export function AkropolysProvider({
       siteId,
       apiUrl,
       voiceUrl,
-      apiToken
+      apiToken,
+      actionAuth,
+      actionHeaders
     });
     clientRef.current.reRegister();
   }
@@ -45,6 +51,10 @@ export function AkropolysProvider({
   useEffect(() => {
     clientRef.current?.setShopperId(shopperId);
   }, [shopperId]);
+
+  useEffect(() => {
+    if (clientRef.current) clientRef.current.api.actionHeaders = actionHeaders;
+  }, [actionHeaders]);
 
   useEffect(() => {
     clientRef.current?.setUserProof(userProof);

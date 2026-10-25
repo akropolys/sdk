@@ -6,6 +6,8 @@ import {
   CaptureTarget,
   ChatAttachment,
 } from './types';
+import { executeBrowserAction, type ActionHeaders, type BrowserActionRequest, type BrowserActionResult } from './browserActions';
+import type { ActionAuth } from './actionAuth';
 import { normalizeIngestRecord, recordID, ingestionEntity } from './ingestionRecord';
 import { loadConversation, saveConversation, listenConversation, type HumanConversation, type ConversationEvent, type VisitorRequest } from './conversation';
 
@@ -79,6 +81,32 @@ function toEntityPayload(product: Record<string, any>): Record<string, any> {
 
 export class AkropolysAPI {
   userProof?: string;
+  actionHeaders?: ActionHeaders;
+  actionAuth?: ActionAuth;
+
+  executeBrowserAction(request: BrowserActionRequest, signal?: AbortSignal): Promise<BrowserActionResult> {
+    return executeBrowserAction(request, signal, this.actionHeaders, this.actionAuth);
+  }
+
+  async handleBrowserAction(request: BrowserActionRequest, signal?: AbortSignal): Promise<void> {
+    if (!request.id || !/^[a-f0-9]{64}$/.test(request.id)) throw new Error("Invalid action request.");
+    const result = await this.executeBrowserAction(request, signal);
+    if (signal?.aborted) return;
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    signal?.addEventListener('abort', abort, { once: true });
+    const timer = setTimeout(abort, 5000);
+    try {
+      const response = await fetch(`${this.apiUrl}/chat/actions/${request.id}/result`, {
+        method: "POST", headers: this.buildHeaders(), credentials: "omit",
+        body: JSON.stringify({ siteId: this.siteId, result }), signal: controller.signal,
+      });
+      if (!response.ok) throw new Error("Could not return the action result. Check the site before retrying.");
+    } finally {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', abort);
+    }
+  }
 
   constructor(
     public apiUrl: string,
@@ -205,11 +233,12 @@ export class AkropolysAPI {
     return this.widget;
   }
 
-  private async shopperAuth(): Promise<string | undefined> {
+  async getShopperAuth(signal?: AbortSignal): Promise<string | undefined> {
     const { identityUrl } = await this.widgetSettings();
     if (!identityUrl) return undefined;
     try {
       const res = await fetch(identityUrl, {
+        signal,
         credentials: 'include',
         headers: { Accept: 'application/json' },
       });
@@ -537,8 +566,7 @@ export class AkropolysAPI {
     }
     if (forcedIntent)                          body.forcedIntent = forcedIntent;
     if (captureTargets && captureTargets.length > 0) body.captureTargets = captureTargets;
-    const shopperAuth = await this.shopperAuth();
-    if (shopperAuth) headers['X-Akropolys-Shopper-Auth'] = shopperAuth;
+    body.browserActions = typeof window !== 'undefined';
     const res = await fetch(`${this.apiUrl}/chat/stream`, {
       method: 'POST',
       headers,

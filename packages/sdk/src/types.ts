@@ -75,6 +75,10 @@ export type RawProductInput<T extends Record<string, any> = Record<string, any>>
 
 
 export interface AkropolysConfig {
+  /** Connect the existing Clerk, Auth0 or Supabase client for bearer-authenticated actions. */
+  actionAuth?: import('./actionAuth').ActionAuth;
+  /** Optional bearer/CSRF headers for registered site actions. Cookies work automatically. */
+  actionHeaders?: import("./browserActions").ActionHeaders;
 
   siteId?: string;
 

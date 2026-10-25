@@ -1,16 +1,8 @@
 # @akropolys/kiku
 
-Chat, search, voice, and photo input for your website. Kiku connects visitors to your content and the API actions you configure in Akropolys.
+Chat, search, voice, and photo input for your website. Kiku connects visitors to your content and the API actions you configure in Akropolys. For React and Next.js, use the React package below. For other websites, use the CDN embed; it also works in React when you prefer a script integration.
 
 [![npm](https://img.shields.io/npm/v/@akropolys/kiku?color=orange)](https://www.npmjs.com/package/@akropolys/kiku) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT) [![TypeScript](https://img.shields.io/badge/types-included-blue)](https://www.typescriptlang.org/)
-
-## Install
-
-```bash
-npm install @akropolys/kiku@2.2.29 @akropolys/sdk@2.0.1
-```
-
-Requires React and React DOM 17 or later. For websites without React, use the [script embed](https://github.com/akropolys/sdk/blob/HEAD/packages/kiku/EMBED.md).
 
 ## JavaScript embed
 
@@ -18,7 +10,7 @@ Add Kiku to any website with the published CDN script:
 
 ```html
 <script
-  src="https://cdn.akropolys.cloud/kiku/2.2.29/kiku.js"
+  src="https://cdn.akropolys.cloud/kiku/2.2.30/kiku.js"
   data-site-id="YOUR_SITE_ID"
   data-api-token="YOUR_PUBLIC_BROWSER_TOKEN"
   data-label="Ask Kiku"
@@ -26,7 +18,17 @@ Add Kiku to any website with the published CDN script:
 ></script>
 ```
 
-The script loads its styles and runtime automatically. See the [embed guide](https://github.com/akropolys/sdk/blob/HEAD/packages/kiku/EMBED.md) for configuration, ingestion, and self-hosting.
+The embed includes its own React runtime, styles, and mounting. Your website needs no React installation or provider, including when it uses React or Next.js. See the [embed guide](https://github.com/akropolys/sdk/blob/HEAD/packages/kiku/EMBED.md) for configuration, ingestion, and self-hosting.
+
+## Install
+
+Recommended for React and Next.js apps:
+
+```bash
+npm install @akropolys/kiku@2.2.30 @akropolys/sdk@2.0.3
+```
+
+This package integration requires React and React DOM 17 or later.
 
 ## React and Next.js
 
@@ -89,15 +91,15 @@ Both components use `AkropolysProvider` from `@akropolys/sdk`.
 
 ## Your content and actions
 
-Give each catalogue record a stable top-level `id`. A webpage link in `fields.url` is optional; Kiku can show and save records without one. See the [SDK ingestion guide](https://github.com/akropolys/sdk/blob/HEAD/packages/sdk/README.md#batch-ingestion-on-your-server).
+Give each catalogue record a stable top-level `id`. A webpage link in `fields.url` is optional; Kiku can show and save records without one. See the [SDK ingestion guide](https://github.com/akropolys/sdk/blob/HEAD/packages/sdk/README.md#batch-ingestion-client).
 
-Configure action endpoints, HTTP methods, and request fields in Shell. Kiku collects the required values and presents the result returned by your backend. Your endpoint validates the request and performs the operation. See the [site actions guide](https://github.com/akropolys/sdk/blob/HEAD/packages/sdk/README.md#site-actions).
+Configure action endpoints, methods and request fields in Shell. The widget calls your API from the visitor's browser in chat and voice. Cookie authentication works automatically. For Clerk, Auth0 or Supabase bearer APIs, add one option such as `actionAuth: { provider: "supabase", client: supabase }` to `Kiku.mount(...)`, or use the `actionAuth` prop on your existing React provider. The existing auth client handles token renewal; Kiku adds the header internally. The CDN embed needs no application wrapper. Your API validates permissions and performs the operation. See the [site actions guide](https://akropolys.cloud/docs/actions/).
 
 ## Links
 
 - [Akropolys](https://akropolys.cloud)
 - [Source code](https://github.com/akropolys/sdk)
-- [Plain HTML embed guide](https://github.com/akropolys/sdk/blob/HEAD/packages/kiku/EMBED.md)
+- [JavaScript embed guide](https://github.com/akropolys/sdk/blob/HEAD/packages/kiku/EMBED.md)
 - [Headless SDK](https://www.npmjs.com/package/@akropolys/sdk)
 
 ## License

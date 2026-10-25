@@ -6,6 +6,7 @@ import { KikuAvatar, type KikuState } from '../KikuAvatar';
 import { SoundToggle } from './components/SoundToggle';
 import { cn } from '../../utils/cn';
 import { useIslandMorph } from '../../utils/island';
+import { ThemeDiscoveryHint } from './components/ThemeDiscoveryHint';
 
 export interface ChatTopbarProps {
   title: string;
@@ -16,6 +17,8 @@ export interface ChatTopbarProps {
   awayFromBottom?: boolean;
   themeMenuOpen?: boolean;
   themeMenuClosing?: boolean;
+  themeDiscovery?: boolean;
+  onThemeMenuReady?: () => void;
   onThemeMenuClosed?: () => void;
   isNarrow?: boolean;
   currentTheme?: ThemeId;
@@ -48,6 +51,8 @@ export function ChatTopbar({
   awayFromBottom = false,
   themeMenuOpen = false,
   themeMenuClosing = false,
+  themeDiscovery = false,
+  onThemeMenuReady,
   onThemeMenuClosed,
   isNarrow = false,
   currentTheme = 'dark',
@@ -61,6 +66,7 @@ export function ChatTopbar({
   layoutControl,
 }: ChatTopbarProps) {
   const tr = useT();
+  const hasLayoutControl = Boolean(layoutControl);
   const barRef = React.useRef<HTMLDivElement>(null);
   const trayRef = React.useRef<HTMLDivElement>(null);
   const shadowRef = React.useRef<HTMLDivElement>(null);
@@ -110,7 +116,7 @@ export function ChatTopbar({
     bar.style.setProperty('--hsk-tray-head', `${name.offsetHeight / 2 + 8}px`);
     bar.style.setProperty('--hsk-tray-h', `${dock.offsetHeight}px`);
     bar.style.setProperty('--hsk-tray-w', `${dock.offsetWidth}px`);
-  }, [themeMenuOpen, isNarrow]);
+  }, [themeMenuOpen, isNarrow, hasLayoutControl]);
   const [trayMotion] = React.useState(() =>
     typeof window !== 'undefined' && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
   );
@@ -126,6 +132,11 @@ export function ChatTopbar({
     };
   }, [isNarrow, trayReady]);
   const trayMounted = isNarrow && (themeMenuOpen || trayReady);
+  React.useEffect(() => {
+    if (isNarrow && !trayReady) return;
+    const frame = requestAnimationFrame(() => onThemeMenuReady?.());
+    return () => cancelAnimationFrame(frame);
+  }, [isNarrow, trayReady, onThemeMenuReady]);
 
   const tray = useIslandMorph({
     target: React.useCallback(() => trayRef.current, []),
@@ -215,7 +226,7 @@ export function ChatTopbar({
       </div>
 
       <div
-        className={cn("hsk-cb-topbar-mark", isNarrow && themeMenuOpen && "is-oozing")}
+        className={cn("hsk-cb-topbar-mark", isNarrow && themeMenuOpen && "is-oozing", themeDiscovery && themeMenuOpen && !themeMenuClosing && 'is-discovering')}
         data-impacting={isImpacting ? 'true' : 'false'}
         style={{
           '--hsk-contact-color': impactColor,
@@ -271,7 +282,7 @@ export function ChatTopbar({
 
       {isNarrow && themeMenuOpen && (
         <div
-          className={cn("hsk-cb-topbar-scrim", themeMenuClosing && "is-closing")}
+          className={cn("hsk-cb-topbar-scrim", themeDiscovery && 'is-discovery', themeMenuClosing && "is-closing")}
           onClick={onToggleThemeMenu}
           aria-hidden="true"
         />
@@ -321,6 +332,9 @@ export function ChatTopbar({
       )}
       {isNarrow && themeMenuOpen && below && (
         <div className={cn("hsk-cb-tray-below", themeMenuClosing && "is-closing")}>{below}</div>
+      )}
+      {isNarrow && themeMenuOpen && themeDiscovery && (
+        <ThemeDiscoveryHint mobile closing={themeMenuClosing} />
       )}
     </div>
   );

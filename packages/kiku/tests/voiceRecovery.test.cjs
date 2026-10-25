@@ -36,7 +36,7 @@ test('history snapshot keeps partial transcripts without mutating previous turns
   assert.equal(turns[1].text, 'The');
 });
 
-function harness() {
+function harness(options = {}) {
   const slots = [], effects = [], sockets = [], contexts = [], worklets = [], timers = new Map(), errors = [], exchanges = [];
   let cursor = 0, dirty = false, now = 1000, nextTimer = 1, api;
   const eq = (a, b) => a && b && a.length === b.length && a.every((x, i) => x === b[i]);
@@ -65,11 +65,13 @@ function harness() {
   class Ws {
     static OPEN = 1; static CONNECTING = 0;
     readyState = 0; bufferedAmount = 0; sent = [];
+    listeners = {};
+    addEventListener(type, callback) { (this.listeners[type] ||= []).push(callback); }
     constructor() { sockets.push(this); }
     open() { this.readyState = 1; this.onopen?.({}); }
     send(value) { if (this.readyState !== 1) throw Error('closed'); this.sent.push(value); }
     message(value) { this.onmessage?.({ data: JSON.stringify(value) }); }
-    close(code = 1000) { this.readyState = 3; this.onclose?.({ code, reason: '' }); }
+    close(code = 1000) { this.readyState = 3; for (const cb of this.listeners.close || []) cb({ code }); this.onclose?.({ code, reason: '' }); }
   }
   const param = () => ({ value: 1, cancelScheduledValues() {}, setValueAtTime() {}, linearRampToValueAtTime() {} });
   const node = () => ({ connect() {}, disconnect() {}, gain: param(), frequencyBinCount: 32, getByteTimeDomainData(out) { out.fill(128); }, getByteFrequencyData(out) { out.fill(0); } });
@@ -86,7 +88,7 @@ function harness() {
     window, document: { visibilityState: 'visible', addEventListener() {}, removeEventListener() {} },
     navigator: { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [track], getAudioTracks: () => [track] }) } },
     WebSocket: Ws, AudioWorkletNode: class { constructor() { worklets.push(this); } port = {}; connect() {} disconnect() {} },
-    URL, Blob, ArrayBuffer, Int16Array, Float32Array, Uint8Array, console,
+    URL, Blob, ArrayBuffer, Int16Array, Float32Array, Uint8Array, AbortController, console,
     Date: class extends Date { static now() { return now; } },
     setTimeout: (fn, ms) => setTimer(fn, ms), clearTimeout: clearTimer, clearInterval: clearTimer,
   };
@@ -96,10 +98,10 @@ function harness() {
     if (name === './chime') return { chime() {}, primeChimes() {} };
     if (name === './adpcm') return { AdpcmEncoder: class { encode() { return new ArrayBuffer(4); } }, decodeAdpcm: () => new Float32Array(0) };
     if (name === './wav') return { int16ToWav: () => new Blob(), float32ToWav: () => new Blob() };
-    if (name === './downscaleImage') return {};
+    if (name === './downscaleImage') return { downscaleImage: async () => 'data:image/jpeg;base64,/9j/4A==' };
     throw Error(name);
   });
-  const opts = { apiUrl: 'https://example.test', siteId: 'news', token: 'test', onError: e => errors.push(e), onExchange: e => exchanges.push(e) };
+  const opts = { apiUrl: 'https://example.test', siteId: 'news', token: 'test', onError: e => errors.push(e), onExchange: e => exchanges.push(e), ...options };
   function render() {
     let passes = 0;
     do {
@@ -123,7 +125,7 @@ function harness() {
   render();
   return { sockets, contexts, worklets, errors, exchanges, track, render, advance, get api() { return api; }, async start() {
     await api.start([{ role: 'user', text: 'Earlier question', done: true }]);
-    sockets[0].open(); sockets[0].message({ type: 'ready' }); render();
+    sockets[0].open(); sockets[0].message({ type: 'ready', ...options.ready }); render();
   } };
 }
 
@@ -196,4 +198,146 @@ test('suspended capture is resumed without replacing the conversation', async ()
 test('a dead capture pipeline surfaces an error instead of listening forever', async () => {
   const h = harness(); await h.start(); h.advance(25_000);
   assert.ok(h.errors.includes('audio-capture')); assert.equal(h.track.stopped, true);
+});
+
+
+test('voice opens with browser actions and never sends a site bearer token to the voice server', async () => {
+  let called = false;
+  const h = harness({ getShopperAuth: async () => { called = true; return 'Bearer private'; } });
+  await h.start();
+  const frame = JSON.parse(h.sockets[0].sent[0]);
+  assert.equal(frame.type, 'open');
+  assert.equal(frame.browserActions, true);
+  assert.equal(Object.hasOwn(frame, 'authorization'), false);
+  assert.equal(called, false);
+  h.api.stop();
+});
+
+test('voice actions use the same current auth adapter as chat through refresh and logout', async t => {
+  const { AkropolysAPI } = require('../../sdk/dist/index.js');
+  const previous = globalThis.window;
+  globalThis.window = { location: { href: 'https://example.test' } };
+  t.after(() => { if (previous === undefined) delete globalThis.window; else globalThis.window = previous; });
+  const requests = [];
+  t.mock.method(globalThis, 'fetch', async (url, options) => { requests.push(options.headers.get('Authorization')); return Response.json({ updated: true }); });
+  let token = 'token-1';
+  const siteApi = new AkropolysAPI('https://platform.test', 'site', 'public');
+  siteApi.actionAuth = { provider: 'supabase', client: { auth: { async getSession() { return { data: { session: token ? { access_token: token } : null } }; } } } };
+  const h = harness({ executeBrowserAction: (request, signal) => siteApi.executeBrowserAction(request, signal) });
+  await h.start();
+  const run = async id => {
+    h.sockets[0].message({ type: 'browser_action', request: { id, name: 'update_cart', url: '/api/cart', method: 'PATCH', body: { quantity: 2 }, requiresSignIn: true } });
+    await new Promise(resolve => setImmediate(resolve));
+  };
+  await run('browser_1'); token = 'token-2'; await run('browser_2'); token = null; await run('browser_3');
+  assert.deepEqual(requests, ['Bearer token-1', 'Bearer token-2']);
+  const replies = h.sockets[0].sent.map(s => JSON.parse(s)).filter(f => f.type === 'action_result');
+  assert.equal(replies.length, 3);
+  assert.equal(replies[2].result.status, 'needs_sign_in');
+  assert.ok(!JSON.stringify(h.sockets[0].sent).includes('token-'));
+  await run('browser_2');
+  assert.equal(requests.length, 2);
+  h.api.stop();
+});
+
+test('stopping voice aborts a pending browser action and discards a late result', async () => {
+  let finish, actionSignal;
+  const h = harness({ executeBrowserAction: (_request, signal) => { actionSignal = signal; return new Promise(resolve => { finish = resolve; }); } });
+  await h.start();
+  h.sockets[0].message({ type: 'browser_action', request: { id: 'browser_1' } });
+  h.api.stop();
+  assert.equal(actionSignal.aborted, true);
+  finish({ status: 'sent', httpStatus: 200 });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.ok(!h.sockets[0].sent.some(s => JSON.parse(s).type === 'action_result'));
+});
+
+
+const settle = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
+const photoFile = { type: 'image/png' };
+const imageFrames = socket => socket.sent.map(value => JSON.parse(value)).filter(frame => frame.type === 'image');
+
+test('voice sends photo pixels and waits for model delivery acknowledgement', async () => {
+  const h = harness({ ready: { photos: true, imageInput: true }, storeScene: async () => true });
+  await h.start();
+  const uploaded = h.api.attachPhoto(photoFile); await settle();
+  const frame = imageFrames(h.sockets[0])[0];
+  assert.equal(frame.image, 'data:image/jpeg;base64,/9j/4A==');
+  h.render(); assert.equal(h.api.images[0].sending, true);
+  h.sockets[0].message({ type: 'image_received', imageId: frame.imageId });
+  assert.equal(await uploaded, true); h.render();
+  assert.equal(h.api.images[0].sending, false);
+  assert.ok(!h.sockets[0].sent.some(value => JSON.parse(value).type === 'text'));
+  h.api.stop();
+});
+
+test('photo reading works when the editing copy cannot be saved', async () => {
+  const h = harness({ ready: { photos: true, imageInput: true }, storeScene: async () => false });
+  await h.start(); const uploaded = h.api.attachPhoto(photoFile); await settle();
+  const frame = imageFrames(h.sockets[0])[0];
+  h.sockets[0].message({ type: 'image_received', imageId: frame.imageId });
+  assert.equal(await uploaded, true); h.api.stop();
+});
+
+test('rejected photos disappear without ending the voice call', async () => {
+  const h = harness({ ready: { photos: true, imageInput: true } });
+  await h.start(); const uploaded = h.api.attachPhoto(photoFile); await settle();
+  const frame = imageFrames(h.sockets[0])[0];
+  h.sockets[0].message({ type: 'image_error', imageId: frame.imageId });
+  assert.equal(await uploaded, false); h.render();
+  assert.equal(h.api.images.length, 0); assert.equal(h.api.state, 'listening');
+  assert.equal(h.track.stopped, false); h.api.stop();
+});
+
+test('reconnect restores the latest photo without replaying a request', async () => {
+  const h = harness({ ready: { photos: true, imageInput: true } });
+  await h.start(); const uploaded = h.api.attachPhoto(photoFile); await settle();
+  const frame = imageFrames(h.sockets[0])[0];
+  h.sockets[0].message({ type: 'image_received', imageId: frame.imageId }); await uploaded;
+  h.sockets[0].close(1012); h.advance(500);
+  const next = h.sockets[1]; next.open(); next.message({ type: 'ready', photos: true, imageInput: true });
+  assert.equal(imageFrames(next).length, 1); assert.equal(imageFrames(next)[0].image, frame.image);
+  assert.ok(!next.sent.some(value => JSON.parse(value).type === 'text'));
+  h.api.stop();
+});
+
+test('stopping during photo upload never forwards the image to a stale socket', async () => {
+  let release;
+  const h = harness({ ready: { photos: true, imageInput: true }, storeScene: () => new Promise(resolve => { release = resolve; }) });
+  await h.start(); const uploaded = h.api.attachPhoto(photoFile); await settle();
+  h.api.stop(); release(true);
+  assert.equal(await uploaded, false); assert.equal(imageFrames(h.sockets[0]).length, 0);
+});
+
+test('image delivery timeout settles the pending photo without ending the call', async () => {
+  const h = harness({ ready: { photos: true, imageInput: true } });
+  await h.start(); const uploaded = h.api.attachPhoto(photoFile); await settle();
+  h.advance(15_000); assert.equal(await uploaded, false); h.render();
+  assert.equal(h.api.images.length, 0); assert.equal(h.track.stopped, false); h.api.stop();
+});
+
+test('older voice servers retain the existing photo editing flow', async () => {
+  const h = harness({ ready: { photos: true }, storeScene: async () => true });
+  await h.start(); assert.equal(await h.api.attachPhoto(photoFile), true);
+  assert.equal(imageFrames(h.sockets[0]).length, 0); h.api.stop();
+});
+
+test('stopping after a photo acknowledgement cannot restore it in a new call', async () => {
+  const h = harness({ ready: { photos: true, imageInput: true } });
+  await h.start(); const uploaded = h.api.attachPhoto(photoFile); await settle();
+  const frame = imageFrames(h.sockets[0])[0];
+  h.sockets[0].message({ type: 'image_received', imageId: frame.imageId });
+  h.api.stop(); assert.equal(await uploaded, false);
+  await h.api.start([]);
+  const next = h.sockets.at(-1); next.open(); next.message({ type: 'ready', photos: true, imageInput: true });
+  assert.equal(imageFrames(next).length, 0); h.api.stop();
+});
+
+test('recovery cancels a pending photo and waits for readiness before accepting another', async () => {
+  const h = harness({ ready: { photos: true, imageInput: true } });
+  await h.start(); const uploaded = h.api.attachPhoto(photoFile); await settle();
+  h.sockets[0].close(1012); assert.equal(await uploaded, false);
+  h.advance(500); const next = h.sockets[1]; next.open();
+  assert.equal(await h.api.attachPhoto(photoFile), false);
+  assert.equal(imageFrames(next).length, 0); h.api.stop();
 });

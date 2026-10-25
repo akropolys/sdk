@@ -57,36 +57,54 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 }
 ```
 
-### 2. Index your records (Server)
+### 2. Publish your loaded records
 
-```typescript
-import { createIngestClient, signed } from '@akropolys/sdk/server';
+```jsx
+'use client';
+
+import { usePageIngest } from '@akropolys/sdk';
+
+export function PublishRecord({ record }) {
+  usePageIngest(record);
+  return null;
+}
+```
+
+Use this inside your provider with data the website already loaded. Normal ingestion submits one record and works on every plan. For arrays, use the ingestion client's `ingestBatch(records)`, available on Growth, Pro and Business:
+
+```js
+import { createIngestClient } from '@akropolys/sdk/server';
 
 const akropolys = createIngestClient({
-  siteId: process.env.AKROPOLYS_SITE_ID!,
-  apiToken: process.env.AKROPOLYS_API_TOKEN!,
-  privateKey: process.env.AKROPOLYS_PRIVATE_KEY!,
-  kid: process.env.AKROPOLYS_KID!,
+  siteId: 'YOUR_SITE_ID',
+  apiToken: 'YOUR_PUBLIC_API_TOKEN',
 });
 
-await akropolys.ingest({
-  id: product.id,
-  title: product.name,
-  fields: { price: product.price, url: product.url },
-}, signed);
+await akropolys.ingestBatch(records);
 ```
 
-Use your source record's stable `id`. `fields.url` is optional but recommended for records with a webpage. ID-only records can be searched, shown and saved in Kiku; a supplied link is retained in saved history. Fingerprints skip unchanged content. On Pro or Business, pass an ID-bearing array to `ingestBatch(records, signed)`.
+Connect the batch call to your website's existing data-loading or refresh callback. It submits the array you pass; unchanged records are skipped and changed records update under the same IDs. Once indexing finishes, the updates are available to every visitor on that site, regardless of who triggered ingestion. The SDK does not watch API requests automatically. A browser can publish a complete catalogue array, including items not rendered on the page; coverage depends on the supplied records, not visits to their pages or where ingestion runs.
 
-### 3. Stream live values (Server)
+The [JavaScript embed](https://akropolys.cloud/docs/javascript/) also accepts one record or an array through `Kiku.ingest`. Choose one publishing path per dataset.
 
-```typescript
-await akropolys.ingestLive([
-  { key: 'product-123', fields: { price: '$348.00', stock: '3 left' } },
-], signed);
+Each record requires a stable `id`. A useful minimal record is `{ id: 'chair-123', title: 'Linen lounge chair' }`; add descriptive facts in `fields`. Keep the ID across updates. `fields.url` is optional. Use `image` for a cover and `images` for an ordered gallery of URL strings or `{ url, alt?, caption? }` objects belonging to that record.
+
+[Signing](https://akropolys.cloud/docs/signed-ingestion/) is optional unless your site requires it in Shell. [Request grouping](https://akropolys.cloud/docs/batch-ingestion/#batch-size-and-retries) is a parameter on the ingestion client's batch method, not single-record ingestion.
+
+### 3. Publish changing values
+
+```jsx
+'use client';
+
+import { useLiveData } from '@akropolys/sdk';
+
+export function PublishAvailability({ product }) {
+  useLiveData(product.id, { price: product.price, stock: product.stock });
+  return null;
+}
 ```
 
-Catalogue records use `id`; the separate live-value API uses its existing stable `key`. The server client handles signing and sending for both APIs. Keep its private key on your server.
+Catalogue records use `id`; live-value updates use a stable `key`. See the [live-data guide](https://akropolys.cloud/docs/live-data/) for signing and allowances.
 
 ---
 
@@ -94,7 +112,7 @@ Catalogue records use `id`; the separate live-value API uses its existing stable
 
 | Package | Purpose |
 |---|---|
-| [`@akropolys/sdk`](./packages/sdk) | Core client, streaming hooks, and signed server telemetry. |
+| [`@akropolys/sdk`](./packages/sdk) | Data ingestion, search, streaming hooks, and optional signing. |
 | [`@akropolys/kiku`](./packages/kiku) | Multi-modal UI widget with Live Voice, Vision, and comparative tables. |
 | [`@akropolys/cli`](./packages/cli) | CLI diagnostics, environment scaffolding, and payload linting. |
 

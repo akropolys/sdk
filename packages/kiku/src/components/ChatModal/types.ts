@@ -238,6 +238,9 @@ export const ONBOARDING_UI_STRINGS: Record<string, string> = {
 };
 
 export const DEFAULT_UI_STRINGS = {
+  themeHoldHint: 'Long press for themes',
+  themeClickHint: 'Pick your mood',
+  layoutFirstReplyNote: 'Open the dock and try {button} to change the reply layout.',
   back: 'Back',
   langPlaceholder: "Type your language…",
   nameStepTitle: "Good to meet you.",

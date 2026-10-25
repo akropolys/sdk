@@ -1,6 +1,6 @@
 # @akropolys/sdk
 
-Blindly agnostic TypeScript client, real-time timeseries streaming layer, and cryptographic server utilities for [Akropolys](https://akropolys.cloud).
+Blindly agnostic TypeScript client, real-time timeseries streaming layer, and optional signing utilities for [Akropolys](https://akropolys.cloud).
 
 [![npm](https://img.shields.io/npm/v/@akropolys/sdk?color=orange)](https://www.npmjs.com/package/@akropolys/sdk) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT) [![TypeScript](https://img.shields.io/badge/types-included-blue)](https://www.typescriptlang.org/)
 
@@ -9,9 +9,9 @@ Blindly agnostic TypeScript client, real-time timeseries streaming layer, and cr
 ## Install
 
 ```bash
-npm install @akropolys/sdk@2.0.1
+npm install @akropolys/sdk@2.0.3
 # or
-pnpm add @akropolys/sdk@2.0.1
+pnpm add @akropolys/sdk@2.0.3
 ```
 
 ---
@@ -20,8 +20,8 @@ pnpm add @akropolys/sdk@2.0.1
 
 The published SDK modules are available at:
 
-- [Client and React exports](https://cdn.akropolys.cloud/sdk/2.0.1/index.mjs)
-- [Server utilities](https://cdn.akropolys.cloud/sdk/2.0.1/server.mjs)
+- [Client and React exports](https://cdn.akropolys.cloud/sdk/2.0.3/index.mjs)
+- [Ingestion and signing utilities](https://cdn.akropolys.cloud/sdk/2.0.3/server.mjs)
 
 Use these package modules with a bundler that resolves their peer dependencies.
 For a ready-made browser widget, use the [Kiku script embed](https://akropolys.cloud/docs/javascript/).
@@ -29,6 +29,8 @@ For a ready-made browser widget, use the [Kiku script embed](https://akropolys.c
 ## Client Usage (React / Next.js)
 
 ```tsx
+'use client';
+
 import { AkropolysProvider, useKiku, useAkropolys } from '@akropolys/sdk';
 
 export function ChatInterface() {
@@ -67,15 +69,46 @@ export default function App() {
 
 ## Site actions
 
-Configure an action's endpoint, HTTP method, and request fields in Shell. Kiku collects the values, Akropolys calls your endpoint, and your backend performs the operation and returns the result. For example, a cart endpoint can accept a product ID and quantity; a booking endpoint can accept a service and date.
+Register your existing API endpoints, HTTP methods and JSON Schemas in Shell. Kiku calls them from the visitor's browser in text and voice. Cookie-based APIs need no authentication option. Your API checks permissions and owns the resulting state.
 
-The SDK does not maintain a separate cart or require a state library. Your endpoint must identify the customer and validate the request. Server-to-server action calls do not automatically include the visitor's browser cookies.
+For Clerk, Auth0 or Supabase bearer APIs, connect your existing client once. Plain JavaScript/CDN uses no application wrapper:
 
-Migration: `onAction`, `onAddToCart`, `getCart`, and the `akropolys:action` browser event have been removed. Configure operations as site actions in Shell and remove the old provider props and action listeners. If Kiku needs current cart contents, expose a read action through the same mechanism. Your website can refresh its displayed state through its existing data-fetching mechanism.
+```js
+await Kiku.mount({
+  siteId,
+  apiToken,
+  actionAuth: { provider: "supabase", client: supabase },
+});
+```
 
-## Batch ingestion on your server
+React can add the same option to its existing provider:
 
-Configure once:
+```tsx
+<AkropolysProvider siteId={siteId} apiToken={apiToken}
+  actionAuth={{ provider: "supabase", client: supabase }}>
+  <YourApp />
+</AkropolysProvider>
+```
+
+Use `provider: "clerk"` with the existing Clerk client (or React `useAuth()` value), `provider: "auth0"` with the SPA client (or `useAuth0()` value), or `provider: "supabase"` with the Supabase client. The adapter reads the current token through that client's token/session getter before each action; the auth SDK handles renewal. Kiku constructs the Authorization header internally. Tokens go directly to your API, and only the action result returns to Akropolys.
+
+Adapters default to the page's origin. For a separate API domain, add `origins: ["https://api.your-site.com"]` to `actionAuth` and configure normal browser CORS. Auth0 `authorizationParams` and Clerk `tokenOptions` are optional when your API needs an audience/scope or JWT template. `actionHeaders` remains the advanced custom-auth/CSRF option; do not add another Authorization header alongside an adapter.
+
+Use relative endpoints such as `/api/cart/items` across localhost and production. `shopperId`/`userProof` establish identity to Akropolys and do not replace your API's session or access token. Return HTTP 401 JSON when sign-in is needed. The widget refuses redirects and does not automatically retry mutations after an unknown outcome. Shell's server tester does not share the shopper's cookies. See the [site actions guide](https://akropolys.cloud/docs/actions/) for brief examples and troubleshooting.
+
+A custom `actionHeaders(action, signal)` callback may return `{}` or Fetch-compatible headers, directly or asynchronously. It runs for same-origin requests too. Throwing/rejecting stops the API request and returns a failure for Kiku to explain. See the [callback contract](https://akropolys.cloud/docs/actions/#callback-contract) and the complete [cookie-based example](https://akropolys.cloud/docs/actions/#cookies-do-nothing-extra).
+
+**Standalone batch ingestion is unchanged:** `createIngestClient(...).ingestBatch(records)` needs no application wrapper, Kiku widget or `actionAuth`.
+
+## Normal and batch ingestion
+
+Use the records your website already loads. Normal ingestion sends one record to `/ingest` and is available on every plan. Batch ingestion sends an array to `/ingest/batch` and requires Growth, Pro or Business. Signing is optional unless the site requires it in Shell; it does not change the batch plan requirement.
+
+Use the ingestion client's `ingestBatch(records)` for arrays across JavaScript frameworks. Connect it to your existing data-loading or refresh callback. React's `usePageIngest(record)` handles a single page record; `useIngest` exposes hook submission status and errors. With the JavaScript embed, `Kiku.ingest(record)` and `Kiku.ingest(records)` select normal and batch ingestion respectively. Choose one publishing path per dataset.
+
+### Batch ingestion client
+
+The JavaScript ingestion utility uses the existing site ID and API token. Its `/server` import is a package path, not a separate ingestion service or framework requirement:
 
 ```ts
 import { createIngestClient } from '@akropolys/sdk/server';
@@ -86,13 +119,13 @@ const akropolys = createIngestClient({
 });
 ```
 
-Send the records you already have:
+Send the loaded array:
 
 ```ts
 await akropolys.ingestBatch(records);
 ```
 
-Each record requires a stable top-level `id` from your API or database. Use a non-empty string or a safe integer; use a string for larger numeric IDs. `fields.url` is optional but recommended when the record has a webpage. Use `title`, `fields` and optional top-level `content` for the data you want indexed. Explicit batches require Pro or Business. For one record use `await akropolys.ingest(record)`.
+Each record requires a stable top-level `id` from your API or database. Use a non-empty string or a safe integer; use a string for larger numeric IDs. `fields.url` is optional but recommended when the record has a webpage. Use `title`, `fields` and optional top-level `content` for the data you want indexed. Explicit batches require Growth, Pro or Business. For one record use `await akropolys.ingest(record)`.
 
 ```ts
 await akropolys.ingest({
@@ -129,13 +162,13 @@ await akropolys.ingest(record, { signed: true });
 
 ### Environment names and the `signed` option
 
-Configure the private key and its matching key ID once in the server client. Passing `signed` to ingestion then handles signing and sending automatically; no separate signing function is needed. The SDK uses the values you supply and does not discover environment variables or require particular names.
+Configure the private key and its matching key ID once in the ingestion client, where the key can stay private. Passing `signed` to ingestion then handles signing and sending automatically; no separate signing function is needed. The SDK uses the values you supply and does not discover environment variables or require particular names.
 
 The site API token used by the browser integration is public. In Next.js, the site ID, site API token, API URL and public key ID may use `NEXT_PUBLIC_`. The private signing key must remain server-only and must never use `NEXT_PUBLIC_`. Dashboard session tokens and other server credentials are also private.
 
-Signed ingestion runs on the server in both plain JavaScript and Next.js. Enable **Require signed ingestion** in Shell to make the backend reject unsigned writes; passing `signed` does not change that site setting.
+Signing uses the same record format in plain JavaScript and Next.js; keep the private key outside browser code. Enable **Require signed ingestion** in Shell to make the backend reject unsigned writes; passing `signed` does not change that site setting.
 
-Batch calls send groups of 10 by default, one request at a time. Change the group size with the third argument:
+For larger arrays, grouping records is recommended instead of issuing one ingestion request per item. The current client uses 10 when `batchSize` is omitted; that fallback belongs to this method, not single-record ingestion or the embed/hooks. `batchSize` is a third-argument parameter on this client’s `ingestBatch` method, not on single-record `ingest`. Choose the number of records per batch request explicitly:
 
 ```js
 await akropolys.ingestBatch(records, signed, { batchSize: 10 });
@@ -147,9 +180,9 @@ Every group uses the batch endpoint and the same plan/signature checks. Each sig
 
 If a split submission fails, later groups are not sent. `IngestBatchError` preserves the error message and HTTP status (`0` for local/network errors), with `partialResult` for accepted groups and `nextIndex` pointing to the start of the failed group. Resume with `records.slice(error.nextIndex)` using the same ordered input. The failed group may have been saved before a connection failure; the backend handles retries of an unchanged saved version without another re-index charge. There are no automatic retries or parallel requests within a batch call.
 
-The promise waits for all groups to be accepted. Splitting requests does not itself make a page load faster. Run full inventory imports in a background job, independently of page requests. For small updates discovered while serving a Next.js page, use its `after` scheduler to start ingestion after the response; that work is still subject to the hosting request-duration limit. Do not rely on an unawaited promise surviving the end of a serverless request. A larger `batchSize` must still fit the backend request-size limit.
+The promise waits for all submitted groups to be accepted. Awaiting ingestion in an async callback pauses that callback, not browser rendering or interaction. Reuse data already loaded by the website, catch submission errors, and avoid making the page’s own rendering depend on ingestion. `batchSize` is not an argument on the embed or React hooks; unsigned arrays passed through those methods are sent as one batch request.
 
-`signed` is an option, not a function. These signed calls run on your server (Node.js or a compatible runtime with Fetch and Web Crypto). Browser JavaScript calls your server; never put the private key in a browser bundle. Unsigned browser ingestion continues to use the existing client API.
+`signed` is an option, not a function. The helper uses Fetch and Web Crypto. Use signing only where the private key remains private; never put that key in a browser bundle. Next.js Server Components and Client Components do not define different ingestion formats.
 
 Enable **Require signed ingestion** for the site in Shell to reject unsigned requests. The backend enforces that setting for both methods; the SDK does not change the setting. Register the matching public key with the site and keep the private key on your server.
 
@@ -159,13 +192,53 @@ Keep this configuration on the server. The ingestion methods create and send the
 
 The promise resolves after backend acceptance. A result with `queued > 0` means the backend retained updates for later re-indexing; it does not mean indexing has finished. Errors throw `IngestError` with the backend's `status` and message. Signing errors fail before sending a request, and rejected signed requests are never retried unsigned.
 
-Use this call in your import job, data-loading code, or update handler. It ingests the records you pass; it does not crawl the remaining inventory. Handle errors at the call site if page rendering should continue when ingestion is unavailable.
+Use the records available in your existing data-loading flow. A browser can submit a complete catalogue array, including records not rendered on screen; visitors do not need to open those items' pages. A paginated result covers only the supplied records. Ingestion does not fetch other API pages, and full coverage does not require a server-side import or scheduled job. Handle errors at the call site and check submission activity in Shell.
 
 ---
 
+### Minimal record and IDs
+
+Every normal or batch record requires a stable top-level `id`. A useful minimal record also supplies its name:
+
+```json
+{ "id": "chair-123", "title": "Linen lounge chair" }
+```
+
+Add attributes to `fields` so Kiku has facts to answer questions about. Keep the same ID across updates; a URL, title, signature, or newly generated ID must not replace it. IDs are site-scoped strings of at most 512 UTF-8 bytes, without surrounding whitespace or control characters. Safe integers including `0` are accepted; use strings for larger numeric IDs. `fields.url` is an optional navigation link. Put long text in top-level `content`.
+
+### Updating records
+
+Call `ingestBatch` whenever your loading or refresh flow receives fresh records. It does not watch API requests or detect source changes automatically. It submits the array you pass; the backend skips unchanged records and updates changed records under the same IDs.
+
+The catalogue is shared by site ID. Once indexing finishes, new questions from every visitor can use those updates, regardless of which visitor triggered ingestion or where they are located. A queued result confirms acceptance, not completed indexing.
+
+Publish the complete record and gallery to retain under the same ID; do not assume arbitrary partial `fields` are merged. Changes to persisted fields or image URLs can use re-index allowance; unchanged records are skipped. Avoid incidental per-view timestamps and counters. Use live data for frequently changing prices, stock, or availability when repeated catalogue updates would be unnecessary. A cached source can still supply stale data; ingestion does not refresh it automatically.
+
+Loaded listing-page arrays are valid batch inputs. There is no detail-page-only rule. Signing is optional unless required in Shell; that policy rejects unsigned payloads, rather than disabling browser transport of valid signed records.
+
+### Entity image galleries
+
+Supply a dedicated top-level `images` list. Each entity in a batch owns its own list:
+
+```json
+{
+  "id": "listing-123",
+  "title": "Example listing",
+  "images": [
+    { "url": "https://example.com/front.jpg", "alt": "Front entrance", "caption": "Exterior" },
+    { "url": "https://example.com/inside.jpg", "caption": "Interior" }
+  ],
+  "fields": { "bedrooms": 2, "url": "https://example.com/listings/123" }
+}
+```
+
+Order is preserved; the first image is the cover unless the existing single `image` property explicitly overrides it. `alt` and `caption` are optional. URL-string arrays remain accepted for compatibility, including legacy `fields.images`. Prefer absolute HTTPS URLs; relative image paths resolve against `fields.url` when supplied. Use absolute image URLs for records without a webpage. Top-level `images` takes precedence over `fields.images`. An empty array clears the gallery on re-ingestion. Malformed top-level galleries are rejected rather than flattened into another entity. Existing single-image payloads continue to work.
+
+Kiku displays one card per entity with an image count. Open it to navigate using buttons, arrow keys or swipe; Escape closes it. Only the selected gallery image is loaded. Captions are supplied metadata, not evidence that the model inspected every image. This requires compatible backend, SDK and Kiku releases.
+
 ## Live entities
 
-Use the same server client and `signed` option for rapidly changing data:
+Use the same ingestion client and optional `signed` setting for rapidly changing data:
 
 ```js
 await akropolys.ingestLive([
@@ -193,26 +266,6 @@ Live previews in chat and voice are bounded. The assistant can use `read_live` t
 
 MIT © [Akropolys](https://akropolys.cloud)
 
-
-### Entity image galleries
-
-Supply a dedicated top-level `images` list. Each entity in a batch owns its own list:
-
-```json
-{
-  "id": "listing-123",
-  "title": "Example listing",
-  "images": [
-    { "url": "https://example.com/front.jpg", "alt": "Front entrance", "caption": "Exterior" },
-    { "url": "https://example.com/inside.jpg", "caption": "Interior" }
-  ],
-  "fields": { "bedrooms": 2, "url": "https://example.com/listings/123" }
-}
-```
-
-Order is preserved; the first image is the cover unless the existing single `image` property explicitly overrides it. `alt` and `caption` are optional. URL-string arrays remain accepted for compatibility, including legacy `fields.images`. Prefer absolute HTTPS URLs; relative image paths resolve against `fields.url` when supplied. Use absolute image URLs for records without a webpage. Top-level `images` takes precedence over `fields.images`. An empty array clears the gallery on re-ingestion. Malformed top-level galleries are rejected rather than flattened into another entity. Existing single-image payloads continue to work.
-
-Kiku displays one card per entity with an image count. Open it to navigate using buttons, arrow keys or swipe; Escape closes it. Only the selected gallery image is loaded. Captions are supplied metadata, not evidence that the model inspected every image. This requires compatible backend, SDK and Kiku releases.
 
 ## Version 2 migration
 

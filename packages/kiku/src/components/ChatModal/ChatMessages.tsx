@@ -53,6 +53,7 @@ export interface ChatMessagesProps {
   setVizState: React.Dispatch<React.SetStateAction<Record<string, 'ok' | 'err'>>>;
   messages: ChatMessage[];
   doodleTheme?: string;
+  afterReply?: { index: number; node: React.ReactNode };
 }
 
 function latestPicture(messages: ChatMessage[], before: number): string | undefined {
@@ -110,6 +111,7 @@ export function ChatMessages({
   setVizState,
   messages,
   doodleTheme,
+  afterReply,
 }: ChatMessagesProps) {
   return (
     <>
@@ -139,42 +141,44 @@ export function ChatMessages({
             (!isUser && Boolean(msg.content?.includes("We're experiencing high demand right now")));
 
           return (
-            <MessageItem
-              key={key}
-              msg={msg}
-              idx={idx}
-              isLast={isLast}
-              isLastUser={isLastUser}
-              isRunEnd={isRunEnd}
-              runMid={runMid}
-              runCont={runCont}
-              isNarrow={isNarrow}
-              loading={loading}
-              streaming={streaming}
-              stopped={stopped}
-              interrupted={interrupted}
-              sources={sources}
-              referencedIds={referencedIds}
-              discussedSources={discussedSources}
-              lastIntent={lastIntent}
-              lastAction={lastAction}
-              vizState={vizState}
-              setVizState={setVizState}
-              setLightboxSrc={setLightboxSrc}
-              setMarkupSrc={setMarkupSrc}
-              handleSend={handleSend}
-              handleSourceClick={handleSourceClick}
-              onRetry={onRetry}
-              onEdit={onEdit}
-              onLongPress={onLongPress}
-              hasError={hasError}
-              retrying={retrying}
-              t={t}
-              messageRef={(el) => { messageRefs.current[idx] = el; }}
-              photosSending={photosSending}
-              workingOn={workingOn}
-              doodleTheme={doodleTheme}
-            />
+            <React.Fragment key={key}>
+              <MessageItem
+                msg={msg}
+                idx={idx}
+                isLast={isLast}
+                isLastUser={isLastUser}
+                isRunEnd={isRunEnd}
+                runMid={runMid}
+                runCont={runCont}
+                isNarrow={isNarrow}
+                loading={loading}
+                streaming={streaming}
+                stopped={stopped}
+                interrupted={interrupted}
+                sources={sources}
+                referencedIds={referencedIds}
+                discussedSources={discussedSources}
+                lastIntent={lastIntent}
+                lastAction={lastAction}
+                vizState={vizState}
+                setVizState={setVizState}
+                setLightboxSrc={setLightboxSrc}
+                setMarkupSrc={setMarkupSrc}
+                handleSend={handleSend}
+                handleSourceClick={handleSourceClick}
+                onRetry={onRetry}
+                onEdit={onEdit}
+                onLongPress={onLongPress}
+                hasError={hasError}
+                retrying={retrying}
+                t={t}
+                messageRef={(el) => { messageRefs.current[idx] = el; }}
+                photosSending={photosSending}
+                workingOn={workingOn}
+                doodleTheme={doodleTheme}
+              />
+              {idx === afterReply?.index && afterReply.node}
+            </React.Fragment>
           );
         });
       })()}

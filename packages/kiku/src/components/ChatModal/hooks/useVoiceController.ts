@@ -105,6 +105,7 @@ export function useVoiceController({
     proof: client?.getUserProof?.() || undefined,
     sessionId: client?.getSessionId?.() || undefined,
     storeScene: (image: string) => client?.storeScene?.(image) ?? Promise.resolve(false),
+    executeBrowserAction: (request, signal) => client.api.executeBrowserAction(request, signal),
     name: shopperName,
     language: shopperLanguage,
     voice: liveVoiceName,

@@ -1,6 +1,6 @@
 {
   "name": "@akropolys/kiku",
-  "version": "2.2.29",
+  "version": "2.2.30",
   "description": "The real-time conversational layer for the living web.",
   "license": "MIT",
   "keywords": [
@@ -44,7 +44,7 @@
     "build:embed": "node scripts/build-embed.mjs"
   },
   "peerDependencies": {
-    "@akropolys/sdk": "^2.0.1",
+    "@akropolys/sdk": "^2.0.3",
     "react": ">=17",
     "react-dom": ">=17"
   },

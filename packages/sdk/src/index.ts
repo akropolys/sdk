@@ -1,13 +1,15 @@
 export { initAkropolys, getAkropolysClient, AkropolysClient, resolveDisplayFields } from './client';
 export type { DisplayFields } from './client';
 export { AkropolysAPI } from './api';
+export { executeBrowserAction } from './browserActions';
+export type { ActionHeaders, BrowserActionRequest, BrowserActionResult } from './browserActions';
+export type { ActionAuth, ClerkActionClient, ClerkActionTokenOptions, Auth0ActionClient, Auth0ActionParams, SupabaseActionClient } from './actionAuth';
 export type { UIStrings, ScriptFont, SpeechResult, VoiceRefusal } from './api';
 export { KikuStream } from './stream';
 export { AkropolysContext, AkropolysProvider, useAkropolysContext } from './Provider';
 export { useAkropolys } from './hooks/useAkropolys';
 export { useSearch } from './hooks/useSearch';
 export { useIngest } from './hooks/useIngest';
-export { useListIngest } from './hooks/useListIngest';
 export { usePageIngest } from './hooks/usePageIngest';
 export { useKiku } from './hooks/useKiku';
 export { useCardFields } from './hooks/useCardFields';

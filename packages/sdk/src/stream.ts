@@ -1,4 +1,5 @@
 import { ChatAction } from './types';
+import type { BrowserActionRequest } from './browserActions';
 
 export interface KnowledgeImage {
   url: string;
@@ -117,7 +118,8 @@ export class KikuStream {
   private responsePromise: Promise<Response>;
   private abortController: AbortController;
 
-  constructor(responsePromise: Promise<Response>, abortController: AbortController) {
+  constructor(responsePromise: Promise<Response>, abortController: AbortController,
+    private handleBrowserAction?: (request: BrowserActionRequest, signal: AbortSignal) => Promise<void>) {
     this.responsePromise = responsePromise;
     this.abortController = abortController;
     this.startReading();
@@ -197,6 +199,7 @@ export class KikuStream {
         const decoder = new TextDecoder();
         let buffer = '';
         let accumulatedMessage = '';
+        const seenActions = new Set<string>();
 
         let isDoneEvent = false;
           let ended = false;
@@ -229,6 +232,15 @@ export class KikuStream {
 
             for (const { event, data } of frames) {
               if (this.aborted) return;
+
+              if (event === 'browser_action') {
+                const request = JSON.parse(data) as BrowserActionRequest;
+                if (!this.handleBrowserAction) throw new Error('This client does not support browser actions.');
+                if (!request.id || seenActions.has(request.id)) continue;
+                seenActions.add(request.id);
+                await this.handleBrowserAction(request, this.abortController.signal);
+                continue;
+              }
 
               if (event === 'meta') {
                 try {

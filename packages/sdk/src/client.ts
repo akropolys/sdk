@@ -249,6 +249,8 @@ export class AkropolysClient {
       () => this.kikuKey ?? undefined
     );
     this.api.userProof = config.userProof;
+    this.api.actionHeaders = config.actionHeaders;
+    this.api.actionAuth = config.actionAuth;
     setInstance(this);
 
     if (typeof window !== 'undefined') {
@@ -327,7 +329,7 @@ export class AkropolysClient {
       mark('context');
       return this.api.chatStream(query, history, abortController.signal, ctx, attachments, forcedIntent, captureTargets);
     }).then(res => { mark('headers'); return res; });
-    const stream = new KikuStream(responsePromise, abortController);
+    const stream = new KikuStream(responsePromise, abortController, (request, signal) => this.api.handleBrowserAction(request, signal));
     let texted = false;
     stream.on('token', () => { if (!texted) { texted = true; mark('first_text'); } });
     stream.on('done', () => { mark('done'); console.info(`[kiku timing] ${marks.join(' ')}`); });
@@ -351,6 +353,8 @@ export class AkropolysClient {
   }
 
   updateConfig(config: Partial<AkropolysConfig>) {
+    if ('actionAuth' in config) this.api.actionAuth = config.actionAuth;
+    if ("actionHeaders" in config) this.api.actionHeaders = config.actionHeaders;
     if (config.apiUrl) this.api.apiUrl = config.apiUrl;
     if (config.siteId) this.api.siteId = config.siteId;
     if (config.apiToken) this.api.apiToken = config.apiToken;

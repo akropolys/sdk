@@ -39,6 +39,7 @@ export interface LiveVoiceOptions {
   sessionId?: string;
   name?: string;
   storeScene?: (image: string) => Promise<boolean>;
+  executeBrowserAction?: (request: any, signal: AbortSignal) => Promise<any>;
 
   language?: string;
   voice?: string;
@@ -112,6 +113,8 @@ function liveUrl(o: LiveVoiceOptions, voiceOverride?: string): string {
   if (o.name) url.searchParams.set('name', o.name);
   if (o.language) url.searchParams.set('language', o.language);
   url.searchParams.set('codec', 'adpcm');
+  url.searchParams.set('browserActions', '1');
+  url.searchParams.set('browserActions', '1');
   const v = voiceOverride || o.voice;
   if (v) url.searchParams.set('voice', v);
   return url.toString();
@@ -192,6 +195,9 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
   const historyRef = useRef<LiveTurn[]>([]);
   const [images, setImages] = useState<LiveImage[]>([]);
   const imageIdRef = useRef(0);
+  const imageInputRef = useRef(false);
+  const latestPhotoRef = useRef<{ id: number; image: string } | null>(null);
+  const pendingPhotosRef = useRef(new Map<number, (received: boolean) => void>());
   // What this turn showed, handed to chat with the exchange.
   const turnImagesRef = useRef<string[]>([]);
   const turnVizRef = useRef<string | undefined>(undefined);
@@ -426,6 +432,9 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
   const startHold = useCallback(() => {}, []);
 
   const teardown = useCallback((finalState: LiveState) => {
+    for (const finish of pendingPhotosRef.current.values()) finish(false);
+    latestPhotoRef.current = null;
+    imageInputRef.current = false;
     if (retryTimerRef.current !== null) clearTimeout(retryTimerRef.current);
     if (connectTimerRef.current !== null) clearTimeout(connectTimerRef.current);
     retryTimerRef.current = connectTimerRef.current = null;
@@ -471,11 +480,14 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
     const history = [...historyRef.current, ...turnsRef.current.filter(x => x.done)]
       .filter(x => x.text)
       .map(x => ({ role: x.role, text: x.text }));
-    try { ws.send(JSON.stringify({ type: 'open', history })); } catch { }
+    if (wsRef.current !== ws || !startedRef.current || ws.readyState !== WebSocket.OPEN) return;
+    try { ws.send(JSON.stringify({ type: 'open', history, browserActions: true })); } catch { }
   }, []);
 
   const attachWsHandlers = useCallback((ws: WebSocket) => {
     let abandoned = false;
+    const browserActions = new Map<string, AbortController>();
+    ws.addEventListener("close", () => { for (const controller of browserActions.values()) controller.abort(); browserActions.clear(); });
     if (connectTimerRef.current !== null) clearTimeout(connectTimerRef.current);
     connectTimerRef.current = setTimeout(() => {
       if (wsRef.current !== ws || readyRef.current) return;
@@ -521,6 +533,30 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
       let f: any;
       try { f = JSON.parse(ev.data); } catch { return; }
       switch (f.type) {
+        case 'browser_action': {
+          if (!f.request?.id || browserActions.has(f.request.id)) break;
+          const controller = new AbortController();
+          browserActions.set(f.request.id, controller);
+          const execute = optsRef.current.executeBrowserAction;
+          const timer = setTimeout(() => controller.abort(), 20_000);
+          const completed = execute
+            ? execute(f.request, controller.signal)
+            : Promise.resolve({ status: 'failed', error: 'Browser actions are unavailable in this client.' });
+          completed.then(result => {
+            if (wsRef.current === ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: 'action_result', id: f.request.id, result }));
+            }
+          }).catch(() => {
+            if (wsRef.current === ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'action_result', id: f.request.id, result: { status: 'failed', error: 'The action result is unknown; check the site before retrying.' } }));
+          }).finally(() => clearTimeout(timer));
+          break;
+        }
+        case 'image_received':
+          pendingPhotosRef.current.get(f.imageId)?.(true);
+          break;
+        case 'image_error':
+          pendingPhotosRef.current.get(f.imageId)?.(false);
+          break;
         case 'ready':
           if (connectTimerRef.current !== null) clearTimeout(connectTimerRef.current);
           connectTimerRef.current = null;
@@ -534,6 +570,11 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
           }
           if (typeof f.secondsLeft === 'number') setSecondsLeft(f.secondsLeft);
           setPhotos(f.photos === true);
+          imageInputRef.current = f.imageInput === true;
+          const photo = latestPhotoRef.current;
+          if (photo && imageInputRef.current) {
+            try { ws.send(JSON.stringify({ type: 'image', imageId: photo.id, image: photo.image })); } catch { }
+          }
           readyRef.current = true;
           setState('listening');
           flushPending();
@@ -658,6 +699,7 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
   }, [dropHeld, enqueue, flushExchange, flushPending, flushPlayback, releaseHeld, sendOpen, startHold, stopHold, stop, teardown]);
 
   const hotReconnect = useCallback((newVoice?: string) => {
+    for (const finish of pendingPhotosRef.current.values()) finish(false);
     const oldWs = wsRef.current;
     wsRef.current = null; // ignore late frames and close events from the old socket
     readyRef.current = false;
@@ -694,6 +736,7 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
       stop();
       return true;
     }
+    for (const finish of pendingPhotosRef.current.values()) finish(false);
     const oldWs = wsRef.current;
     wsRef.current = null;
     readyRef.current = false;
@@ -896,29 +939,41 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
   }, [opts.muted, state]);
 
   const attachPhoto = useCallback(async (file: File): Promise<boolean> => {
-    const store = optsRef.current.storeScene;
-    if (!store || !file.type.startsWith('image/')) return false;
+    const ws = wsRef.current;
+    if (!startedRef.current || !readyRef.current || !ws || ws.readyState !== WebSocket.OPEN || !file.type.startsWith('image/')) return false;
     let image: string;
-    try {
-      image = await downscaleImage(file);
-    } catch {
-      return false;
-    }
+    try { image = await downscaleImage(file, 'image/jpeg'); } catch { return false; }
+    if (image.length > Math.ceil((4 * 1024 * 1024) / 3) * 4 + 32 || wsRef.current !== ws || !startedRef.current) return false;
     const id = ++imageIdRef.current;
     setImages(prev => [...prev, { id, url: image, pending: false, sending: true }]);
-    if (!(await store(image))) {
+    const store = optsRef.current.storeScene;
+    const stored = store ? await store(image).catch(() => false) : false;
+    if (wsRef.current !== ws || !startedRef.current || ws.readyState !== WebSocket.OPEN) {
       setImages(prev => prev.filter(i => i.id !== id));
       return false;
     }
-    setImages(prev => prev.map(i => (i.id === id ? { ...i, sending: false } : i)));
-    turnImagesRef.current.push(image);
-    const ws = wsRef.current;
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({
-        type: 'text',
-        text: '(The visitor just attached a photo. You cannot see it. In one short sentence, ask what they would like changed in it.)',
-      }));
+    let received = stored;
+    if (imageInputRef.current) {
+      received = await new Promise<boolean>(resolve => {
+        const timer = setTimeout(() => finish(false), 15_000);
+        const finish = (ok: boolean) => {
+          clearTimeout(timer);
+          pendingPhotosRef.current.delete(id);
+          resolve(ok);
+        };
+        pendingPhotosRef.current.set(id, finish);
+        try { ws.send(JSON.stringify({ type: 'image', imageId: id, image })); } catch { finish(false); }
+      });
+    } else if (stored) {
+      ws.send(JSON.stringify({ type: 'text', text: '(The visitor attached a photo for editing. Briefly ask what they would like changed.)' }));
     }
+    if (!received || wsRef.current !== ws || !startedRef.current || !readyRef.current) {
+      setImages(prev => prev.filter(i => i.id !== id));
+      return false;
+    }
+    if (imageInputRef.current) latestPhotoRef.current = { id, image };
+    setImages(prev => prev.map(i => i.id === id ? { ...i, sending: false } : i));
+    turnImagesRef.current.push(image);
     return true;
   }, []);
 

@@ -1,4 +1,4 @@
-import { initialTheme } from '../../utils/themePreference';
+import { hasSeenThemes, initialTheme, rememberThemesSeen } from '../../utils/themePreference';
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useId } from 'react';
 import { flushSync } from 'react-dom';
 import { THEMES, isThemeId, themeDef, DEFAULT_THEME, type ThemeId } from './themes';
@@ -41,7 +41,7 @@ import { chime, primeChimes } from '../../utils/chime';
 import { SoundToggle } from './components/SoundToggle';
 import { LayoutToggle } from './components/LayoutToggle';
 import { useChatLayout } from './hooks/useChatLayout';
-import { isTeamNote } from './components/ThinkingBlock';
+import { isTeamNote, parseThinking } from './components/ThinkingBlock';
 import { useDelayedClose } from './hooks/useDelayedClose';
 
 const RadarIcon = ({ size = 14 }: { size?: number }) => (
@@ -57,6 +57,9 @@ import { VoiceOverlay } from './VoiceOverlay';
 import { LightboxModal } from './components/LightboxModal';
 import { ConversationTimeline } from './components/ConversationTimeline';
 import { TapbackMenu } from './components/TapbackMenu';
+import { ThemeDiscoveryHint } from './components/ThemeDiscoveryHint';
+import { LayoutDiscoveryNote } from './components/LayoutDiscoveryNote';
+import { hasSeenLayoutHint, rememberLayoutHintSeen } from '../../utils/layoutDiscovery';
 
 export function ChatModal({
   title = 'kiku',
@@ -254,7 +257,7 @@ export function ChatModal({
     return subscribeLiveStream({ client });
   }, [hasLiveData, client]);
 
-  const [isNarrow, setIsNarrow] = useState(false);
+  const [isNarrow, setIsNarrow] = useState(() => typeof window !== 'undefined' && !!window.matchMedia?.('(max-width: 1199px)').matches);
   useEffect(() => {
     const mq = window.matchMedia?.('(max-width: 1199px)');
     if (!mq) return;
@@ -589,6 +592,19 @@ export function ChatModal({
 
   const panelRef = useRef<HTMLDivElement>(null);
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
+  const [themeDiscovery, setThemeDiscovery] = useState(false);
+  const [layoutHintEligible, setLayoutHintEligible] = useState(() => !hasSeenLayoutHint());
+  const [layoutHintIndex, setLayoutHintIndex] = useState<number | null>(null);
+  const [layoutGuidance, setLayoutGuidance] = useState(false);
+  const [themeMenuReady, setThemeMenuReady] = useState(false);
+  const markThemeMenuReady = useCallback(() => setThemeMenuReady(true), []);
+  useEffect(() => {
+    if (themeMenuOpen) rememberThemesSeen();
+    else {
+      setThemeDiscovery(false);
+      setLayoutGuidance(false);
+    }
+  }, [themeMenuOpen]);
   const layoutDockTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!themeMenuOpen && layoutDockTimer.current) clearTimeout(layoutDockTimer.current);
@@ -615,11 +631,12 @@ export function ChatModal({
       const path = (e.composedPath ? e.composedPath() : []) as EventTarget[];
       const isInsideRail = themeMenuRef.current && (path.includes(themeMenuRef.current) || themeMenuRef.current.contains(e.target as Node));
       const isInsideMobile = mobileThemeRef.current && (path.includes(mobileThemeRef.current) || mobileThemeRef.current.contains(e.target as Node));
+      const isLayoutNote = path.some(el => (el as HTMLElement).classList?.contains('hsk-cb-layout-discovery-note'));
       const targetEl = e.target as HTMLElement | null;
       const isInsideTopbarMark = targetEl?.closest?.('.hsk-cb-topbar-mark');
       const isInsideOoze = targetEl?.closest?.('.hsk-cb-topbar-ooze-menu') || path.some((el: any) => el?.classList?.contains?.('hsk-cb-topbar-ooze-menu'));
 
-      if (isInsideRail || isInsideMobile || isInsideTopbarMark || isInsideOoze) {
+      if (isInsideRail || isInsideMobile || isInsideTopbarMark || isInsideOoze || isLayoutNote) {
         return;
       }
       closeThemeMenu();
@@ -655,8 +672,34 @@ export function ChatModal({
   }, [revealMessage]);
 
   const chatLayout = useChatLayout(msgsContainerRef);
+  const handleToggleLayout = () => {
+    chatLayout.toggle();
+    rememberLayoutHintSeen();
+    setLayoutHintEligible(false);
+    setLayoutHintIndex(null);
+    setLayoutGuidance(false);
+    if (!isNarrow) return;
+    if (layoutDockTimer.current) clearTimeout(layoutDockTimer.current);
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) closeThemeMenuNow();
+    else layoutDockTimer.current = setTimeout(closeThemeMenu, 400);
+  };
+  const openLayoutDock = () => {
+    setThemeMenuMark(currentTheme);
+    setLayoutGuidance(true);
+    setThemeMenuOpen(true);
+  };
 
   const { closing: overlayClosing, requestClose: exitOverlay } = useDelayedClose(OVERLAY_EXIT_MS, onClose);
+  useEffect(() => {
+    if (!chromeReady || !baseFontReady || !themeMenuReady || overlayClosing || hasSeenThemes()) return;
+    const timer = window.setTimeout(() => {
+      if (hasSeenThemes()) return;
+      setThemeMenuMark(currentTheme);
+      setThemeDiscovery(true);
+      setThemeMenuOpen(true);
+    }, 650);
+    return () => window.clearTimeout(timer);
+  }, [chromeReady, baseFontReady, themeMenuReady, overlayClosing, currentTheme]);
   // end=true tells the team the visitor is done; otherwise the request is kept for when they come back.
   const closeNow = useCallback((end: boolean) => {
     if (end) leaveHuman();
@@ -728,6 +771,7 @@ export function ChatModal({
   const resetNow = useCallback((end: boolean) => {
     if (end) leaveHuman();
     reset();
+    setLayoutHintIndex(null);
     setKeyPhase('idle');
   }, [reset, setKeyPhase, leaveHuman]);
   const handleReset = useCallback(() => {
@@ -900,6 +944,20 @@ export function ChatModal({
     return kept.map((m, i) => (i === last ? { ...m, content: pacedContent } : m));
   }, [messages, loading, streaming, pacedContent]);
 
+  const hasLayoutContent = displayMessages.some(message =>
+    message.role === 'assistant' && !isTeamNote(message.statusStage) && parseThinking(message.content).content.trim().length > 0
+  );
+  useEffect(() => {
+    if (!layoutHintEligible || loading || revealing || error || halted || voiceMode !== 'off') return;
+    for (let index = displayMessages.length - 1; index >= 0; index--) {
+      const message = displayMessages[index];
+      if (message.role !== 'assistant' || isTeamNote(message.statusStage) || !parseThinking(message.content).content.trim()) continue;
+      setLayoutHintEligible(false);
+      setLayoutHintIndex(index);
+      break;
+    }
+  }, [layoutHintEligible, displayMessages, loading, revealing, error, halted, voiceMode]);
+
   const timelineItems = React.useMemo(() => {
     const items: Array<{ idx: number; text: string }> = [];
     displayMessages.forEach((m, idx) => {
@@ -999,12 +1057,7 @@ export function ChatModal({
             <KikuDoodles seed={(client as any)?.api?.siteId ?? ''} theme={hskThemeAttr} dir={isRTL ? 'rtl' : 'ltr'} waitForContent />
 
             <ChatTopbar
-              layoutControl={<LayoutToggle wide={chatLayout.wide} onToggle={() => {
-                chatLayout.toggle();
-                if (layoutDockTimer.current) clearTimeout(layoutDockTimer.current);
-                if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) closeThemeMenuNow();
-                else layoutDockTimer.current = setTimeout(closeThemeMenu, 400);
-              }} />}
+              layoutControl={hasLayoutContent ? <LayoutToggle wide={chatLayout.wide} onToggle={handleToggleLayout} emphasized={layoutGuidance} /> : undefined}
               title={title}
               logo={logo}
               hasMessages={messages.length > 0}
@@ -1013,6 +1066,8 @@ export function ChatModal({
               awayFromBottom={showJumpToBottom}
               themeMenuOpen={themeMenuOpen}
               themeMenuClosing={themeMenuClosing}
+              themeDiscovery={themeDiscovery}
+              onThemeMenuReady={markThemeMenuReady}
               onThemeMenuClosed={closeThemeMenuNow}
               isNarrow={isNarrow}
               currentTheme={currentTheme}
@@ -1054,6 +1109,7 @@ export function ChatModal({
                 />
               ) : (
                 <ChatMessages
+                  afterReply={layoutHintIndex === null ? undefined : { index: layoutHintIndex, node: <LayoutDiscoveryNote onOpenDock={openLayoutDock} /> }}
                   doodleTheme={hskThemeAttr}
                   displayMessages={displayMessages}
                   messageRefs={messageRefs}
@@ -1182,7 +1238,7 @@ export function ChatModal({
           )}
 
 
-          <div className={cn("hsk-cb-kiku-id-rail", isRTL ? "hsk-cb-kiku-id-rail--right" : "hsk-cb-kiku-id-rail--left")}>
+          <div className={cn("hsk-cb-kiku-id-rail", isRTL ? "hsk-cb-kiku-id-rail--right" : "hsk-cb-kiku-id-rail--left", themeMenuOpen && !themeMenuClosing && 'is-theme-open')}>
             <div className="hsk-cb-dock-frost" aria-hidden="true" />
             <SoundToggle />
 
@@ -1226,7 +1282,9 @@ export function ChatModal({
               </button>
             </div>
 
-            <LayoutToggle wide={chatLayout.wide} onToggle={() => { chatLayout.toggle(); }} />
+            {!isNarrow && themeMenuOpen && themeDiscovery && <ThemeDiscoveryHint closing={themeMenuClosing} />}
+
+            {hasLayoutContent && <LayoutToggle wide={chatLayout.wide} onToggle={handleToggleLayout} emphasized={layoutGuidance} />}
 
           </div>
 

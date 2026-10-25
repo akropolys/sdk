@@ -13,8 +13,8 @@ function readAsDataURL(blob: Blob): Promise<string> {
 }
 
 // Small files, GIFs and SVGs go as they are; anything larger is decoded at its sending size and encoded off the main thread, so picking a photo never stalls the page.
-export async function downscaleImage(file: File): Promise<string> {
-  if (file.type === 'image/gif' || file.type === 'image/svg+xml' || file.size <= SKIP_UNDER_BYTES) {
+export async function downscaleImage(file: File, outputType?: 'image/jpeg'): Promise<string> {
+  if (!outputType && (file.type === 'image/gif' || file.type === 'image/svg+xml' || file.size <= SKIP_UNDER_BYTES)) {
     return readAsDataURL(file);
   }
   try {
@@ -30,16 +30,19 @@ export async function downscaleImage(file: File): Promise<string> {
       canvas.width = w;
       canvas.height = h;
       const cx = canvas.getContext('2d');
-      if (!cx) return readAsDataURL(file);
+      if (!cx) { if (outputType) throw new Error('image conversion failed'); return readAsDataURL(file); }
+      if (outputType) { cx.fillStyle = '#fff'; cx.fillRect(0, 0, w, h); }
       cx.drawImage(bitmap, 0, 0);
-      const keepPNG = file.type === 'image/png';
+      const keepPNG = !outputType && file.type === 'image/png';
       const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, keepPNG ? 'image/png' : 'image/jpeg', QUALITY));
-      if (!blob || blob.size >= file.size) return readAsDataURL(file);
+      if (!blob) { if (outputType) throw new Error('image conversion failed'); return readAsDataURL(file); }
+      if (!outputType && blob.size >= file.size) return readAsDataURL(file);
       return readAsDataURL(blob);
     } finally {
       bitmap.close?.();
     }
-  } catch {
+  } catch (error) {
+    if (outputType) throw error;
     return readAsDataURL(file);
   }
 }

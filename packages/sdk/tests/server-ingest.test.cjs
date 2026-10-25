@@ -49,8 +49,8 @@ test('queue acceptance is returned with its message and counts',async t=>{
 });
 
 test('backend rejection preserves status and message without retry',async t=>{
- let calls=0;fakeFetch(t,async()=>{calls++;return new Response(JSON.stringify({error:'Batch requires Pro or Business'}),{status:402})});
- await assert.rejects(createIngestClient(config).ingestBatch([{id:'/one'}]),e=>e instanceof IngestError&&e.status===402&&e.message==='Batch requires Pro or Business');
+ let calls=0;fakeFetch(t,async()=>{calls++;return new Response(JSON.stringify({error:'Batch requires Growth, Pro or Business'}),{status:402})});
+ await assert.rejects(createIngestClient(config).ingestBatch([{id:'/one'}]),e=>e instanceof IngestError&&e.status===402&&e.message==='Batch requires Growth, Pro or Business');
  assert.equal(calls,1);
 });
 
@@ -147,7 +147,7 @@ test('network failure and first-group rejection never continue the import',async
  fakeFetch(t,async()=>{calls++;throw cause});
  await assert.rejects(createIngestClient(config).ingestBatch([{id:'/1'},{id:'/2'}],undefined,{batchSize:1}),e=>e instanceof IngestBatchError&&e.nextIndex===0&&e.partialResult.count===0&&e.cause===cause);
  assert.equal(calls,1);
- global.fetch=async()=>{calls++;return new Response(JSON.stringify({error:'Batch requires Pro'}),{status:402})};
+ global.fetch=async()=>{calls++;return new Response(JSON.stringify({error:'Batch requires Growth or above'}),{status:402})};
  await assert.rejects(createIngestClient(config).ingestBatch([{id:'/1'},{id:'/2'}],undefined,{batchSize:1}),e=>e instanceof IngestBatchError&&e.status===402&&e.nextIndex===0);
  assert.equal(calls,2);
 });
