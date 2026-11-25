@@ -1,6 +1,8 @@
 import type { IngestResponse, IngestRecord } from './types';
 import { normalizeIngestRecord } from './ingestionRecord';
 export type { IngestRecord } from './types';
+import { siteFromKey, kidFromPrivateKey, warnSiteMismatch } from './keys';
+export { siteFromKey, kidFromPrivateKey } from './keys';
 import { stableStringify } from './utils/stableStringify';
 
 declare const globalThis: any;
@@ -130,8 +132,10 @@ async function createSignedIngestEnvelope<T extends Record<string, any>>(
 }
 
 export interface SignUserOptions {
-  siteId: string;
-  kid: string;
+  siteId?: string;
+  kid?: string;
+  /** Your browser key; lets siteId and kid be left out. */
+  apiToken?: string;
   /** How long the proof stays valid. Defaults to a day. */
   ttlSeconds?: number;
 }
@@ -146,7 +150,10 @@ export async function signUser(
   options: SignUserOptions
 ): Promise<string> {
   const exp = Math.floor(Date.now() / 1000) + (options.ttlSeconds ?? 86400);
-  const canonical = stableStringify({ v: 1, kid: options.kid, siteId: options.siteId, shopperId: userId, exp });
+  const siteId = options.siteId || siteFromKey(options.apiToken);
+  if (!siteId) throw new Error('signUser needs a siteId, or an apiToken that carries one');
+  const kid = options.kid || await kidFromPrivateKey(privateKeyPem, options.apiToken ?? '');
+  const canonical = stableStringify({ v: 1, kid, siteId, shopperId: userId, exp });
   const bytes = new TextEncoder().encode(canonical);
 
   const binaryString = decodeBase64(normalisePem(privateKeyPem));
@@ -225,7 +232,7 @@ async function createSignedLiveEnvelope(
 
 
 export interface IngestClientOptions {
-  siteId: string;
+  siteId?: string;
   apiToken: string;
   apiUrl?: string;
   timeoutMs?: number;
@@ -288,14 +295,23 @@ export class LiveBatchError extends IngestError {
 /** Configure once on the server, then await ingest(entity) or ingestBatch(entities). */
 export function createIngestClient(options: IngestClientOptions) {
   const config = { ...options };
+  warnSiteMismatch(config.siteId, config.apiToken);
+  if (!config.siteId) config.siteId = siteFromKey(config.apiToken);
+  let kidReady: Promise<void> | undefined;
+  const resolveKid = () => {
+    if (config.kid?.trim() || !config.privateKey?.trim()) return Promise.resolve();
+    kidReady ||= kidFromPrivateKey(config.privateKey, config.apiToken ?? '').then(k => { config.kid = k; }, e => { kidReady = undefined; throw e; });
+    return kidReady;
+  };
   async function send(entities: Record<string, unknown>[], batch: boolean, options?: IngestRequestOptions): Promise<IngestResponse> {
     if (entities.length === 0) return { success: true, count: 0, indexed: 0, updated: 0, queued: 0 };
-    if (!config.siteId?.trim() || !config.apiToken?.trim()) throw new Error('Ingestion requires siteId and apiToken');
+    if (!config.siteId?.trim() || !config.apiToken?.trim()) throw new Error('Ingestion requires your public key (apiToken)');
     if (options !== undefined && (options === null || typeof options !== 'object' || (options.signed !== undefined && typeof options.signed !== 'boolean'))) {
       throw new Error('Pass signed or { signed: true } as the second argument');
     }
+    if (options?.signed) await resolveKid();
     if (options?.signed && (!config.privateKey?.trim() || !config.kid?.trim())) {
-      throw new Error('Signed ingestion requires a privateKey and kid');
+      throw new Error('Signed ingestion requires a privateKey');
     }
     const timeoutMs = config.timeoutMs ?? 20_000;
     if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) throw new Error('timeoutMs must be a positive integer');
@@ -377,11 +393,12 @@ export function createIngestClient(options: IngestClientOptions) {
     let offset = 0;
     while (offset < records.length) {
       try {
-        if (!config.siteId?.trim() || !config.apiToken?.trim()) throw new Error('Ingestion requires siteId and apiToken');
+        if (!config.siteId?.trim() || !config.apiToken?.trim()) throw new Error('Ingestion requires your public key (apiToken)');
         if (options !== undefined && (options === null || typeof options !== 'object' || (options.signed !== undefined && typeof options.signed !== 'boolean'))) {
           throw new Error('Pass signed or { signed: true } as the second argument');
         }
-        if (options?.signed && (!config.privateKey?.trim() || !config.kid?.trim())) throw new Error('Signed ingestion requires a privateKey and kid');
+        if (options?.signed) await resolveKid();
+        if (options?.signed && (!config.privateKey?.trim() || !config.kid?.trim())) throw new Error('Signed ingestion requires a privateKey');
         const timeoutMs = config.timeoutMs ?? 20_000;
         if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) throw new Error('timeoutMs must be a positive integer');
         // Leave room for the envelope and signature under the live endpoint's 2 MiB limit.

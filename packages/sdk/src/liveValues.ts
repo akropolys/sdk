@@ -11,8 +11,14 @@ export interface LiveValue {
 
 type Listener = (key: string) => void;
 
-const values = new Map<string, LiveValue>();
-const listeners = new Set<Listener>();
+const values = new Map<string, Map<string, LiveValue>>();
+const listeners = new Set<{ listener: Listener; scope: string }>();
+
+// A client may change sites over its lifetime; scope by endpoint and site, not object identity.
+export function liveValueScope(client?: { api: { apiUrl: string; siteId: string } } | null): string {
+  const active = client ?? (globalThis as any).__akropolys_client__;
+  return active?.api ? JSON.stringify([active.api.apiUrl, active.api.siteId]) : '';
+}
 
 export const LIVE_STALE_AFTER_MS = 30_000;
 
@@ -23,9 +29,12 @@ export function setLiveValue(
   key: string,
   fields: Record<string, string>,
   at: number = Date.now(),
+  scope: string = liveValueScope(),
 ): void {
   if (!key || !fields || typeof fields !== 'object') return;
-  const prev = values.get(key);
+  let scoped = values.get(scope);
+  if (!scoped) { scoped = new Map(); values.set(scope, scoped); }
+  const prev = scoped.get(key);
   if (prev && prev.at > at) return;
 
   const changedAt: Record<string, number> = { ...(prev?.changedAt ?? {}) };
@@ -41,10 +50,11 @@ export function setLiveValue(
   }
   if (!moved && prev && prev.at === at) return;
 
-  values.set(key, { key, fields, at, changedAt });
-  for (const l of listeners) {
+  scoped.set(key, { key, fields, at, changedAt });
+  for (const { listener, scope: listenerScope } of listeners) {
+    if (listenerScope !== scope) continue;
     try {
-      l(key);
+      listener(key);
     } catch (err) {
       console.error('[Akropolys] live value listener failed:', err);
     }
@@ -52,14 +62,21 @@ export function setLiveValue(
 }
 
 export function getLiveValue(key: string): LiveValue | undefined {
-  return values.get(key);
+  return getLiveValueInScope(key, liveValueScope());
+}
+
+export function getLiveValueInScope(key: string, scope: string): LiveValue | undefined {
+  return values.get(scope)?.get(key);
 }
 
 export function subscribeLiveValues(listener: Listener): () => void {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
+  return subscribeLiveValuesInScope(listener, liveValueScope());
+}
+
+export function subscribeLiveValuesInScope(listener: Listener, scope: string): () => void {
+  const entry = { listener, scope };
+  listeners.add(entry);
+  return () => { listeners.delete(entry); };
 }
 
 export function clearLiveValues(): void {

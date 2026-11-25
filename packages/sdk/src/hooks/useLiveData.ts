@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { pipeLiveData, type LiveIngestResult, type LiveSkipped, type PipeOptions } from '../liveIngest';
+import { useAkropolysContext } from '../Provider';
 
 export interface UseLiveDataReturn {
   status: 'idle' | 'pending' | LiveIngestResult['status'];
@@ -10,6 +11,7 @@ export interface UseLiveDataReturn {
 }
 
 export function useLiveData(key: string, fields: Record<string, unknown>, options: PipeOptions = {}): UseLiveDataReturn {
+  const client = useAkropolysContext();
   const [state, setState] = useState<Omit<UseLiveDataReturn, 'retry'>>({ status: 'idle', skipped: [], retrying: false });
   const current = useRef({ key, fields, options }); current.current = { key, fields, options };
   const last = useRef('');
@@ -25,16 +27,16 @@ export function useLiveData(key: string, fields: Record<string, unknown>, option
         setState({ ...result, skipped: result.skipped ?? [], retrying: result.retrying ?? false });
         current.current.options.onResult?.(result);
       }
-    } });
-  }, []);
+    } }, client);
+  }, [client]);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; version.current++; last.current = ''; }; }, []);
   useEffect(() => {
     if (!key || !fields) { if (last.current) {last.current = ''; version.current++; setState({status:'idle',skipped:[],retrying:false});} return; }
     let fingerprint: string;
-    try { fingerprint = key + '|' + JSON.stringify(fields); }
+    try { fingerprint = JSON.stringify([client.api.apiUrl, client.api.siteId, key, fields]); }
     catch (error) { if (last.current !== '!invalid') {last.current='!invalid'; version.current++; setState({ status: 'error', error: error as Error, skipped: [], retrying: false });} return; }
     if (last.current === fingerprint) return;
     last.current = fingerprint; submit();
-  }, [key, fields, submit]);
+  }, [key, fields, submit, client.api.siteId, client.api.apiUrl]);
   return { ...state, retry: submit };
 }

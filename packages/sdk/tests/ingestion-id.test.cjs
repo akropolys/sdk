@@ -50,7 +50,7 @@ test('browser API retains ID and optional fields.url; signed envelopes remain ex
 
 function client() {
  const c=Object.create(AkropolysClient.prototype);
- Object.assign(c,{ingestQueue:[],ingestedUrls:new Map(),scheduleFlush:()=>{}});
+ Object.assign(c,{api:{},ingestQueue:[],ingestedUrls:new Map(),scheduleFlush:()=>{}});
  return c;
 }
 test('browser deduplicates by ID and content while ignoring signature nonce',async()=>{

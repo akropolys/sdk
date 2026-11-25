@@ -18,6 +18,8 @@ export function AkropolysProvider({
   actionHeaders,
   actionAuth,
   authLoading,
+  indexContent,
+  kikuKey,
   onError,
   children
 }: AkropolysProviderProps & { voiceUrl?: string }) {
@@ -34,6 +36,8 @@ export function AkropolysProvider({
       actionHeaders,
       actionAuth,
       authLoading,
+      indexContent,
+      kikuKey,
       onError
     });
   } else {
@@ -43,10 +47,18 @@ export function AkropolysProvider({
       voiceUrl,
       apiToken,
       actionAuth,
-      actionHeaders
+      actionHeaders,
+      indexContent
     });
     clientRef.current.reRegister();
   }
+
+  useEffect(() => {
+    if (kikuKey !== undefined && clientRef.current?.getKikuKey() !== kikuKey) {
+      clientRef.current?.clearKikuKey();
+      if (kikuKey) clientRef.current?.setKikuKey(kikuKey);
+    }
+  }, [kikuKey]);
 
   useEffect(() => {
     clientRef.current?.setShopperId(shopperId);

@@ -1,9 +1,12 @@
-import { useRef } from 'react';
+import { useContext, useRef } from 'react';
 import { AkropolysConfig } from '../types';
 import { AkropolysClient, initAkropolys, getAkropolysClient } from '../client';
+import { AkropolysContext } from '../Provider';
 
 export function useAkropolys(config?: AkropolysConfig): AkropolysClient {
+  const provider = useContext(AkropolysContext);
   const clientRef = useRef<AkropolysClient | null>(null);
+  if (!config && provider) return provider;
 
   if (!clientRef.current) {
     if (config) {

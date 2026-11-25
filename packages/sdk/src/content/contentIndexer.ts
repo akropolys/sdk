@@ -1,8 +1,8 @@
 import { AkropolysClient } from '../client';
 
-const indexedUrls = new Set<string>();
-
 export function initContentIndexer(client: AkropolysClient): () => void {
+  const indexedUrls = new Set<string>();
+  let stopped = false;
   let debounceTimer: ReturnType<typeof setTimeout>;
   let maxWaitTimer: ReturnType<typeof setTimeout>;
   let lastUrl = typeof location !== 'undefined' ? location.href : '';
@@ -11,7 +11,7 @@ export function initContentIndexer(client: AkropolysClient): () => void {
   const originalReplaceState = typeof history !== 'undefined' ? history.replaceState.bind(history) : null;
 
   const extractAndIngest = () => {
-    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+    if (stopped || typeof window === 'undefined' || typeof document === 'undefined') return;
     const url = location.href;
 
     if (indexedUrls.has(url)) return;
@@ -86,7 +86,7 @@ export function initContentIndexer(client: AkropolysClient): () => void {
   let observer: MutationObserver | null = null;
 
   const startObserving = () => {
-    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+    if (stopped || typeof window === 'undefined' || typeof document === 'undefined') return;
     if (typeof MutationObserver === 'undefined') return;
 
     observer = new MutationObserver(() => {
@@ -139,6 +139,7 @@ export function initContentIndexer(client: AkropolysClient): () => void {
   }
 
   const cleanup = () => {
+    stopped = true;
     if (observer) {
       observer.disconnect();
     }

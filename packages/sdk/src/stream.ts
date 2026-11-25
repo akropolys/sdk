@@ -1,5 +1,6 @@
 import { ChatAction } from './types';
-import type { BrowserActionRequest } from './browserActions';
+import type { BrowserActionRequest, BrowserActionResult } from './browserActions';
+import type { ActionLinkContext } from './actionLinks';
 
 export interface KnowledgeImage {
   url: string;
@@ -28,6 +29,7 @@ export interface ChatMessage {
 
   liveKeys?: string[];
   actionType?: string;
+  actionLinks?: ActionLinkContext[];
   sources?: ChatSource[]; // this turn's candidate entities, for rendering referenced products
   referencedIds?: string[]; // ids from `sources` this specific answer actually mentioned
   intent?: string;
@@ -119,13 +121,13 @@ export class KikuStream {
   private abortController: AbortController;
 
   constructor(responsePromise: Promise<Response>, abortController: AbortController,
-    private handleBrowserAction?: (request: BrowserActionRequest, signal: AbortSignal) => Promise<void>) {
+    private handleBrowserAction?: (request: BrowserActionRequest, signal: AbortSignal) => Promise<BrowserActionResult | void>) {
     this.responsePromise = responsePromise;
     this.abortController = abortController;
     this.startReading();
   }
 
-  on(event: 'token' | 'meta' | 'done' | 'error' | 'entity_ref' | 'live_ref' | 'viz' | 'thinking' | 'knowledge_images' | 'stale_notice', callback: Function): this {
+  on(event: 'token' | 'meta' | 'done' | 'error' | 'entity_ref' | 'live_ref' | 'viz' | 'thinking' | 'knowledge_images' | 'stale_notice' | 'action_result' | 'action_return' | 'action_return_ack', callback: Function): this {
     if (!this.listeners[event]) {
       this.listeners[event] = [];
     }
@@ -133,7 +135,7 @@ export class KikuStream {
     return this;
   }
 
-  off(event: 'token' | 'meta' | 'done' | 'error' | 'entity_ref' | 'live_ref' | 'viz' | 'thinking' | 'knowledge_images' | 'stale_notice', callback: Function): this {
+  off(event: 'token' | 'meta' | 'done' | 'error' | 'entity_ref' | 'live_ref' | 'viz' | 'thinking' | 'knowledge_images' | 'stale_notice' | 'action_result' | 'action_return' | 'action_return_ack', callback: Function): this {
     if (!this.listeners[event]) return this;
     this.listeners[event] = this.listeners[event].filter(cb => cb !== callback);
     return this;
@@ -238,7 +240,17 @@ export class KikuStream {
                 if (!this.handleBrowserAction) throw new Error('This client does not support browser actions.');
                 if (!request.id || seenActions.has(request.id)) continue;
                 seenActions.add(request.id);
-                await this.handleBrowserAction(request, this.abortController.signal);
+                const result = await this.handleBrowserAction(request, this.abortController.signal);
+                if (result) this.emit('action_result', { name: request.name, result });
+                continue;
+              }
+
+              if (event === 'action_return') {
+                this.emit('action_return', JSON.parse(data));
+                continue;
+              }
+              if (event === 'action_return_ack') {
+                this.emit('action_return_ack');
                 continue;
               }
 

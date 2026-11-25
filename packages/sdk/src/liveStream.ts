@@ -1,5 +1,5 @@
 import { getAkropolysClient, AkropolysClient } from './client';
-import { setLiveValue } from './liveValues';
+import { setLiveValue, liveValueScope } from './liveValues';
 
 export interface LiveStreamOptions {
 
@@ -28,6 +28,7 @@ export function subscribeLiveStream(options: LiveStreamOptions = {}): () => void
     return () => {};
   }
 
+  const scope = liveValueScope(client);
   let closed = false;
   let ws: WebSocket | null = null;
   let attempt = 0;
@@ -49,7 +50,7 @@ export function subscribeLiveStream(options: LiveStreamOptions = {}): () => void
       if (!Array.isArray(frame.records)) return;
       for (const r of frame.records) {
         if (!r?.key || !r.fields) continue;
-        setLiveValue(r.key, r.fields, r.at);
+        setLiveValue(r.key, r.fields, r.at, scope);
       }
     };
 

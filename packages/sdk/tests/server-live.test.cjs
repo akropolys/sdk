@@ -28,7 +28,7 @@ test('live errors retain accepted progress and never retry unsigned',async t=>{
  let calls=0;fetchStub(t,async()=>{calls++;return calls===1?response(1):new Response(JSON.stringify({error:'Denied'}),{status:403})});
  await assert.rejects(createIngestClient(config).ingestLive(['a','b','c'].map(key=>({key,fields:{v:1}})),undefined,{batchSize:1}),e=>e instanceof LiveBatchError&&e.status===403&&e.nextIndex===1&&e.partialResult.count===1);
  assert.equal(calls,2);
- await assert.rejects(createIngestClient(config).ingestLive({key:'a',fields:{v:1}},signed),/privateKey and kid/);assert.equal(calls,2);
+ await assert.rejects(createIngestClient(config).ingestLive({key:'a',fields:{v:1}},signed),/requires a privateKey/);assert.equal(calls,2);
 });
 test('live invalid acknowledgements and oversized records are exposed',async t=>{
  let calls=0;fetchStub(t,async()=>{calls++;return response(0)});

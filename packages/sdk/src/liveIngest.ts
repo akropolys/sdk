@@ -1,4 +1,4 @@
-import { getAkropolysClient } from './client';
+import { getAkropolysClient, type AkropolysClient } from './client';
 
 export interface LiveRecord { key: string; fields: Record<string, unknown>; }
 export interface LiveSkipped { key: string; reason: string; detail?: string; }
@@ -101,13 +101,13 @@ async function flush(): Promise<void> {
   }
 }
 
-export function pipeLiveData(record: LiveRecord, options: PipeOptions = {}): void {
+export function pipeLiveData(record: LiveRecord, options: PipeOptions = {}, client?: AkropolysClient): void {
   if (typeof window === 'undefined') return;
   let connection: Connection = { apiUrl: '', siteId: '', apiToken: '' };
   const entry: Pending = { record, connection, observers: new Set([options]) };
   try {
     if (!record?.key?.trim() || !record.fields) throw new Error('Live updates require a key and fields');
-    const api = (getAkropolysClient() as any).api;
+    const api = (client ?? getAkropolysClient()).api;
     connection = { apiUrl: api?.apiUrl, siteId: api?.siteId, apiToken: api?.apiToken };
     if (!connection.apiUrl || !connection.siteId || !connection.apiToken) throw new Error('Live client is not configured');
     entry.connection = connection;

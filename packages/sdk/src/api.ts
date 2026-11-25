@@ -88,7 +88,7 @@ export class AkropolysAPI {
     return executeBrowserAction(request, signal, this.actionHeaders, this.actionAuth);
   }
 
-  async handleBrowserAction(request: BrowserActionRequest, signal?: AbortSignal): Promise<void> {
+  async handleBrowserAction(request: BrowserActionRequest, signal?: AbortSignal): Promise<BrowserActionResult | undefined> {
     if (!request.id || !/^[a-f0-9]{64}$/.test(request.id)) throw new Error("Invalid action request.");
     const result = await this.executeBrowserAction(request, signal);
     if (signal?.aborted) return;
@@ -102,6 +102,7 @@ export class AkropolysAPI {
         body: JSON.stringify({ siteId: this.siteId, result }), signal: controller.signal,
       });
       if (!response.ok) throw new Error("Could not return the action result. Check the site before retrying.");
+      return result;
     } finally {
       clearTimeout(timer);
       signal?.removeEventListener('abort', abort);
@@ -125,6 +126,9 @@ export class AkropolysAPI {
   private widget?: Promise<WidgetSettings>;
 
   private humanConversation?: HumanConversation | null;
+  private conversationGeneration = 0;
+  private siteGeneration = 0;
+  private conversationStreams = new Set<AbortController>();
 
   // The conversation a person was asked into, if any; remembered across reloads.
   get conversation(): HumanConversation | null {
@@ -149,19 +153,24 @@ export class AkropolysAPI {
   }
 
   // The visitor's requests on this site, found by their Kiku identity; empty for a visitor without one.
-  async myRequests(): Promise<VisitorRequest[]> {
+  // null when the answer is stale (the visitor switched conversation meanwhile): keep the list you have.
+  async myRequests(): Promise<VisitorRequest[] | null> {
+    const generation = this.conversationGeneration;
     if (!this.getKikuKey?.()) return [];
     const res = await fetch(`${this.apiUrl}/conversations?siteId=${encodeURIComponent(this.siteId)}`, { headers: this.buildHeaders() });
     if (!res.ok) return [];
-    return (await res.json()).requests ?? [];
+    const body = await res.json();
+    return generation === this.conversationGeneration ? body.requests ?? [] : null;
   }
 
   // Picks a request up again in this browser; resolves with its last message id, or null when it is not theirs.
   async resumeRequest(id: string): Promise<number | null> {
+    const generation = this.conversationGeneration;
     const url = `${this.apiUrl}/conversations/${encodeURIComponent(id)}/resume?siteId=${encodeURIComponent(this.siteId)}`;
     const res = await fetch(url, { method: 'POST', headers: this.buildHeaders() });
     if (!res.ok) return null;
     const body = await res.json();
+    if (generation !== this.conversationGeneration) return null;
     this.humanConversation = { id, token: body.token, cursor: 0 };
     saveConversation(this.siteId, this.humanConversation);
     return Number(body.lastMessageId) || 0;
@@ -174,12 +183,14 @@ export class AkropolysAPI {
 
   // Where the remembered request stands: its status, and the team's replies not yet seen.
   async conversationState(): Promise<{ status: string; unread: number } | null> {
+    const generation = this.conversationGeneration;
     const c = this.conversation;
     if (!c) return null;
     const url = `${this.apiUrl}/conversations/${encodeURIComponent(c.id)}?siteId=${encodeURIComponent(this.siteId)}&after=${c.cursor}`;
     const res = await fetch(url, { headers: this.buildHeaders(false, { 'X-Akropolys-Conversation-Token': c.token }) });
     if (!res.ok) return null;
     const body = await res.json();
+    if (generation !== this.conversationGeneration) return null;
     const messages: { role: string }[] = body.messages ?? [];
     return { status: body.status, unread: messages.filter(m => m.role === 'human').length };
   }
@@ -193,9 +204,24 @@ export class AkropolysAPI {
     fetch(url, { method: 'POST', headers: this.buildHeaders(false, { 'X-Akropolys-Conversation-Token': c.token }), keepalive: true }).catch(() => {});
   }
 
+  private stopConversationStreams(): void {
+    this.conversationGeneration++;
+    for (const controller of this.conversationStreams) controller.abort();
+    this.conversationStreams.clear();
+  }
+
   forgetConversation(): void {
+    this.stopConversationStreams();
     this.humanConversation = null;
     saveConversation(this.siteId, null);
+  }
+
+  resetSiteState(): void {
+    this.siteGeneration++;
+    this.stopConversationStreams();
+    this.humanConversation = undefined;
+    this.widget = undefined;
+    this.cardFields = [];
   }
 
   // One connection to the conversation's replies, from the last message seen; resolves with the HTTP status.
@@ -203,7 +229,13 @@ export class AkropolysAPI {
     const c = this.conversation;
     if (!c) return Promise.resolve(404);
     const url = `${this.apiUrl}/conversations/${encodeURIComponent(c.id)}/events?siteId=${encodeURIComponent(this.siteId)}&after=${after ?? c.cursor}`;
-    return listenConversation(url, this.buildHeaders(false, { 'X-Akropolys-Conversation-Token': c.token }), onEvent, signal);
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    if (signal.aborted) abort();
+    else signal.addEventListener('abort', abort, { once: true });
+    this.conversationStreams.add(controller);
+    return listenConversation(url, this.buildHeaders(false, { 'X-Akropolys-Conversation-Token': c.token }), onEvent, controller.signal)
+      .finally(() => { signal.removeEventListener('abort', abort); this.conversationStreams.delete(controller); });
   }
 
   // Last known card fields; components read them through useCardFields so they re-render when they arrive.
@@ -212,11 +244,13 @@ export class AkropolysAPI {
   // One boot call: the site's identity address, language and font.
   widgetSettings(): Promise<WidgetSettings> {
     if (!this.widget) {
+      const generation = this.siteGeneration;
       this.widget = (async () => {
         try {
           const res = await fetch(`${this.apiUrl}/site-widget?siteId=${encodeURIComponent(this.siteId)}`);
           if (!res.ok) throw new Error(`site-widget ${res.status}`);
           const data = await res.json();
+          if (generation !== this.siteGeneration) return { identityUrl: '', cardFields: [] };
           this.cardFields = Array.isArray(data?.cardFields) ? data.cardFields.filter((f: unknown) => typeof f === 'string') : [];
           return {
             identityUrl: data?.identityUrl || '',
@@ -225,7 +259,7 @@ export class AkropolysAPI {
             font: data?.font ? this.parseFont(data.font) : null,
           };
         } catch {
-          this.widget = undefined; // next caller retries
+          if (generation === this.siteGeneration) this.widget = undefined; // next caller retries
           return { identityUrl: '', cardFields: this.cardFields };
         }
       })();
@@ -539,11 +573,13 @@ export class AkropolysAPI {
     currentContext?: any,
     attachments?: ChatAttachment[],
     forcedIntent?: string,
-    captureTargets?: CaptureTarget[]
+    captureTargets?: CaptureTarget[],
+    actionReturn?: string
   ): Promise<Response> {
     log('info', 'chatStream query', query);
     const headers = this.buildHeaders(true);
     const body: Record<string, any> = { query, siteId: this.siteId, history, currentContext };
+    if (actionReturn) body.actionReturn = actionReturn;
     const shopperName = this.getShopperName?.();
     if (shopperName) body.shopperName = shopperName;
     const shopperLanguage = this.getShopperLanguage?.();

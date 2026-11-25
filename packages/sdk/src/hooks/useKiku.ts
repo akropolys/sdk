@@ -1,11 +1,14 @@
 import { normalizeEntityImages } from '../entityImages';
+import { actionLinkContexts } from '../actionLinks';
+import { watchActionReturns } from '../actionReturns';
+import type { BrowserActionResult } from '../browserActions';
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import type { VisitorRequest } from '../conversation';
 import { useAkropolysContext } from '../Provider';
 import { ChatMessage, ChatSource, VizEvent } from '../stream';
 import { ChatAction, ChatAttachment, CaptureTarget } from '../types';
 import { resolveDisplayFields } from '../client';
-import { setLiveValue } from '../liveValues';
+import { setLiveValue, liveValueScope } from '../liveValues';
 import { useCardFields } from './useCardFields';
 
 interface UseKikuOptions {
@@ -60,6 +63,7 @@ interface PendingSend {
 export interface SpokenMedia {
   images?: string[];
   visualization?: string;
+  actionLinks?: import('../actionLinks').ActionLinkContext[];
   live?: string;
 }
 
@@ -77,7 +81,7 @@ function appendSpoken(prev: ChatMessage[], heard: string, said: string, duration
   const images = media?.images?.length ? media.images : undefined;
   const live = media?.live;
   if (heard || images) next.push({ role: 'user', content: heard, spoken: true, live, audioUrl: userAudioUrl, images });
-  if (said || media?.visualization) next.push({
+  if (said || media?.visualization || media?.actionLinks?.length) next.push({
     role: 'assistant',
     content: said,
     spoken: true,
@@ -85,6 +89,7 @@ function appendSpoken(prev: ChatMessage[], heard: string, said: string, duration
     thoughtForSeconds: duration && duration > 0 ? Math.round(duration * 10) / 10 : undefined,
     audioUrl: assistantAudioUrl,
     visualization: media?.visualization,
+    actionLinks: media?.actionLinks,
   });
   return next;
 }
@@ -122,6 +127,7 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
   const [allowedActions, setAllowedActions] = useState<string[] | null>(null);
   const activeStreamRef = useRef<any | null>(null);
   const pendingRef = useRef<PendingSend | null>(null);
+  const returnWatcher = useRef<ReturnType<typeof watchActionReturns> | null>(null);
   const [queuedMessage, setQueuedMessage] = useState<ChatMessage | null>(null);
   const spokenQueueRef = useRef<SpokenExchange[]>([]);
   const loadingRef = useRef(false);
@@ -147,6 +153,8 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
   const onErrorRef = useRef(options.onError);
 
   const [conversationId, setConversationId] = useState<string | null>(() => client?.api.conversation?.id ?? null);
+  const conversationIdRef = useRef(conversationId);
+  conversationIdRef.current = conversationId;
   const lastSentAtRef = useRef(0);
   const [humanStatus, setHumanStatus] = useState<string | null>(null);
   // A request found at mount is replayed once, so a reload or page change keeps what was said to the team.
@@ -155,20 +163,25 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
   const [requests, setRequests] = useState<VisitorRequest[]>([]);
   const [attached, setAttached] = useState(0);
 
+  const requestsRef = useRef<VisitorRequest[]>([]);
   const loadRequests = useCallback(async (): Promise<VisitorRequest[]> => {
     if (!client) return [];
     const list = await client.api.myRequests().catch(() => [] as VisitorRequest[]);
+    if (list === null) return requestsRef.current; // a stale answer never wipes the list
     setRequests(list);
+    requestsRef.current = list;
     return list;
   }, [client]);
 
   // Lets go of the request in this browser without ending it; it stays in the visitor's requests.
   const detach = useCallback(() => {
+    const id = conversationIdRef.current;
     client?.api.forgetConversation();
     resumeRef.current = { id: null, upTo: 0, shown: 0, auto: false };
     setConversationId(null);
     setHumanStatus(null);
-    loadRequests();
+    // The request stays in the visitor's list; fetch the list only if it is not there yet.
+    if (!id || !requestsRef.current.some(r => r.id === id)) loadRequests();
   }, [client, loadRequests]);
 
   // Shows one of the visitor's requests in the chat, replacing whatever was on screen.
@@ -252,7 +265,11 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
         return;
       }
       if (e.type === 'status' && e.status) {
-        if (status !== null && status !== e.status) loadRequests();
+        // Update this request's status in the list in place, rather than fetching the whole list again.
+        if (status !== null && status !== e.status) {
+          const next = e.status as VisitorRequest['status'];
+          setRequests(prev => (requestsRef.current = prev.map(r => (r.id === conversationId ? { ...r, status: next } : r))));
+        }
         status = e.status;
         setHumanStatus(e.status);
       }
@@ -394,7 +411,20 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     let messageInitialized = continuing;
     let lastMeta: any = null;
     const turnRefs: string[] = [];
+    // Entries the model put on screen with show, and the photo each opens at.
+    // When it shows, the carousel is exactly what it showed.
+    const turnShown: string[] = [];
+    const turnPhotos: Record<string, number> = {};
+    const withPhotos = (srcs: ChatSource[]): ChatSource[] => srcs.map(s => {
+      const at = s.id ? turnPhotos[s.id] : undefined;
+      if (!at) return s;
+      const list = Array.isArray(s.images) ? s.images : Array.isArray(s.fields?.images) ? s.fields!.images : null;
+      if (!list || at >= list.length) return s;
+      return { ...s, images: [...list.slice(at), ...list.slice(0, at)] };
+    });
+    const turnReferenced = () => (turnShown.length ? [...turnShown] : turnRefs);
     const sentAt = Date.now();
+    const liveScope = liveValueScope(client);
     let thoughtStamped = continuing;
 
     if (continuing) {
@@ -421,7 +451,7 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
 
     stream.on('meta', (meta: any) => {
       lastMeta = meta;
-      setSources(meta.sources ?? []);
+      setSources(withPhotos(meta.sources ?? []));
       if (meta.intent) setLastIntent(meta.intent);
       if (Array.isArray(meta.allowedActions)) setAllowedActions(meta.allowedActions);
       if (meta.action) setLastAction(meta.action);
@@ -456,10 +486,18 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     });
 
     stream.on('entity_ref', (ref: any) => {
-      if (ref?.id) {
-        if (!turnRefs.includes(ref.id)) turnRefs.push(ref.id);
-        setReferencedIds(prev => prev.includes(ref.id) ? prev : [...prev, ref.id]);
+      if (!ref?.id) return;
+      if (ref.type === 'shown') {
+        if (!turnShown.includes(ref.id)) turnShown.push(ref.id);
+        if (typeof ref.photo === 'number' && ref.photo > 0) {
+          turnPhotos[ref.id] = ref.photo;
+          if (lastMeta?.sources) setSources(withPhotos(lastMeta.sources));
+        }
+        setReferencedIds([...turnShown]);
+        return;
       }
+      if (!turnRefs.includes(ref.id)) turnRefs.push(ref.id);
+      if (!turnShown.length) setReferencedIds(prev => prev.includes(ref.id) ? prev : [...prev, ref.id]);
     });
 
     stream.on('knowledge_images', (refs: any[]) => {
@@ -488,7 +526,7 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
 
     stream.on('live_ref', (ref: { key: string; fields?: Record<string, string>; at?: number }) => {
       if (ref?.fields && typeof ref.fields === 'object') {
-        setLiveValue(ref.key, ref.fields, typeof ref.at === 'number' ? ref.at : undefined);
+        setLiveValue(ref.key, ref.fields, typeof ref.at === 'number' ? ref.at : undefined, liveScope);
       }
       ensureAssistantMessage();
       setMessages(prev => {
@@ -499,6 +537,39 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
           if (!keys.includes(ref.key)) {
             next[next.length - 1] = { ...last, liveKeys: [...keys, ref.key] };
           }
+        }
+        return next;
+      });
+    });
+
+    stream.on('action_result', ({ result }: { result: BrowserActionResult }) => {
+      const contexts = actionLinkContexts(result);
+      if (!contexts.length) return;
+      ensureAssistantMessage();
+      setMessages(prev => {
+        const next = [...prev];
+        const last = next[next.length - 1];
+        if (last?.role === 'assistant') {
+          const links = new Map((last.actionLinks ?? []).map(link => [link.url, link]));
+          for (const link of contexts) links.set(link.url, link);
+          next[next.length - 1] = { ...last, actionLinks: [...links.values()] };
+        }
+        return next;
+      });
+    });
+
+    stream.on('action_return', ({ token, urls }: { token: string; urls: string[] }) => {
+      if (!/^[a-f0-9]{64}$/.test(token) || !Array.isArray(urls)) return;
+      ensureAssistantMessage();
+      setMessages(prev => {
+        const next = [...prev];
+        const last = next[next.length - 1];
+        if (last?.role === 'assistant') {
+          const links = new Map((last.actionLinks ?? []).map(link => [link.url, link]));
+          for (const url of urls) {
+            if (typeof url === 'string' && /^https?:\/\//i.test(url)) links.set(url, { ...links.get(url), url, returnToken: token });
+          }
+          next[next.length - 1] = { ...last, actionLinks: [...links.values()] };
         }
         return next;
       });
@@ -584,11 +655,11 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
       setMessages(prev => {
         const next = [...prev];
         if (next.length > 0 && next[next.length - 1].role === 'assistant') {
-          const rawSources: ChatSource[] = lastMeta?.sources ?? [];
+          const rawSources: ChatSource[] = withPhotos(lastMeta?.sources ?? []);
           next[next.length - 1] = {
             ...next[next.length - 1],
             sources: enrichSources(rawSources, client?.api.cardFields ?? []),
-            referencedIds: turnRefs,
+            referencedIds: turnReferenced(),
             intent: lastMeta?.intent,
           };
         }
@@ -635,6 +706,7 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     attachments?: ChatAttachment[],
     forcedIntent?: string,
     captureTargets?: CaptureTarget[],
+    actionReturn?: string,
   ) => {
     setMessages(prev => [...prev, { role: 'assistant', content: '', thinking: '' }]);
     setLoading(true);
@@ -650,10 +722,18 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     displayedLenRef.current = 0;
 
     try {
-      const stream = client.chat(query, history, attachments, forcedIntent, captureTargets);
+      const stream = client.chat(query, history, attachments, forcedIntent, captureTargets, actionReturn);
       activeStreamRef.current = stream;
+      if (actionReturn) {
+        let accepted = false;
+        stream.on('action_return_ack', () => { accepted = true; returnWatcher.current?.ack(actionReturn); });
+        const retryIfUnacknowledged = () => { if (!accepted) returnWatcher.current?.fail(actionReturn); };
+        stream.on('error', retryIfUnacknowledged);
+        stream.on('done', retryIfUnacknowledged);
+      }
       consumeStream(stream, false, '');
     } catch (err: any) {
+      if (actionReturn) returnWatcher.current?.fail(actionReturn);
       setLoading(false);
       setStreaming(false);
       setError(err?.message ?? 'Chat request failed');
@@ -661,6 +741,23 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
       onErrorRef.current?.(err);
     }
   }, [client, consumeStream]);
+
+  const resumeReturn = useRef<(token: string) => boolean>(() => false);
+  resumeReturn.current = token => {
+    if (loadingRef.current || streamingRef.current || humanStatus === 'waiting' || humanStatus === 'human') return false;
+    loadingRef.current = true;
+    beginTurn(messages.map(message => ({ role: message.role, content: message.content })),
+      'Check the result of the external action I returned from.', undefined, undefined, undefined, token);
+    return true;
+  };
+  useEffect(() => {
+    if (!client?.api.siteId || typeof window === 'undefined') return;
+    const watcher = watchActionReturns(client.api.siteId, token => resumeReturn.current(token));
+    returnWatcher.current = watcher;
+    watcher.check();
+    return () => { watcher.dispose(); returnWatcher.current = null; };
+  }, [client, client?.api.siteId]);
+  useEffect(() => { returnWatcher.current?.check(); }, [loading, streaming, humanStatus]);
 
   const send = useCallback(async (query: string, displayQuery?: string, attachments?: ChatAttachment[], forcedIntent?: string, captureTargets?: CaptureTarget[]) => {
     if (!query.trim()) return;
@@ -744,6 +841,7 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
   }, [client, messages, loading, streaming, consumeStream]);
 
   const reset = useCallback(() => {
+    returnWatcher.current?.clear();
     activeStreamRef.current?.destroy();
     stopFlush();
     streamDoneRef.current = true;
@@ -768,6 +866,31 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     setLastIntent(null);
     detach();
   }, [detach, stopFlush]);
+
+  // Never carry one site's visible history or pending input into another site.
+  const previousSiteScope = useRef(liveValueScope(client));
+  const currentSiteScope = liveValueScope(client);
+  useEffect(() => {
+    if (previousSiteScope.current === currentSiteScope) return;
+    previousSiteScope.current = currentSiteScope;
+    activeStreamRef.current?.destroy();
+    stopFlush();
+    streamDoneRef.current = true;
+    targetTextRef.current = '';
+    displayedLenRef.current = 0;
+    pendingRef.current = null;
+    spokenQueueRef.current = [];
+    videoPollsRef.current.clear();
+    videoTimeoutsRef.current.forEach(timer => clearTimeout(timer));
+    videoTimeoutsRef.current.clear();
+    setQueuedMessage(null); setMessages([]); setSources([]); setReferencedIds([]);
+    setLoading(false); setStreaming(false); setStopped(false); setInterrupted(false);
+    setError(null); setErrorCode(null); setLastAction(null); setLastIntent(null); setAllowedActions(null);
+    const next = client?.api.conversation;
+    resumeRef.current = { id: next?.id ?? null, upTo: next?.cursor ?? 0, shown: 0, auto: true };
+    setConversationId(next?.id ?? null); setHumanStatus(null);
+    void loadRequests();
+  }, [client, currentSiteScope, loadRequests, stopFlush]);
 
   const stop = useCallback(() => {
     activeStreamRef.current?.destroy();
@@ -798,7 +921,7 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
   const appendSpokenExchange = useCallback((heard: string, said: string, duration?: number, userAudioUrl?: string, assistantAudioUrl?: string, media?: SpokenMedia) => {
     const h = heard.trim();
     const s = said.trim();
-    if (!h && !s && !media?.images?.length && !media?.visualization) return;
+    if (!h && !s && !media?.images?.length && !media?.visualization && !media?.actionLinks?.length) return;
     if (loadingRef.current || streamingRef.current) {
       spokenQueueRef.current.push({ heard: h, said: s, duration, userAudioUrl, assistantAudioUrl, media });
       return;

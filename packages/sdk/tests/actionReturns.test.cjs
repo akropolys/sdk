@@ -1,0 +1,34 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const ts = require('typescript');
+const path = require('node:path');
+const source = fs.readFileSync(path.join(__dirname, '../src/actionReturns.ts'), 'utf8');
+
+test('return token remains retryable until server acknowledges it', () => {
+  const listeners = new Map(), docListeners = new Map(), stored = new Map(), timers = [];
+  const events = map => ({ addEventListener: (name, cb) => map.set(name,cb), removeEventListener: name => map.delete(name) });
+  const window = {...events(listeners), dispatchEvent: event => listeners.get(event.type)?.(event)};
+  const document = {...events(docListeners), visibilityState:'visible', hidden:false, hasFocus:()=>true};
+  const sessionStorage = {getItem:key=>stored.get(key),setItem:(key,value)=>stored.set(key,value)};
+  const exports = {};
+  const context = {exports,window,document,sessionStorage,CustomEvent:class {constructor(type){this.type=type}},setTimeout:fn=>{timers.push(fn);return timers.length},clearTimeout:()=>{},Date,Map};
+  vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,context);
+  const token='a'.repeat(64); let attempts=0;
+  const watcher=exports.watchActionReturns('site',()=>{attempts++; return true});
+  exports.armActionReturn('site',token);
+  listeners.get('blur')(); listeners.get('focus')();
+  assert.equal(attempts,1);
+  let state=JSON.parse(stored.get('akropolys:action-returns:site'));
+  assert.equal(state.pending.length,1); assert.equal(state.used.length,0);
+  watcher.fail(token);
+  state=JSON.parse(stored.get('akropolys:action-returns:site'));
+  assert.equal(state.pending.length,1);
+  listeners.get('blur')(); listeners.get('focus')();
+  assert.equal(attempts,2);
+  watcher.ack(token);
+  state=JSON.parse(stored.get('akropolys:action-returns:site'));
+  assert.equal(state.pending.length,0); assert.deepEqual(state.used,[token]);
+  watcher.dispose();
+});

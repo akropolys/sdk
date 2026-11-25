@@ -58,8 +58,8 @@ test('missing keys and signing failures never send unsigned requests',async t=>{
  let calls=0;fakeFetch(t,async()=>{calls++;return ok()});
  for(const keys of [{},{privateKey:'invalid'},{privateKey:'',kid:'key'}]) {
   const client=createIngestClient({...config,...keys});
-  await assert.rejects(client.ingestBatch([{id:'/one'}],signed),/privateKey and kid/);
-  await assert.rejects(client.ingest({id:'/one'},signed),/privateKey and kid/);
+  await assert.rejects(client.ingestBatch([{id:'/one'}],signed),/requires a privateKey|work(ed)? out/);
+  await assert.rejects(client.ingest({id:'/one'},signed),/requires a privateKey|work(ed)? out/);
  }
  await assert.rejects(createIngestClient({...config,privateKey:'invalid',kid:'key'}).ingestBatch([{id:'/one'}],signed));
  for(const option of [null,true,{signed:'true'}]) {
