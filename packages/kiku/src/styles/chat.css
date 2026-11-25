@@ -4978,5 +4978,16 @@
 .hsk-cb-src-field-label { font-weight: 600; text-transform: capitalize; }
 .hsk-cb-src-field-value { min-width: 0; }
 
+/* A faint ghost pill marks a card's title as a title. It is tinted from the
+   theme's own text colour, so it suits light, dark and every site theme. */
+.hsk-cb-src-name {
+  background: color-mix(in srgb, var(--hsk-chat-text, #333) 5%, transparent);
+  padding: 2px 6px;
+  margin-inline-start: -6px;
+  border-radius: 6px;
+  width: fit-content;
+  max-width: calc(100% + 6px);
+}
+
 /* The muted rest of a card title (a city after the street). */
 .hsk-cb-src-sub { font-weight: 500; color: var(--hsk-src-desc, var(--hsk-chat-muted, #777)); }
