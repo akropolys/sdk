@@ -116,8 +116,13 @@ function namePattern(names?: readonly string[]): RegExp | null {
     .sort((a, b) => b.length - a.length)
     .map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
   if (unique.length === 0) return null;
-  // Whole names only: not inside a longer word.
-  return new RegExp(`(?<![\\p{L}\\p{N}])(${unique.join('|')})(?![\\p{L}\\p{N}])`, 'giu');
+  // Whole names only: not inside a longer word. A browser without lookbehind
+  // (Safari before 16.4) simply gets no pill rather than a broken answer.
+  try {
+    return new RegExp(`(?<![\\p{L}\\p{N}])(${unique.join('|')})(?![\\p{L}\\p{N}])`, 'giu');
+  } catch {
+    return null;
+  }
 }
 
 function markNames(text: string, key: string): React.ReactNode {

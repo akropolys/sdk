@@ -166,8 +166,9 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
   const requestsRef = useRef<VisitorRequest[]>([]);
   const loadRequests = useCallback(async (): Promise<VisitorRequest[]> => {
     if (!client) return [];
-    const list = await client.api.myRequests().catch(() => [] as VisitorRequest[]);
-    if (list === null) return requestsRef.current; // a stale answer never wipes the list
+    // A network error or a stale answer (null) keeps the list the visitor has.
+    const list = await client.api.myRequests().catch(() => null);
+    if (list === null) return requestsRef.current;
     setRequests(list);
     requestsRef.current = list;
     return list;
