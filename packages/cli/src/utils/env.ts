@@ -31,10 +31,10 @@ export function writeEnv(file: string, vars: Record<string, string>, cwd = proce
   return { file, added, updated };
 }
 
+// Keeps file out of git, creating .gitignore if the project has none.
 export function ensureGitignored(file: string, cwd = process.cwd()): boolean {
   const gitignore = path.join(cwd, '.gitignore');
-  if (!fs.existsSync(gitignore)) return false;
-  const content = fs.readFileSync(gitignore, 'utf-8');
+  const content = fs.existsSync(gitignore) ? fs.readFileSync(gitignore, 'utf-8') : '';
   const ignored = content.split(/\r?\n/).some((l) => {
     const t = l.trim();
     return t === file || t === `/${file}` || t === '.env*' || t === '.env*.local';

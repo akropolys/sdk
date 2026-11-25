@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { siteFromKey } from '../utils/keys';
 import pc from 'picocolors';
 
 export function loadEnv() {
@@ -38,8 +39,8 @@ export async function runDoctor(options: { verbose?: boolean }) {
     return '';
   };
 
-  const siteId = resolve('SITE_ID');
-  const apiToken = resolve('API_KEY');
+  const apiToken = resolve('API_TOKEN') || resolve('API_KEY');
+  const siteId = resolve('SITE_ID') || siteFromKey(apiToken);
   const apiUrl = resolve('API_URL') || 'https://api.akropolys.cloud/v1';
 
   if (options.verbose) {
@@ -49,13 +50,15 @@ export async function runDoctor(options: { verbose?: boolean }) {
   }
 
   if (!siteId) {
-    console.log(pc.red('❌ Configuration: Site ID is missing. Set NEXT_PUBLIC_AKROPOLYS_SITE_ID in your env.'));
+    console.log(pc.red(apiToken
+      ? '❌ Configuration: this key does not include its site. Set NEXT_PUBLIC_AKROPOLYS_SITE_ID, or make a new key in Shell.'
+      : '❌ Configuration: no key found. Set NEXT_PUBLIC_AKROPOLYS_API_TOKEN in your env.'));
     process.exit(1);
   }
   console.log(pc.green(`✓ Configuration: Site ID detected (${siteId})`));
 
   if (!apiToken) {
-    console.log(pc.red('❌ Environment: API key is missing. Set NEXT_PUBLIC_AKROPOLYS_API_KEY in your env.'));
+    console.log(pc.red('❌ Environment: API key is missing. Set NEXT_PUBLIC_AKROPOLYS_API_TOKEN in your env.'));
     process.exit(1);
   }
   console.log(pc.green('✓ Environment: API key detected'));

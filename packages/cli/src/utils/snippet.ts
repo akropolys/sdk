@@ -5,16 +5,17 @@ const env = (prefix: string, name: string, framework: Framework) =>
     ? `import.meta.env.${prefix}${name}`
     : `process.env.${prefix}${name}!`;
 
-export function snippetFor(framework: Framework): string {
+export function snippetFor(framework: Framework, { withSiteId = false, withApiUrl = false } = {}): string {
   const p = framework.envPrefix;
-  const siteId = env(p, 'AKROPOLYS_SITE_ID', framework);
-  const apiUrl = env(p, 'AKROPOLYS_API_URL', framework);
-  const apiKey = env(p, 'AKROPOLYS_API_KEY', framework);
+  const apiKey = env(p, 'AKROPOLYS_API_TOKEN', framework);
+  const props = [
+    withSiteId && `siteId={${env(p, 'AKROPOLYS_SITE_ID', framework)}}`,
+    withApiUrl && `apiUrl={${env(p, 'AKROPOLYS_API_URL', framework)}}`,
+    `apiToken={${apiKey}}`,
+  ].filter(Boolean) as string[];
 
   const provider = `<AkropolysProvider
-  siteId={${siteId}}
-  apiUrl={${apiUrl}}
-  apiToken={${apiKey}}
+  ${props.join('\n  ')}
 >
   {children}
   <KikuButton label="Ask me anything" enableVoice enableVision />
@@ -44,9 +45,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 export default function App({ Component, pageProps }) {
   return (
     <AkropolysProvider
-      siteId={${siteId}}
-      apiUrl={${apiUrl}}
-      apiToken={${apiKey}}
+      ${props.join('\n      ')}
     >
       <Component {...pageProps} />
       <KikuButton label="Ask me anything" enableVoice enableVision />

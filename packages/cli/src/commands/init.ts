@@ -10,6 +10,7 @@ import { openBrowser } from '../utils/open';
 import { gridSpinner } from '../utils/spinner';
 import { startHandshake } from '../utils/login';
 import { api, ApiError, type Site } from '../utils/api';
+import { siteFromKey } from '../utils/keys';
 import { banner, box, bold, dim, gradient } from '../utils/theme';
 
 const SHELL_LOGIN_URL = 'https://shell.akropolys.cloud/cli-login';
@@ -234,17 +235,21 @@ async function pasteCredentials(apiUrl: string): Promise<Credentials> {
   bail(shouldOpen);
   if (shouldOpen) openBrowser(SETUP_URL);
 
-  const siteId = await text({
-    message: 'Site ID',
-    validate: (v) => (v.trim() ? undefined : 'Required'),
-  });
-  bail(siteId);
-
   const apiKey = await password({
     message: 'API key',
     validate: (v) => (v.trim() ? undefined : 'Required'),
   });
   bail(apiKey);
+
+  let siteId = siteFromKey(apiKey);
+  if (!siteId) {
+    const typed = await text({
+      message: 'Site ID',
+      validate: (v) => (v.trim() ? undefined : 'Required'),
+    });
+    bail(typed);
+    siteId = typed;
+  }
 
   const s = gridSpinner();
   s.start('Verifying credentials');
@@ -300,20 +305,25 @@ ${banner()}
   }
 
   const p = framework.envPrefix;
+  const keyCarriesSite = siteFromKey(credentials.apiKey) === credentials.siteId;
   const vars: Record<string, string> = {
-    [`${p}AKROPOLYS_SITE_ID`]: credentials.siteId,
-    [`${p}AKROPOLYS_API_KEY`]: credentials.apiKey,
-    [`${p}AKROPOLYS_API_URL`]: apiUrl,
+    ...(keyCarriesSite ? {} : { [`${p}AKROPOLYS_SITE_ID`]: credentials.siteId }),
+    [`${p}AKROPOLYS_API_TOKEN`]: credentials.apiKey,
+    ...(apiUrl === DEFAULT_API_URL ? {} : { [`${p}AKROPOLYS_API_URL`]: apiUrl }),
   };
 
+  // The signing keypair is server-only: it goes to .env.local, which is
+  // never committed, whatever file the public settings go to.
+  const secrets: Record<string, string> = {};
   if (credentials.kid && credentials.privateKey) {
     const alsoSigning = await confirm({
       message: 'Also write the signing keypair? It is shown only once, and only your server can use it.',
     });
     bail(alsoSigning);
     if (alsoSigning) {
-      vars.AKROPOLYS_KID = credentials.kid;
-      vars.AKROPOLYS_PRIVATE_KEY = JSON.stringify(credentials.privateKey);
+      // The SDK works out the key ID from the private key and a site-carrying key.
+      if (!keyCarriesSite) secrets.AKROPOLYS_KID = credentials.kid;
+      secrets.AKROPOLYS_PRIVATE_KEY = JSON.stringify(credentials.privateKey);
     }
   }
 
@@ -323,8 +333,14 @@ ${banner()}
   if (ensureGitignored(framework.envFile)) {
     log.info(`Added ${framework.envFile} to .gitignore`);
   }
+  if (Object.keys(secrets).length > 0) {
+    const secretFile = '.env.local';
+    writeEnv(secretFile, secrets);
+    log.success(`${pc.bold(secretFile)} — signing keypair written (server only)`);
+    if (ensureGitignored(secretFile)) log.info(`Added ${secretFile} to .gitignore`);
+  }
 
-  note(snippetFor(framework), framework.entry ? `Add to ${framework.entry}` : 'Mount the widget');
+  note(snippetFor(framework, { withSiteId: !keyCarriesSite, withApiUrl: apiUrl !== DEFAULT_API_URL }), framework.entry ? `Add to ${framework.entry}` : 'Mount the widget');
 
   console.log(box('ready', [
     ['site', bold(credentials.siteId)],
