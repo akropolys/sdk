@@ -73,7 +73,7 @@ test('sign-out discards a pending list response and cancels an active chat', asy
   c.clearKikuKey();
   listResponse(Response.json({requests:[{id:'old'}]}));
   contextResponse({});
-  assert.deepEqual(await pendingList, []);
+  assert.equal(await pendingList, null, 'a list answer from before sign-out is discarded as stale');
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(fetches,1,'an aborted chat must not begin a request later');
   c.destroy();

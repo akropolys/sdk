@@ -90,10 +90,11 @@ const parseInline = (text: string, keyPrefix: string): React.ReactNode => {
       if (MEMORY_LINK_FILTER_REGEX.test(linkText) || MEMORY_URL_FILTER_REGEX.test(url)) {
         return null;
       }
-      const isSafeUrl = SAFE_LINK_REGEX.test(url) || url.startsWith('/');
-      if (isSafeUrl) {
+      // safeHref also refuses //other-site.com, which would pass a "/" test.
+      const href = safeHref(url);
+      if (href) {
         return (
-          <a key={key} href={url} target="_blank" rel="noopener noreferrer" className="hsk-markdown-link">
+          <a key={key} href={href} target="_blank" rel="noopener noreferrer" className="hsk-markdown-link">
             {parseInline(linkText, key)}
           </a>
         );

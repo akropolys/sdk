@@ -886,6 +886,9 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     setQueuedMessage(null); setMessages([]); setSources([]); setReferencedIds([]);
     setLoading(false); setStreaming(false); setStopped(false); setInterrupted(false);
     setError(null); setErrorCode(null); setLastAction(null); setLastIntent(null); setAllowedActions(null);
+    // The previous visitor's requests are never shown to the next one.
+    requestsRef.current = [];
+    setRequests([]);
     const next = client?.api.conversation;
     resumeRef.current = { id: next?.id ?? null, upTo: next?.cursor ?? 0, shown: 0, auto: true };
     setConversationId(next?.id ?? null); setHumanStatus(null);

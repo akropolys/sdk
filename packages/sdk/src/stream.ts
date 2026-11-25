@@ -246,7 +246,8 @@ export class KikuStream {
               }
 
               if (event === 'action_return') {
-                this.emit('action_return', JSON.parse(data));
+                // One malformed event must not end the whole reply.
+                try { this.emit('action_return', JSON.parse(data)); } catch { /* ignored */ }
                 continue;
               }
               if (event === 'action_return_ack') {
