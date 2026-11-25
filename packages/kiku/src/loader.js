@@ -90,6 +90,8 @@
     container: data.container,
     button: { label: data.label || 'Ask Kiku', enableVoice: data.voice === 'true', enableVision: data.vision === 'true' }
   };
+  // data-title, data-logo and data-brand-icon: the site's own name and marks in the chat
+  for (const k of ['title', 'logo', 'brandIcon']) if (data[k]) options.button[k] = data[k];
 
   const report = error => {
     window.dispatchEvent(new CustomEvent('kiku:error', { detail: error }));

@@ -1,6 +1,5 @@
 import React from 'react';
 import { cn } from '../../utils/cn';
-import type { KikuState } from '../KikuAvatar';
 import { LANGUAGE_CHOICES, endonymFor, getLoadingMeta, type UIStringKey } from './types';
 import { ClayLoader } from './ClayLoader';
 
@@ -20,7 +19,6 @@ export interface OnboardingViewProps {
   theme?: string;
   inOnboarding: boolean;
   justCompleted: boolean;
-  onboardingMood?: KikuState;
   awaitingLang: boolean;
   awaitingName: boolean;
   awaitingEntityLang: boolean;
@@ -47,7 +45,6 @@ export function OnboardingView({
   theme,
   inOnboarding,
   justCompleted,
-  onboardingMood,
   awaitingLang,
   awaitingName,
   awaitingEntityLang,

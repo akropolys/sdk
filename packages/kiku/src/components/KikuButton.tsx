@@ -21,6 +21,8 @@ export interface KikuButtonProps {
 
   /** Wordmark shown in place of the name in the topbar. */
   logo?: string;
+  /** Small brand icon (image URL) shown before the name in the topbar. Ignored when `logo` is set. */
+  brandIcon?: string;
   placeholder?: string;
   backdropColor?: string;
   backdropBlur?: string | number;
@@ -53,6 +55,7 @@ export function KikuButton({
   icon,
   title,
   logo,
+  brandIcon,
   placeholder,
   backdropColor,
   backdropBlur,
@@ -182,6 +185,7 @@ export function KikuButton({
         <ChatModal
           title={title}
           logo={logo}
+          brandIcon={brandIcon}
           placeholder={placeholder}
           backdropColor={backdropColor}
           backdropBlur={backdropBlur}

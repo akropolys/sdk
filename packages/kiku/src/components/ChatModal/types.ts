@@ -513,7 +513,7 @@ export interface ModalOrigin {
   y: number;
 }
 
-export interface ChatModalProps extends Pick<KikuButtonProps, 'title' | 'logo' | 'placeholder' | 'backdropColor' | 'backdropBlur' | 'onSelectSource' | 'chips' | 'theme' | 'classNames' | 'enableVoice' | 'voiceWorkletUrl' | 'voiceLang' | 'enableVision' | 'ttsVoice'> {
+export interface ChatModalProps extends Pick<KikuButtonProps, 'title' | 'logo' | 'brandIcon' | 'placeholder' | 'backdropColor' | 'backdropBlur' | 'onSelectSource' | 'chips' | 'theme' | 'classNames' | 'enableVoice' | 'voiceWorkletUrl' | 'voiceLang' | 'enableVision' | 'ttsVoice'> {
   theme?: 'light' | 'dark' | AkropolysTheme;
   classNames?: any;
   origin?: ModalOrigin | null;

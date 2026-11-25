@@ -22,6 +22,20 @@ later work too. A page with no tag shows kiku in the bottom-right corner.
 
 `data-key` is your public key from Shell. It is safe in your pages.
 
+## Your brand's name and icon
+
+The chat shows a name in a small pill at the top. Set it to your shop's name with
+`data-title`. Add `data-brand-icon` with an image URL to put your icon before the
+name, at about 14px tall. To show a wordmark instead of the name, use `data-logo`;
+when a logo is set, the icon is not shown.
+
+```html
+<script src="https://cdn.akropolys.cloud/kiku/2.3.1/kiku.js" data-key="YOUR_KEY"
+  data-title="Harbour Home" data-brand-icon="https://example.com/icon.svg" defer></script>
+```
+
+In JavaScript, pass the same values as `button: { title, logo, brandIcon }`.
+
 Use the same public browser token as your existing frontend integration. Never
 put secret keys or signing keys in HTML. The embed uses the same domain and
 authentication checks as the React integration. React is bundled privately;

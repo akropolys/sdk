@@ -12,7 +12,6 @@ import { useHostFontFace, preloadScriptFont } from '../../utils/hostFont';
 import { useDragToDismiss } from '../../utils/sheetGesture';
 import { downscaleImage } from '../../utils/downscaleImage';
 import { MarkupEditor } from '../MarkupEditor';
-import type { KikuState } from '../KikuAvatar';
 import KikuDoodles, { bloomDoodles } from '../KikuDoodles';
 
 import {
@@ -65,6 +64,7 @@ import { hasSeenLayoutHint, rememberLayoutHintSeen } from '../../utils/layoutDis
 export function ChatModal({
   title = 'kiku',
   logo,
+  brandIcon,
   placeholder = 'Ask me anything…',
   backdropColor,
   backdropBlur,
@@ -359,12 +359,8 @@ export function ChatModal({
     : (placeholder === 'Ask me anything…' ? t('defaultPlaceholder') : placeholder);
 
   const activeChips = !chips || chips === DEFAULT_CHIPS ? [] : (Array.isArray(chips) ? chips : []);
-  const onboardingMood: KikuState =
-    awaitingLang ? 'curious'
-    : awaitingName ? 'welcoming'
-    : awaitingEntityLang ? 'guiding'
-    : awaitingConsent ? 'focused'
-    : 'happy';
+  // kiku reacts each time a reply (its own or a teammate's) lands.
+  const replyCount = messages.filter(m => m.role !== 'user').length;
 
   const [currentTheme, setCurrentTheme] = useState<ThemeId>(() => initialTheme(theme));
 
@@ -1061,8 +1057,15 @@ export function ChatModal({
               layoutControl={hasLayoutContent ? <LayoutToggle wide={chatLayout.wide} onToggle={handleToggleLayout} emphasized={layoutGuidance} /> : undefined}
               title={title}
               logo={logo}
+              brandIcon={brandIcon}
               hasMessages={messages.length > 0}
-              avatarState={streaming ? 'speaking' : loading ? 'thinking' : 'idle'}
+              avatarState={
+                humanPending ? 'handoff'
+                : voicePhase === 'listening' || (voiceMode === 'dictate' && voicePhase === 'speaking') ? 'listening'
+                : streaming ? 'speaking' : loading ? 'thinking' : 'idle'
+              }
+              inputRef={textareaRef}
+              newMessages={replyCount}
               unread={unreadBelow}
               awayFromBottom={showJumpToBottom}
               themeMenuOpen={themeMenuOpen}
@@ -1088,7 +1091,6 @@ export function ChatModal({
                   theme={hskThemeAttr}
                   inOnboarding={inOnboarding}
                   justCompleted={justCompleted}
-                  onboardingMood={onboardingMood}
                   awaitingLang={awaitingLang}
                   awaitingName={awaitingName}
                   awaitingEntityLang={awaitingEntityLang}

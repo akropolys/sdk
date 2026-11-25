@@ -29,6 +29,15 @@ import '@akropolys/kiku/styles.css';
 
 Use your site's public key in the page. Keep private keys and server credentials on your server: never put them in browser code or in a committed `.env` file.
 
+## Your brand's name and icon
+
+The chat shows a name in a small pill at the top. On any website, set `data-title`, and add `data-brand-icon` (an image URL) to put your icon before the name. `data-logo` shows a wordmark in place of the name; when it is set, the icon is not shown. In React, use the same three props:
+
+```jsx
+<KikuButton title="Harbour Home" brandIcon="/icon.svg" />
+// or a wordmark: <KikuButton title="Harbour Home" logo="/wordmark.svg" />
+```
+
 ## What kiku sends and stores
 
 kiku contains no analytics, advertising or tracking code, and loads nothing from third parties. It talks only to Akropolys (`api.akropolys.cloud`, `voice.akropolys.cloud`, `cdn.akropolys.cloud`) and, for actions you set up, to your own site.

@@ -163,10 +163,49 @@
   color: var(--hsk-selection-text, #ffffff);
 }
 
-.hsk-kiku-avatar,
-.hsk-kiku-avatar * {
-  transition: none;
+/* kiku's avatar: colours come from the theme tokens; motion comes from kikuBrain.ts.
+   CSS only does breathing (restarted from JS with a new depth each breath) the thinking dots, sparkles, the sweat drop and the z's. */
+.hsk-kiku {
+  --hsk-kiku-body: color-mix(in srgb, var(--hsk-primary, #ff6a33) 90%, #fff3e6);
+  --hsk-kiku-face: color-mix(in srgb, var(--hsk-primary, #ff6a33) 14%, #1a120d);
+  display: block; overflow: visible; transform-origin: 50% 90%;
+  fill: rgb(var(--hsk-ink, 55, 65, 81)); stroke-linecap: round; stroke-linejoin: round;
+  animation: hsk-kiku-br var(--bt, 3.6s) cubic-bezier(.45, 0, .4, 1) var(--bw, 0ms) 1 both;
 }
+.hsk-kiku * { transition: none; }
+@keyframes hsk-kiku-br {
+  0%, 100% { transform: none; }
+  42% { transform: scale(calc(1 - var(--bd, .02) * .5), calc(1 + var(--bd, .02))); }
+}
+.hsk-kiku-body, .hsk-kiku-tuft, .hsk-kiku-think, .hsk-kiku-sweat { stroke: rgb(var(--hsk-ink, 55, 65, 81)); stroke-width: 4.5; fill: var(--hsk-kiku-body); }
+.hsk-kiku-tuft { stroke-width: 3.5; fill: color-mix(in srgb, var(--hsk-primary, #ff6a33) 42%, #fff6ec); }
+.hsk-kiku-shine { fill: none; stroke: #fff; stroke-opacity: .55; stroke-width: 3.5; }
+.hsk-kiku-cheeks { fill: color-mix(in srgb, var(--hsk-primary, #ff6a33) 35%, #ffd6cc); }
+.hsk-kiku-face { fill: var(--hsk-kiku-face); }
+.hsk-kiku-face path { fill: none; stroke: var(--hsk-kiku-face); stroke-width: 3.6; }
+.hsk-kiku-glint { fill: #fff; }
+.hsk-kiku-think, .hsk-kiku-sweat { stroke-width: 3; fill: var(--hsk-chat-bg, #fff); opacity: 0; }
+.hsk-kiku-spark { fill: color-mix(in srgb, var(--hsk-primary, #ff6a33) 42%, #fff6ec); stroke: rgb(var(--hsk-ink, 55, 65, 81)); stroke-width: 2.4; }
+.hsk-kiku-spark path, .hsk-kiku-zzz text { opacity: 0; }
+.hsk-kiku-zzz { font: 700 13px/1 system-ui, sans-serif; }
+.hsk-kiku[data-state="thinking"] .hsk-kiku-think { opacity: 1; }
+.hsk-kiku[data-state="thinking"] .hsk-kiku-think circle { transform-box: fill-box; transform-origin: center; animation: hsk-kiku-dot 1.5s ease-out infinite; }
+.hsk-kiku-think circle + circle { animation-delay: .21s !important; }
+.hsk-kiku-think circle + circle + circle { animation-delay: .39s !important; }
+@keyframes hsk-kiku-dot { 0% { opacity: 0; transform: scale(.3); } 20% { opacity: 1; transform: scale(1.12); } 30%, 75% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+.hsk-kiku-sparkgo .hsk-kiku-spark path { transform-box: fill-box; transform-origin: center; animation: hsk-kiku-tw .9s ease-out both; }
+.hsk-kiku-spark path + path { animation-delay: .12s !important; }
+.hsk-kiku-spark path + path + path { animation-delay: .24s !important; }
+@keyframes hsk-kiku-tw { 0% { opacity: 0; transform: scale(.2); } 30% { opacity: 1; transform: scale(1.15) rotate(25deg); } 100% { opacity: 0; transform: scale(.4) rotate(70deg); } }
+.hsk-kiku-sweatgo .hsk-kiku-sweat { animation: hsk-kiku-sw 1.6s ease-in both; }
+@keyframes hsk-kiku-sw { 0% { opacity: 0; transform: translateY(-3px); } 15% { opacity: 1; } 70% { opacity: 1; transform: translateY(5px); } 100% { opacity: 0; transform: translateY(7px); } }
+.hsk-kiku-asleep .hsk-kiku-zzz text { animation: hsk-kiku-z 3.6s ease-out infinite; }
+.hsk-kiku-zzz text + text { font-size: 10px; animation-delay: 1.2s !important; }
+.hsk-kiku-zzz text + text + text { font-size: 8px; animation-delay: 2.4s !important; }
+@keyframes hsk-kiku-z { 0% { opacity: 0; transform: translate(0, 4px) scale(.6); } 25% { opacity: .8; } 100% { opacity: 0; transform: translate(14px, -22px) scale(1.2); } }
+/* reduced motion: no breathing or one-shots and the dots hold still; poses still change, snapped */
+.hsk-kiku-reduced, .hsk-kiku-reduced * { animation: none !important; }
+.hsk-kiku-reduced.hsk-kiku-asleep .hsk-kiku-zzz text { opacity: .7; }
 
 @media (prefers-reduced-motion: reduce) {
   .hsk-cb-overlay,
@@ -196,30 +235,6 @@
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   font-family: var(--hsk-font);
-}
-
-:host, :root,
-.hsk-cb-btn,
-.hsk-cb-overlay,
-.hsk-chat-widget {
-  --hsk-marble-1: color-mix(in srgb, var(--hsk-primary, #ff6a33) 12%, #fffaf4);
-  --hsk-marble-2: color-mix(in srgb, var(--hsk-primary, #ff6a33) 30%, #fdf0e4);
-  --hsk-marble-3: color-mix(in srgb, var(--hsk-primary, #ff6a33) 62%, #e8cbb0);
-  --hsk-marble-4: color-mix(in srgb, var(--hsk-primary, #ff6a33) 85%, #6d3a1c);
-  --hsk-marble-sheen: .5;
-}
-
-@media (prefers-color-scheme: dark) {
-  :host, :root,
-  .hsk-cb-btn,
-  .hsk-cb-overlay,
-  .hsk-chat-widget {
-    --hsk-marble-1: #FFFDF6;
-    --hsk-marble-2: #FBF3E2;
-    --hsk-marble-3: color-mix(in srgb, var(--hsk-primary, #ff6a33) 20%, #EDDFC4);
-    --hsk-marble-4: color-mix(in srgb, var(--hsk-primary, #ff6a33) 42%, #D8C39C);
-    --hsk-marble-sheen: .9;
-  }
 }
 
 @keyframes hsk-pulse {

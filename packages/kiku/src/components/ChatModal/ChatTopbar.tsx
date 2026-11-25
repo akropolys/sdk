@@ -11,8 +11,13 @@ import { ThemeDiscoveryHint } from './components/ThemeDiscoveryHint';
 export interface ChatTopbarProps {
   title: string;
   logo?: string;
+  brandIcon?: string; // shown before the title in the name pill; ignored when logo is set
   hasMessages: boolean;
   avatarState?: KikuState;
+  // The message box, so kiku can watch the caret while the visitor types.
+  inputRef?: React.RefObject<HTMLTextAreaElement | null>;
+  // Bumps when a new message arrives.
+  newMessages?: number;
   unread?: boolean;
   awayFromBottom?: boolean;
   themeMenuOpen?: boolean;
@@ -49,8 +54,11 @@ const RadarIcon = ({ size = 15 }: { size?: number }) => (
 export function ChatTopbar({
   title,
   logo,
+  brandIcon,
   hasMessages,
   avatarState = 'idle',
+  inputRef,
+  newMessages,
   unread = false,
   awayFromBottom = false,
   themeMenuOpen = false,
@@ -157,8 +165,6 @@ export function ChatTopbar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [themeMenuClosing, isNarrow]);
   const [isImpacting, setIsImpacting] = React.useState(false);
-  const [impactColor, setImpactColor] = React.useState<string>('#134e3d');
-  const [impactGlow, setImpactGlow] = React.useState<string>('rgba(19, 78, 61, 0.45)');
   const triggerRef = React.useRef<(() => void) | undefined>(undefined);
   const longPressTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const isLongPressRef = React.useRef(false);
@@ -206,15 +212,7 @@ export function ChatTopbar({
     }
   }, [awayFromBottom, isNarrow, onJumpToLatest, onToggleThemeMenu]);
 
-  const handleImpact = React.useCallback((splat: number, color: string, glow: string) => {
-    if (splat > 0.04) {
-      setIsImpacting(true);
-      setImpactColor(color);
-      setImpactGlow(glow);
-    } else {
-      setIsImpacting(false);
-    }
-  }, []);
+  const handleImpact = React.useCallback((splat: number) => setIsImpacting(splat > 0.04), []);
 
   return (
     <div ref={barRef} className={cn("hsk-cb-topbar", isNarrow && themeMenuOpen && "is-docked")}>
@@ -234,10 +232,6 @@ export function ChatTopbar({
       <div
         className={cn("hsk-cb-topbar-mark", isNarrow && themeMenuOpen && "is-oozing", themeDiscovery && themeMenuOpen && !themeMenuClosing && 'is-discovering')}
         data-impacting={isImpacting ? 'true' : 'false'}
-        style={{
-          '--hsk-contact-color': impactColor,
-          '--hsk-contact-glow': impactGlow,
-        } as React.CSSProperties}
         data-unread={unread ? 'true' : 'false'}
         onTouchStart={startPress}
         onTouchEnd={endPress}
@@ -256,12 +250,17 @@ export function ChatTopbar({
           onImpact={handleImpact}
           triggerRef={triggerRef}
           dropIn={dropIn}
+          inputRef={inputRef}
+          notice={newMessages}
         />
         <div className="hsk-cb-topbar-identity">
           {logo ? (
             <img ref={nameRef as React.Ref<HTMLImageElement>} className="hsk-cb-topbar-logo" src={logo} alt={title} />
           ) : (
-            <span ref={nameRef as React.Ref<HTMLSpanElement>} className="hsk-cb-topbar-name">{title}</span>
+            <span ref={nameRef as React.Ref<HTMLSpanElement>} className={cn('hsk-cb-topbar-name', brandIcon && 'has-brand')}>
+              {brandIcon && <img className="hsk-cb-topbar-brand" src={brandIcon} alt="" />}
+              {title}
+            </span>
           )}
         </div>
       </div>

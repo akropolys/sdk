@@ -109,6 +109,17 @@ const links = head => head.children.map(c => c.rel);
   assert.deepEqual(await t.Kiku.ingest({ id: 'a' }), { id: 'a' });
   assert.equal(t.calls.mounts.length, 1);
 
+  // data-title, data-logo and data-brand-icon reach the button only when present.
+  t = load({ siteId: 'shop', title: 'Harbour Home', brandIcon: 'https://shop.example/icon.svg' });
+  await t.Kiku.ready;
+  assert.equal(t.calls.mounts[0].button.title, 'Harbour Home');
+  assert.equal(t.calls.mounts[0].button.brandIcon, 'https://shop.example/icon.svg');
+  assert.ok(!('logo' in t.calls.mounts[0].button), 'no logo key when data-logo is absent');
+  t = load({ siteId: 'shop', logo: 'https://shop.example/wordmark.svg' });
+  await t.Kiku.ready;
+  assert.equal(t.calls.mounts[0].button.logo, 'https://shop.example/wordmark.svg');
+  assert.ok(!('title' in t.calls.mounts[0].button) && !('brandIcon' in t.calls.mounts[0].button));
+
   // data-eager keeps the old load-at-once behaviour.
   t = load({ siteId: 'shop', eager: 'true' });
   await tick(); await tick();
