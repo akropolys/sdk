@@ -1252,3 +1252,14 @@
   color: var(--hsk-chat-muted, #9aa0a6);
 }
 
+/* The thing being discussed (a product named in the answer) sits in a faint
+   pill tinted from the theme's own text colour, so it suits light, dark and
+   every site theme. */
+.hsk-cb-ai-text .hsk-entity-name {
+  font-weight: 600;
+  background: color-mix(in srgb, var(--hsk-chat-text, #333) 7%, transparent);
+  padding: 1px 7px;
+  border-radius: 999px;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}

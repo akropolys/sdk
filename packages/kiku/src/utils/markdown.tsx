@@ -102,9 +102,33 @@ const parseInline = (text: string, keyPrefix: string): React.ReactNode => {
       return <span key={key}>{parseInline(linkText, key)}</span>;
     }
 
-    return part;
+    return markNames(part, key);
   });
 };
+
+// The names of the things an answer is about (its products), longest first,
+// set for the length of one render; plain-text mentions of them get a faint
+// pill so the thing being discussed stands out from the sentence around it.
+let entityNames: RegExp | null = null;
+
+function namePattern(names?: readonly string[]): RegExp | null {
+  const unique = [...new Set((names ?? []).map(n => n.trim()).filter(n => n.length >= 3))]
+    .sort((a, b) => b.length - a.length)
+    .map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  if (unique.length === 0) return null;
+  // Whole names only: not inside a longer word.
+  return new RegExp(`(?<![\\p{L}\\p{N}])(${unique.join('|')})(?![\\p{L}\\p{N}])`, 'giu');
+}
+
+function markNames(text: string, key: string): React.ReactNode {
+  if (!entityNames || !text) return text;
+  const pieces = text.split(entityNames);
+  if (pieces.length === 1) return text;
+  // split() puts each matched name at the odd positions.
+  return pieces.map((piece, i) => (i % 2 === 1
+    ? <span key={`${key}-name-${i}`} className="hsk-entity-name">{piece}</span>
+    : piece));
+}
 
 const TABLE_SEPARATOR_REGEX = /^\s*\|?[\s:|-]*-[\s:|-]*\|?\s*$/;
 
@@ -194,12 +218,14 @@ export function TableWrapper({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function renderMarkdown(content: string, streaming = false, hosts?: ReadonlySet<string>): React.ReactNode {
+export function renderMarkdown(content: string, streaming = false, hosts?: ReadonlySet<string>, names?: readonly string[]): React.ReactNode {
   imageHosts = hosts ?? null;
+  entityNames = namePattern(names);
   try {
     return buildMarkdown(content, streaming);
   } finally {
     imageHosts = null;
+    entityNames = null;
   }
 }
 

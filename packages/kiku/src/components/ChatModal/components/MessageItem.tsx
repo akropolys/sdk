@@ -22,9 +22,9 @@ import {
 import type { UIStringKey } from '../types';
 
 const MarkdownBlock = React.memo(
-  ({ content, streaming, hosts }: { content: string; streaming: boolean; hosts: string }) =>
-    <>{renderMarkdown(content, streaming, new Set(hosts.split(',')))}</>,
-  (a, b) => a.content === b.content && a.streaming === b.streaming && a.hosts === b.hosts
+  ({ content, streaming, hosts, names }: { content: string; streaming: boolean; hosts: string; names: string }) =>
+    <>{renderMarkdown(content, streaming, new Set(hosts.split(',')), names ? names.split('\n') : [])}</>,
+  (a, b) => a.content === b.content && a.streaming === b.streaming && a.hosts === b.hosts && a.names === b.names
 );
 MarkdownBlock.displayName = 'MarkdownBlock';
 
@@ -140,6 +140,8 @@ export function MessageItem({
   const api = useAkropolysContext()?.api;
   const doodleSeed = api?.siteId ?? '';
   const imageHosts = hostsOf([api?.apiUrl, ...(isLast ? sources : (msg.sources ?? [])).flatMap(s => [s.image, s.url])]);
+  // The products this answer is about; their names get a faint pill in the text.
+  const entityNames = (isLast ? sources : (msg.sources ?? [])).map(s => s.name).filter(Boolean).join('\n');
   const isUser = msg.role === 'user';
   const displayContent = isUser ? msg.content : stripToolMarkup(msg.content);
   const hiddenToolMarkup = !isUser && displayContent !== msg.content;
@@ -365,7 +367,7 @@ export function MessageItem({
                   {!cleanContent && hiddenToolMarkup && !(isLast && (streaming || loading)) && <p className="hsk-cb-ai-content">{t('errStreamInterrupted')}</p>}
                   {external.content && (
                     <div className="hsk-cb-ai-content">
-                      <MarkdownBlock content={external.content} streaming={isLast && streaming} hosts={imageHosts} />
+                      <MarkdownBlock content={external.content} streaming={isLast && streaming} hosts={imageHosts} names={entityNames} />
                     </div>
                   )}
                   <ExternalLinks links={external.links} t={t} onOpen={link => { if (api?.siteId) armActionReturn(api.siteId, link.returnToken); }} />
