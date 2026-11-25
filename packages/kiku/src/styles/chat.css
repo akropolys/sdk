@@ -293,20 +293,9 @@
   background: var(--hsk-primary, #ff6a33);
   color: #fff;
     box-shadow: 0 0 0 3px var(--hsk-chat-bg, #ffffff);
-  animation: hsk-unread-pill .9s cubic-bezier(.34, 1.56, .64, 1) infinite;
 }
 
-@keyframes hsk-unread-pill {
-  0%, 100% { transform: scale(1, 1); }
-  38%      { transform: scale(1.08, .92); }
-  62%      { transform: scale(.97, 1.03); }
-}
 
-@media (prefers-reduced-motion: reduce) {
-  .hsk-cb-topbar-mark[data-unread="true"] .hsk-cb-topbar-name {
-    animation: none;
-  }
-}
 
 /* kiku stands above the name pill, its outline never covered: kiku rises 5px
    and the pill 5px less, so the pill stays where it was on screen. */
@@ -335,6 +324,23 @@
   transform-origin: 50% 0%;
   transition: transform 0.18s cubic-bezier(0.34, 1.8, 0.64, 1);
 }
+
+/* kiku's swell lights a soft ring around the pill, name or logo, on a layer of its own so the pill never moves.
+   The identity is one grid cell as wide as its only child; the ring shares that cell. Both pills are 24px tall. */
+.hsk-cb-topbar-identity { display: grid; place-items: center; justify-content: center; }
+.hsk-cb-topbar-identity > * { grid-area: 1 / 1; }
+.hsk-cb-topbar-identity::after {
+  content: '';
+  grid-area: 1 / 1;
+  justify-self: stretch;
+  height: 24px;
+  border-radius: 999px;
+  pointer-events: none;
+  opacity: 0;
+  box-shadow: 0 0 0 3px var(--hsk-chat-bg), 0 0 12px 3px color-mix(in srgb, var(--hsk-primary, #ff6a33) 55%, transparent);
+}
+.hsk-cb-topbar-mark:has(.hsk-kiku-swellgo) .hsk-cb-topbar-identity::after { animation: hsk-swell-glow 1.2s cubic-bezier(.2, .7, .3, 1); }
+@keyframes hsk-swell-glow { 22% { opacity: 1; } }
 
 .hsk-cb-topbar-name.has-brand {
   display: inline-flex;
@@ -4577,6 +4583,14 @@
   .hsk-cb-topbar-ooze-menu.is-island.is-closing {
     animation: none;
     will-change: transform, opacity;
+  }
+}
+
+/* Reduced motion: no drop (useIslandMorph is off), just the dock fading in. Keyed to leaving the parked
+   state, so a dock mounted parked while the chat was idle still fades when it opens. */
+@media (prefers-reduced-motion: reduce) {
+  .hsk-cb-topbar-ooze-menu:not(.is-parked):not(.is-closing) {
+    animation: hsk-scrim-in .16s ease-out both;
   }
 }
 

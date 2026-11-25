@@ -31,10 +31,10 @@ export const KIKU_SVG = `<ellipse class="${C}shadow" cy="40" rx="25" ry="3.2"/><
   + `<path class="${C}body" d="M-36 20C-38 1 -29 -25 -1 -26C26 -27 37 -6 37 16C37 31 22 36 0 36C-22 36 -35 32 -36 20Z"/><path class="${C}shine" d="M-26 -3Q-24 -14 -13 -19"/><g class="${C}cheeks"><ellipse cx="-23" cy="13" rx="5.5" ry="3.2"/><ellipse cx="23" cy="13" rx="5.5" ry="3.2"/></g>`
   + `<g class="${C}face">${EYE}${EYE}<path class="${C}bu" d="M-18 -10Q-12 -14 -6 -10.5" opacity="0"/><path class="${C}bs" d="M-17 -6L-8 -10M8 -10L17 -6" opacity="0"/><ellipse class="${C}talk" rx="3.6" ry="3" opacity="0"/><path class="${C}smile" d="M-4.5 13Q0 16 4.5 13"/></g></g>`
   + `<g class="${C}think"><circle cx="30" cy="-30" r="2.2"/><circle cx="37" cy="-37" r="3"/><circle cx="45" cy="-45" r="3.8"/></g>`
-  + `<g class="${C}spark">${star(-40, -24, 7)}${star(42, -16, 6)}${star(-30, -42, 5)}</g><path class="${C}sweat" d="M30 -25C34 -19 35 -16 30 -14C25 -16 26 -19 30 -25Z"/><g class="${C}zzz">${Z}${Z}${Z}</g>`;
+  + `<g class="${C}spark">${star(-40, -24, 7)}${star(42, -16, 6)}${star(-30, -42, 5)}</g><g class="${C}zzz">${Z}${Z}${Z}</g>`;
 
 const DEF: Pose = { x: 0, y: 0, rot: 0, s: 0, fx: 0, fy: 0, lid: 1, eL: 1, eR: 1, smile: .25, open: 0, happy: 0, cheeks: .6,
-  bu: 0, bs: 0, th: 0, sp: 0, follow: 1, gaze: { x: 0, y: .05 } };
+  bu: 0, bs: 0, th: 0, sp: 0, g: 0, follow: 1, gaze: { x: 0, y: .05 } };
 const POSE: Record<string, Pose> = {
   idle: {},
   listening: { lid: .9, follow: 1.8, s: -.02, th: -6, smile: .15 },
@@ -42,18 +42,26 @@ const POSE: Record<string, Pose> = {
   thinking: { lid: .82, rot: -3, smile: 0, follow: .8, gaze: { x: -.7, y: -.8 } },
   speaking: { smile: .3, follow: .8 },
   happy: { smile: 1, happy: 1, cheeks: 1 },
+  // The chat is empty: bright eyes on the visitor, a warm smile.
+  welcoming: { smile: .7, cheeks: .9, eL: 1.05, eR: 1.05, th: -6, follow: 1.2 },
+  // A photo waits in the box, or kiku asked something: head tilted, one brow up, looking at the box.
+  curious: { rot: 9, eL: 1.16, eR: .94, bu: .9, smile: .1, th: -14, follow: .9, gaze: { x: .25, y: .55 } },
+  // Products or sources are on screen: leans toward them and looks down at them.
+  guiding: { x: 1.5, rot: 5, smile: .45, cheeks: .8, bu: .35, follow: .6, gaze: { x: .3, y: .85 } },
+  // A picture is being made: eyes up and wide at it, a small "o" of wonder.
+  visualizing: { eL: 1.1, eR: 1.1, open: .2, smile: .4, cheeks: .9, rot: -2, th: -10, follow: .5, gaze: { x: .6, y: -.75 } },
   failed: { s: -.08, th: 34, smile: -.5, bs: 1, cheeks: 0, lid: .62, fy: 3.5, gaze: { x: 0, y: .6 } },
   // A teammate has the conversation: kiku steps back and leans aside, calm and attentive,
   // watching the messages with a soft smile and nodding along. No second figure.
   handoff: { x: -3, rot: 5, s: -.03, lid: .88, smile: .55, cheeks: .8, th: -8, follow: .5, gaze: { x: .45, y: .6 } },
 };
-// the states the chat does not use yet borrow the nearest pose
-POSE.welcoming = POSE.happy; POSE.curious = POSE.guiding = POSE.focused; POSE.visualizing = POSE.thinking;
 // Left alone while idle: 20 s unlocks a stretch, 40 s a yawn, 75 s drowsy, 110 s asleep.
 const TIER_AT = [0, 20e3, 40e3, 75e3, 110e3];
 const TIER_POSE: Pose[] = [{}, {}, {}, { lid: .55, fy: 1.5, smile: .1, follow: .5, th: 8 },
   { lid: .08, fy: 3, s: -.04, smile: .18, follow: 0, th: 14, gaze: { x: 0, y: .3 } }];
-const BUSY = /thinking|speaking|failed/;
+const BUSY = /thinking|speaking|visualizing|failed/;
+// Resting states: the visitor's typing still turns kiku to listen.
+const CALM = /idle|welcoming|curious|guiding/;
 
 // Weighted pick that never repeats the last choice while another one is allowed.
 export function pick(list: W, last: string, r = R()) {
@@ -78,14 +86,14 @@ export function createKiku(svg: SVGSVGElement, onImpact: (splat: number) => void
     lid: sp(1, 7, .9, .003), eL: sp(1, 6, .42, .003), eR: sp(1, 6, .42, .003),
     smile: sp(.25, 5, .85, .003), open: sp(0, 13, .65, .003), happy: sp(0, 7, .9, .003), cheeks: sp(.6, 2.5, 1, .005),
     bu: sp(0, 6, .8, .005), bs: sp(0, 6, .8, .005), th: sp(0, 3.4, .26, .15), sp: sp(0, 3.8, .3, .15),
-    p0: sp(0, 2.4, .3, .15), p1: sp(0, 2.9, .28, .15), p2: sp(0, 2.2, .32, .15) };
+    p0: sp(0, 2.4, .3, .15), p1: sp(0, 2.9, .28, .15), p2: sp(0, 2.2, .32, .15), g: sp(0, 3.4, .42, .0008) };
   const springs = Object.values(S);
-  const direct = ['s', 'lid', 'eL', 'eR', 'smile', 'open', 'happy', 'cheeks', 'bu', 'bs', 'th', 'sp'];
+  const direct = ['s', 'lid', 'eL', 'eR', 'smile', 'open', 'happy', 'cheeks', 'bu', 'bs', 'th', 'sp', 'g'];
   let air = false, still = false, rect: DOMRect | null = null, pvx = 0, pvy = 0, prx = 0, pry = -24;
   // writes an attribute only when it changes; the last value rides on the element
   const put = (el: any, a: string, v: string) => { if (el['_' + a] !== v) el.setAttribute(a, el['_' + a] = v); };
   const cls = (c: string, on: boolean) => svg.classList.toggle(C + c, on);
-  const oneShot = (c: string) => { if (!reduced) { cls(c, false); void svg.getBoundingClientRect(); cls(c, true); } };
+  const oneShot = (c: string, calm?: boolean) => { if (calm || !reduced) { cls(c, false); void svg.getBoundingClientRect(); cls(c, true); } };
 
   // Breathing is a CSS animation on the svg, restarted at the end of each breath with a new depth, length and pause.
   const breathe = (e?: Event) => {
@@ -152,10 +160,10 @@ export function createKiku(svg: SVGSVGElement, onImpact: (splat: number) => void
   }
 
   function render(lm: number) {
-    const sy = 1 + S.s.x, sx = 1 / sy, x = S.x.x, o = Math.max(0, S.open.x);  // squash and stretch keep area
+    const sy = 1 + S.s.x, sx = 1 / sy, g = 1 + S.g.x, x = S.x.x, o = Math.max(0, S.open.x);  // squash and stretch keep area
     const smear = 1 + clamp(Math.abs(S.ex.v) * .006, 0, .25), lid = Math.max(.08, S.lid.x * lm), hap = clamp(S.happy.x, 0, 1);
     const k = clamp(1 + S.y.x * .018, .45, 1);
-    put(fig, 'transform', `translate(${f2(x)} ${f2(S.y.x + 36)})rotate(${f2(S.rot.x)})scale(${f2(sx)} ${f2(sy)})translate(0 -36)`);
+    put(fig, 'transform', `translate(${f2(x)} ${f2(S.y.x + 36)})rotate(${f2(S.rot.x)})scale(${f2(sx * g)} ${f2(sy * g)})translate(0 -36)`);
     put(tuft, 'transform', `translate(3 -24)scale(${f2(sx ** -.6)} ${f2(sy ** -.6)})translate(-3 24)`);
     petals.forEach((p, i) => put(p, 'transform', `rotate(${f2(S['p' + i].x + (i - 1) * S.sp.x)} 3 -24)`));
     put(face, 'transform', `translate(${f2(S.fx.x)} ${f2(S.fy.x)})`);
@@ -184,7 +192,7 @@ export function createKiku(svg: SVGSVGElement, onImpact: (splat: number) => void
   let state = 'idle', want = 'idle', paused = false, dead = false, rectAt = 0, tier = 0, lastPoke = 0;
   let raf = 0, timer: ReturnType<typeof setTimeout> | undefined, last = 0, inFrame = false, wantFrame = false;
   let bl: number[] | null = null, attnRaw: Pt | null = null, attnPt: Pt | null = null, attnNext = 0, attnBlock = 0, caretPt: Pt | null = null;
-  let typed = 0, nodAt = rint(4, 8), lastAct = '', lastReact = '', focused = false, deep = false, forceNext: string[] = [];
+  let held = 0, typed = 0, nodAt = rint(4, 8), lastAct = '', lastReact = '', focused = false, deep = false, forceNext: string[] = [];
   const used: Record<string, number> = {};
   const now = () => performance.now();
   const P: Pose = { ...DEF };
@@ -211,7 +219,7 @@ export function createKiku(svg: SVGSVGElement, onImpact: (splat: number) => void
     else if (Q.length) timer = setTimeout(wake, Q[0].t - now());
   }
 
-  const base = (): Pose => ({ ...DEF, ...POSE[state], ...(state === 'idle' ? TIER_POSE[tier] : {}) });
+  const base = (): Pose => ({ ...DEF, ...POSE[state], ...(state === 'idle' ? TIER_POSE[tier] : {}), g: reduced ? 0 : held });
   const set = (o: Pose) => { Object.assign(P, o); wake(); };
   const rest = (...k: string[]) => { const b = base(); for (const x of k) P[x] = b[x]; wake(); };
   const K = (ch: string, v: number) => { if (!reduced) S[ch].v += v; wake(); };
@@ -287,10 +295,9 @@ export function createKiku(svg: SVGSVGElement, onImpact: (splat: number) => void
     emph: [() => T().d(() => { set({ rot: pm() * 3 }); K('s', .6); }).w(rnd(400, 800)).d(() => rest('rot')).w(200).t],
     nod: [() => T().d(() => { K('rot', 18); K('s', -.5); }).w(400).t],
     waitUp: [() => hold({ gaze: { x: 0, y: .1 } }, 1200, 2500), 1],
-    hop: [() => hop(rnd(90, 115)).w(380).d(() => oneShot('sparkgo')).w(500).t, 0, 4e3],
     sparkle: [() => { oneShot('sparkgo'); return 900; }],
-    sweat: [() => { oneShot('sweatgo'); return 1600; }],
     sigh: [() => { deep = true; return T().d(() => set({ s: .03, lid: .45 })).w(700).d(() => { set({ s: -.12 }); K('th', 60); }).w(900).d(() => rest('s', 'lid')).w(400).t; }],
+    tilt: [() => hold({ rot: -P.rot, eL: P.eR, eR: P.eL }, 900, 1700)],          // curious: tips its head the other way
     // reactions to the visitor
     perk: [() => T().d(() => { K('s', 1.3); K('th', -140); set({ eL: 1.15, eR: 1.15, smile: .6 }); }).w(450).d(() => rest('eL', 'eR', 'smile')).w(300).t],
     giggle: [() => { set({ happy: 1, smile: 1, cheeks: 1 }); return sway(4, 3, 110, d => K('rot', d * 30)).w(200).d(() => rest('happy', 'smile', 'cheeks')).w(300).t; }],
@@ -300,8 +307,11 @@ export function createKiku(svg: SVGSVGElement, onImpact: (splat: number) => void
         .d(() => { look(away * .3, .1, 0); rest('happy'); }).w(400).d(() => rest('cheeks')).w(300).t; }],
     hophi: [() => hop(85).w(700).t],
     boop: [() => T().d(() => { K('s', -3); K('th', pm() * 180); set({ happy: 1, open: .35 }); }).w(420).d(() => rest('happy', 'open')).w(500).t],
-    notice: [() => T().d(() => { look(rnd(-.3, .3), .85, 0); set({ bu: .7, eL: 1.12, eR: 1.12, smile: .6 }); K('s', .9); K('th', -130); })
-      .w(rnd(1100, 1700)).d(() => rest('bu', 'eL', 'eR', 'smile', 'gaze')).w(300).t, 1],
+    // one-shots from the chat; they play over any state and hand back to it
+    happy: [() => T().d(() => { set({ happy: 1, smile: .9, cheeks: 1 }); K('s', 1.1); K('th', -120); })            // a small glad lift, like a haptic tap
+      .w(rnd(650, 850)).d(() => rest('happy', 'smile', 'cheeks')).w(300).t, 1],
+    oh: [() => T().d(() => { set({ eL: 1.08, eR: 1.08, open: .22, gaze: { x: 0, y: .05 } }); K('s', .5); })         // the visitor stopped it: a quiet "oh", then an exhale
+      .w(200).d(() => { set({ open: 0, s: -.05, lid: .7, smile: .1 }); deep = true; }).w(800).d(() => rest('eL', 'eR', 'open', 's', 'lid', 'smile', 'gaze')).w(300).t, 1],
   };
   const ACTS: Record<string, W> = {
     idle0: [['glance', 5], ['blink2', 1.2], ['twitch', 2], ['shift', 1.5], ['bounce', .5], ['hum', .7], ['lookAround', 1]],
@@ -312,11 +322,15 @@ export function createKiku(svg: SVGSVGElement, onImpact: (splat: number) => void
     thinking: [['ponder', 3], ['hmm', 2], ['tap', 1.5], ['checkIn', .8], ['twitch', 1]],
     speaking: [['lookUser', 3], ['lookMsg', 2], ['brow', 1], ['emph', 1.3]],
     handoff: [['lookMsg', 2], ['nod', 1.6], ['lookUser', 1], ['blink2', .6], ['slowBlink', .5]],
-    happy: [['hop', 1.4], ['hum', 1], ['sparkle', .8], ['glance', 1]],
-    failed: [['sigh', 2], ['sweat', .8], ['slowBlink', 1], ['glance', .6]],
+    welcoming: [['lookUser', 2], ['glance', 1], ['blink2', .6], ['hum', .4]],
+    curious: [['tilt', 2], ['blink2', 1], ['checkIn', 1], ['twitch', .6]],
+    guiding: [['lookMsg', 2], ['checkIn', 1.5], ['nod', 1], ['blink2', .5]],
+    visualizing: [['sparkle', .6], ['brow', 1], ['blink2', 1], ['slowBlink', .6]],
+    failed: [['slowBlink', 1.2], ['lookUser', 1], ['sigh', .5]],
   };
-  ACTS.welcoming = ACTS.happy;
-  const GAP: Record<string, number[]> = { idle: [900, 3400], focused: [2e3, 5e3], thinking: [450, 1300], speaking: [600, 1800], handoff: [1800, 3500], failed: [2e3, 4e3] };
+  ACTS.happy = ACTS.welcoming;
+  const GAP: Record<string, number[]> = { idle: [900, 3400], focused: [2e3, 5e3], thinking: [450, 1300], speaking: [600, 1800], handoff: [1800, 3500],
+    failed: [3e3, 6e3], welcoming: [1500, 3500], curious: [1400, 3e3], guiding: [1500, 3e3], visualizing: [1800, 3500] };
 
   function pickNext() {
     // the idle clock: only while idle, and any sign of the visitor resets it
@@ -365,18 +379,21 @@ export function createKiku(svg: SVGSVGElement, onImpact: (splat: number) => void
       boil();
     } else {
       put(body, 'transform', '');
-      if (prev === 'thinking' && s === 'speaking') {                             // "aha": eyes widen, a brow lifts, the tuft perks
-        go({ eL: 1.18, eR: 1.18, bu: .7, gaze: { x: 0, y: .05 } }); K('s', 1.2); K('th', 150); st(240, () => rest('eL', 'eR', 'bu')); entry = 900;
+      if (prev === 'thinking' && s === 'speaking') {                             // "aha": eyes widen, a brow lifts, the tuft perks (the swell is the chat's notice)
+        go({ eL: 1.18, eR: 1.18, bu: .7, gaze: { x: 0, y: .05 } }); K('th', 150); st(240, () => rest('eL', 'eR', 'bu')); entry = 900;
       } else if (prev === 'speaking') {                                          // wraps up: a nod, a smile held for a beat
         go({ smile: .55 }); K('rot', 20); st(1200, () => rest('smile')); entry = 1400;
-      } else if (s === 'failed') {                                               // "oh no": freezes for a beat, then slumps; a sweat drop
-        go({ s: 0, th: 0, smile: 0, bs: 0, cheeks: .6, lid: 1, fy: 0, eL: 1.12, eR: 1.12, bu: .8, open: .35, gaze: { x: 0, y: 0 } });
-        st(200, () => go()); st(800, () => oneShot('sweatgo')); deep = true; entry = 1500;
+      } else if (s === 'failed') {                                               // "oh": a still beat looking at you, then a quiet slump
+        go({ s: 0, th: 0, smile: 0, bs: 0, cheeks: .6, lid: 1, fy: 0, eL: 1.08, eR: 1.08, open: .2, gaze: { x: 0, y: 0 } });
+        st(260, () => go()); deep = true; entry = 2e3;
       } else go(s === 'idle' ? { gaze: P.gaze } : {});
       if (s === 'speaking') st(entry === 900 ? 220 : 60, talk);
       else if (s === 'listening') { K('s', .8); st(90, () => K('th', -120)); }
       else if (s === 'handoff') { set({ x: 1, rot: -2 }); st(140, () => rest('x', 'rot')); st(950, () => { look(.45, .6, 0); K('rot', 24); K('s', -.4); }); entry = 1600; }
-      else if (s === 'happy' || s === 'welcoming') { hop(110); st(560, () => oneShot('sparkgo')); entry = 1200; }
+      else if (s === 'welcoming' || s === 'happy') { set({ happy: 1 }); K('s', 1); K('th', -130); st(650, () => rest('happy')); entry = 1400; }   // a glad "hi"
+      else if (s === 'curious') { K('rot', -40); K('th', -160); entry = 900; }   // the head tips over, the tuft perks
+      else if (s === 'guiding') { st(160, () => { K('rot', 22); K('s', -.4); }); entry = 1200; }   // a nod toward what is on screen
+      else if (s === 'visualizing') { K('s', .9); st(300, () => oneShot('sparkgo')); entry = 1400; }
       blink();
     }
     EP.blink++; blinkLoop();
@@ -408,14 +425,26 @@ export function createKiku(svg: SVGSVGElement, onImpact: (splat: number) => void
     schedule(1e3);
     return true;
   }
+  // "Something is up": a breath in, a swell outward and a settle, all on one spring, with a glow on the name pill.
+  // Under reduced motion only the glow plays. A second call while one is running is the same swell.
+  let swellAt = -1e4;
+  function swell() {
+    const t = now();
+    if (t - swellAt < 700) return;
+    swellAt = t;
+    oneShot('swellgo', true);
+    if (reduced) return;
+    P.g = -.035; wake();
+    at(90, () => { P.g = .1; wake(); }, 'free');
+    at(330, () => { P.g = base().g; K('s', -.7); }, 'free');
+  }
   function react(kind: string) {
-    if (poke()) return;
-    if (BUSY.test(state)) {                                                     // busy: a quick look or a small beat
-      if (kind === 'notice') { const g = P.gaze; look(0, .85, 0); at(700, () => set({ gaze: g }), 'free'); }
-      if (kind === 'boop') K('s', -1.5);
-      return;
-    }
-    if (reduced && kind !== 'notice') { set({ smile: .6 }); at(800, () => rest('smile'), 'free'); return; }
+    const woke = poke();
+    if (kind === 'swell') return swell();
+    const cue = kind === 'happy' || kind === 'oh';
+    if (woke && !cue) return;
+    if (BUSY.test(state) && !cue) { if (kind === 'boop') K('s', -1.5); return; }   // busy: only a small beat
+    if (reduced && !A[kind]?.[1]) { set({ smile: .6 }); at(800, () => rest('smile'), 'free'); return; }
     EP.act++;
     perform(kind === 'hover' ? lastReact = pick([['perk', 3], ['giggle', 2], ['shy', 1.4], ['hophi', .8]], lastReact) : kind);
   }
@@ -434,7 +463,7 @@ export function createKiku(svg: SVGSVGElement, onImpact: (splat: number) => void
     setBase(s: string) { want = s; setState(s === 'idle' && focused ? 'focused' : s); },
     typed(pt: Pt) {
       poke(); caretPt = pt;
-      if (want === 'idle') setState('listening');
+      if (CALM.test(want)) setState('listening');
       if (++typed >= nodAt) { typed = 0; nodAt = rint(4, 9); K('rot', 14); K('s', -.4); }
       EP.type++;
       at(1400, () => { if (state === 'listening') { caretPt = null; look(0, .1); set({ smile: .35 }); } }, 'type');  // the visitor paused: looks up at them
@@ -442,7 +471,7 @@ export function createKiku(svg: SVGSVGElement, onImpact: (splat: number) => void
     focus(on: boolean) {
       focused = on; poke();
       if (!on) caretPt = null;
-      if (want === 'idle' && !(on && state === 'listening')) setState(on ? 'focused' : 'idle');
+      if (CALM.test(want) && !(on && state === 'listening')) setState(on && want === 'idle' ? 'focused' : want);
     },
     react,
     /** The cursor moved; kiku watches it while it is near, and grows curious if it lingers. */
@@ -458,10 +487,13 @@ export function createKiku(svg: SVGSVGElement, onImpact: (splat: number) => void
       attnRaw = near ? pt : attnPt = null;
       wake();
     },
+    /** Unread below: kiku swells and stays a little swollen, glowing, until the visitor catches up; then it lets the breath out. */
     setAlert(on: boolean) {
-      EP.alert++;
-      const nag = () => { if (!BUSY.test(state) && !reduced) hop(70); at(2600, nag, 'alert'); };
-      if (on) nag();
+      if (on === !!held) return;
+      held = on ? .07 : 0;
+      cls('swollen', on);
+      if (on) { swellAt = -1e4; swell(); }
+      else if (!reduced) { P.g = 0; K('s', -.5); deep = true; wake(); }
     },
     setReduced(v: boolean) { reduced = v; cls('reduced', v); wake(); },
     pause(h: boolean) {

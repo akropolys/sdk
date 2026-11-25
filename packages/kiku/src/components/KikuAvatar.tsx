@@ -15,9 +15,14 @@ export interface KikuAvatarProps {
   dropIn?: boolean;
   // The chat's message box: while the visitor types, kiku looks at the caret and listens.
   inputRef?: React.RefObject<HTMLTextAreaElement | HTMLInputElement | null>;
-  // Bump to tell kiku a new message arrived.
+  // Count of messages kiku should notice; a rise (a reply's first words, a teammate's message) makes kiku swell.
   notice?: number;
+  // A moment to react to over the current state: n bumps each time.
+  cue?: { kind: KikuCue; n: number };
 }
+
+// happy: something worked or the visitor is pleased; oh: the visitor stopped the reply.
+export type KikuCue = 'happy' | 'oh';
 
 // Roughly where the caret sits: half an em per character before it on its line.
 function caretAt(el: HTMLTextAreaElement | HTMLInputElement) {
@@ -26,7 +31,7 @@ function caretAt(el: HTMLTextAreaElement | HTMLInputElement) {
   return { x: r.left + pad + (before.length - before.lastIndexOf('\n') - 1) * parseFloat(cs.fontSize) * .5 % inner, y: r.top + r.height / 2 };
 }
 
-export function KikuAvatar({ state = 'idle', size = 40, alert = false, onImpact, triggerRef, dropIn = false, inputRef, notice = 0 }: KikuAvatarProps) {
+export function KikuAvatar({ state = 'idle', size = 40, alert = false, onImpact, triggerRef, dropIn = false, inputRef, notice = 0, cue }: KikuAvatarProps) {
   const ref = useRef<SVGSVGElement>(null);
   const kiku = useRef<Kiku>();
   const props = useRef({ onImpact, inputRef });
@@ -64,7 +69,11 @@ export function KikuAvatar({ state = 'idle', size = 40, alert = false, onImpact,
   }, []);
   useEffect(() => kiku.current?.setBase(state), [state]);
   useEffect(() => kiku.current?.setAlert(alert), [alert]);
-  useEffect(() => { if (notice) kiku.current?.react('notice'); }, [notice]);
+  // Only a rise counts: opening a chat with history, or clearing it, is not news.
+  const seen = useRef(notice);
+  useEffect(() => { if (notice > seen.current) kiku.current?.react('swell'); seen.current = notice; }, [notice]);
+  const cued = useRef(cue?.n);
+  useEffect(() => { if (cue && cue.n !== cued.current) kiku.current?.react(cue.kind); cued.current = cue?.n; }, [cue?.n]);
 
   return (
     <svg ref={ref} className="hsk-kiku" width={size} height={size} viewBox="-50 -50 100 100" aria-hidden="true" />

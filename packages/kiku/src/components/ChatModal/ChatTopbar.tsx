@@ -2,7 +2,7 @@ import React from 'react';
 import { useT } from './types';
 import { ChevronLeftIcon, CloseIcon, TrashIcon } from './icons';
 import { THEMES, type ThemeId } from './themes';
-import { KikuAvatar, type KikuState } from '../KikuAvatar';
+import { KikuAvatar, type KikuState, type KikuCue } from '../KikuAvatar';
 import { SoundToggle } from './components/SoundToggle';
 import { cn } from '../../utils/cn';
 import { useIslandMorph } from '../../utils/island';
@@ -16,8 +16,10 @@ export interface ChatTopbarProps {
   avatarState?: KikuState;
   // The message box, so kiku can watch the caret while the visitor types.
   inputRef?: React.RefObject<HTMLTextAreaElement | null>;
-  // Bumps when a new message arrives.
+  // Rises when a message's first words land; kiku swells.
   newMessages?: number;
+  // A moment for kiku to react to: a success, the visitor's thanks, a stop.
+  avatarCue?: { kind: KikuCue; n: number };
   unread?: boolean;
   awayFromBottom?: boolean;
   themeMenuOpen?: boolean;
@@ -59,6 +61,7 @@ export function ChatTopbar({
   avatarState = 'idle',
   inputRef,
   newMessages,
+  avatarCue,
   unread = false,
   awayFromBottom = false,
   themeMenuOpen = false,
@@ -244,6 +247,7 @@ export function ChatTopbar({
           dropIn={dropIn}
           inputRef={inputRef}
           notice={newMessages}
+          cue={avatarCue}
         />
         <div className="hsk-cb-topbar-identity">
           {logo ? (

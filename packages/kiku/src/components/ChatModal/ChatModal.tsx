@@ -43,7 +43,8 @@ import { LayoutToggle } from './components/LayoutToggle';
 import { useChatLayout } from './hooks/useChatLayout';
 import { isTeamNote, parseThinking } from './components/ThinkingBlock';
 import { useDelayedClose } from './hooks/useDelayedClose';
-import { avatarStateFor } from './avatarState';
+import { avatarStateFor, afterReply, pleased } from './avatarState';
+import type { KikuCue } from '../KikuAvatar';
 import { stripToolMarkup } from '../../utils/toolMarkup';
 
 const RadarIcon = ({ size = 14 }: { size?: number }) => (
@@ -361,8 +362,6 @@ export function ChatModal({
     : (placeholder === 'Ask me anything…' ? t('defaultPlaceholder') : placeholder);
 
   const activeChips = !chips || chips === DEFAULT_CHIPS ? [] : (Array.isArray(chips) ? chips : []);
-  // kiku reacts each time a reply (its own or a teammate's) lands.
-  const replyCount = messages.filter(m => m.role !== 'user').length;
 
   const [currentTheme, setCurrentTheme] = useState<ThemeId>(() => initialTheme(theme));
 
@@ -945,14 +944,59 @@ export function ChatModal({
   const pacedContent = usePacedText(tail?.role === 'assistant' ? tail.content ?? '' : '');
   const draining = tail?.role === 'assistant' && pacedContent.length < (tail.content?.length ?? 0);
   const revealing = streaming || draining;
+  const visibleReply = tail?.role === 'assistant' && parseThinking(stripToolMarkup(pacedContent)).content.trim().length > 0;
+
+  // For a while after a reply finishes, kiku points at what it put on screen, or waits on its question.
+  const turnOn = loading || revealing;
+  const [afterTurn, setAfterTurn] = useState<'guiding' | 'curious' | null>(null);
+  const turnWasOn = useRef(false);
+  useEffect(() => {
+    if (turnOn) { turnWasOn.current = true; setAfterTurn(null); return; }
+    if (!turnWasOn.current) return;
+    turnWasOn.current = false;
+    if (error || interrupted || stopped || tail?.role !== 'assistant') return;
+    const kind = afterReply(
+      (tail.referencedIds?.length ?? 0) + referencedIds.length + (tail.knowledgeImages?.length ?? 0) > 0,
+      parseThinking(stripToolMarkup(tail.content ?? '')).content.trim(),
+    );
+    if (!kind) return;
+    setAfterTurn(kind);
+    const id = setTimeout(() => setAfterTurn(null), 9000);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turnOn]);
+
   const avatarState = avatarStateFor({
     handoff: humanPending,
     listening: voicePhase === 'listening' || (voiceMode === 'dictate' && voicePhase === 'speaking'),
     busy: loading || streaming,
     revealing,
-    visibleReply: tail?.role === 'assistant' && parseThinking(stripToolMarkup(pacedContent)).content.trim().length > 0,
+    visibleReply,
     failed: !!error || interrupted,
+    visualizing: messages.some(m => m.visualizing),
+    attaching: attachments.length > 0,
+    after: afterTurn,
+    empty: messages.length === 0,
   });
+
+  // Moments kiku reacts to over its state. Each signal counts only when it changes, not on opening.
+  const [avatarCue, setAvatarCue] = useState<{ kind: KikuCue; n: number }>();
+  const cueKiku = (kind: KikuCue) => setAvatarCue(c => ({ kind, n: (c?.n ?? 0) + 1 }));
+  // a site action that went through, or a picture that came back
+  const wins = tail?.role === 'assistant' ? (tail.actionLinks?.length ?? 0) + (tail.visualization ? 1 : 0) : 0;
+  const asked = messages.filter(m => m.role === 'user').length;
+  const seenCue = useRef({ stopped, lastAction, wins, asked });
+  useEffect(() => {
+    const was = seenCue.current;
+    if (stopped && !was.stopped) cueKiku('oh');
+    else if ((lastAction && lastAction !== was.lastAction && !/^request_/.test(lastAction.type)) || wins > was.wins) cueKiku('happy');
+    else if (asked > was.asked) {
+      const said = [...messages].reverse().find(m => m.role === 'user')?.content ?? '';
+      if (pleased(said.trim())) cueKiku('happy');
+    }
+    seenCue.current = { stopped, lastAction, wins, asked };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stopped, lastAction, wins, asked]);
 
   const displayMessages = React.useMemo(() => {
     const inFlight = loading || streaming;
@@ -972,6 +1016,12 @@ export function ChatModal({
     if (!inFlight && !draining) return kept;
     return kept.map((m, i) => (i === last ? { ...m, content: pacedContent } : m));
   }, [messages, loading, streaming, pacedContent]);
+
+  // kiku swells when a message (its own or a teammate's) shows its first words or picture, not when
+  // an empty reply is opened at send: the newest one counts only once there is something to see.
+  const lastShown = displayMessages[displayMessages.length - 1];
+  const replyCount = displayMessages.filter(m => m.role !== 'user').length - (lastShown && lastShown.role !== 'user' &&
+    !lastShown.visualization && !lastShown.knowledgeImages?.length && !parseThinking(stripToolMarkup(lastShown.content ?? '')).content.trim() ? 1 : 0);
 
   const hasLayoutContent = displayMessages.some(message =>
     message.role === 'assistant' && !isTeamNote(message.statusStage) && parseThinking(message.content).content.trim().length > 0
@@ -1072,6 +1122,7 @@ export function ChatModal({
               avatarState={avatarState}
               inputRef={textareaRef}
               newMessages={replyCount}
+              avatarCue={avatarCue}
               unread={unreadBelow}
               awayFromBottom={showJumpToBottom}
               themeMenuOpen={themeMenuOpen}
