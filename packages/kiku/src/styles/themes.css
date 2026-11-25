@@ -187,7 +187,7 @@
   font-weight: 700 !important;
 }
 
-[data-hsk-theme] .hsk-cb-main,
+[data-hsk-theme] .hsk-cb-panel,
 [data-hsk-theme] .hsk-voice-overlay {
   --hsk-doodle-ink: var(--hsk-ink) !important;
   --hsk-doodle-tint: var(--hsk-tint) !important;

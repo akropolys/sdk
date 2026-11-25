@@ -382,7 +382,7 @@ export function ChatModal({
     const targets = side ? Array.from(side) : [];
     const msgs = msgsContainerRef.current as HTMLElement | null;
     if (includeText && msgs) targets.unshift(msgs);
-    const canvas = panelRef.current?.querySelector<HTMLElement>('.hsk-cb-main > .hsk-cb-doodles');
+    const canvas = panelRef.current?.querySelector<HTMLElement>('.hsk-cb-panel > .hsk-cb-doodles');
     nudgeRef.current = animateNudge(targets, isRTL, canvas, msgs);
   };
   // The first bloom waits for the greeting or messages to appear, which can lag the panel on a first open.
@@ -1052,8 +1052,10 @@ export function ChatModal({
             }
           }}
         >
+          {/* Outside the chat column, so in the wide layout the doodles can reach
+              past it and fade out toward the screen edges. */}
+          <KikuDoodles seed={(client as any)?.api?.siteId ?? ''} theme={hskThemeAttr} dir={isRTL ? 'rtl' : 'ltr'} waitForContent />
           <div className="hsk-cb-main">
-            <KikuDoodles seed={(client as any)?.api?.siteId ?? ''} theme={hskThemeAttr} dir={isRTL ? 'rtl' : 'ltr'} waitForContent />
 
             <ChatTopbar
               layoutControl={hasLayoutContent ? <LayoutToggle wide={chatLayout.wide} onToggle={handleToggleLayout} emphasized={layoutGuidance} /> : undefined}

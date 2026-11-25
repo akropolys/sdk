@@ -540,7 +540,9 @@ function generateGlyphs(
   const noise = makeNoise(mulberry32(seed ^ 0x9e3779b9));
 
   const area = w * h;
-  const target = Math.max(40, Math.min(520, Math.round(area / 3100)));
+  // The wide desktop canvas reaches past the chat column; 800 keeps the field
+  // as dense behind the column on tall screens.
+  const target = Math.max(40, Math.min(800, Math.round(area / 3100)));
   const raw = target / 0.48;
   const r = Math.max(26, Math.sqrt((0.7 * area) / raw));
   const pts = poisson(w, h, r, rng);

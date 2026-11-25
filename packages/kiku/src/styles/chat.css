@@ -195,11 +195,12 @@
 }
 
 .hsk-cb-panel {
+  --hsk-col: 720px; /* the chat column's width */
   position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
-    max-width: 720px;
+  max-width: var(--hsk-col);
   width: 100%;
   margin: 0 auto;
   animation: hsk-panel-in .28s cubic-bezier(.34,1.2,.64,1);

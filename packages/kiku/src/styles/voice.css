@@ -441,7 +441,7 @@
 }
 
 .hsk-cb-main { position: relative; }
-.hsk-cb-main,
+.hsk-cb-panel,
 .hsk-voice-overlay { --hsk-doodle-ink: 31, 31, 31; --hsk-doodle-tint: 255, 106, 51; }
 
 @keyframes hsk-doodles-shimmer-in {
@@ -462,14 +462,39 @@
 
 .hsk-cb-main > *:not(.hsk-cb-doodles) { position: relative; }
 
+/* Desktop: the doodles reach past the chat column. They are full strength
+   behind it and, in the wide layout, fade out toward the screen edges (the
+   fade shrinks on narrower screens). The canvas keeps one size in both
+   layouts so switching layout only swaps the mask: in the bubbles layout the
+   fade is 0, a hard edge at the column, as before. */
+@media (min-width: 1200px) {
+  .hsk-cb-panel { --hsk-doodle-reach: 410px; --hsk-doodle-fade: 0px; }
+  [data-hsk-layout="wide"] .hsk-cb-panel {
+    --hsk-doodle-fade: min(var(--hsk-doodle-reach), calc((100vw - var(--hsk-col)) * 0.35));
+  }
+  .hsk-cb-panel > .hsk-cb-doodles {
+    left: 50%;
+    right: auto;
+    width: calc(var(--hsk-col) + 2 * var(--hsk-doodle-reach));
+    transform: translateX(-50%);
+    --hsk-doodle-mask: linear-gradient(to right,
+      transparent calc(50% - var(--hsk-col) / 2 - var(--hsk-doodle-fade)),
+      #000 calc(50% - var(--hsk-col) / 2),
+      #000 calc(50% + var(--hsk-col) / 2),
+      transparent calc(50% + var(--hsk-col) / 2 + var(--hsk-doodle-fade)));
+    -webkit-mask-image: var(--hsk-doodle-mask);
+    mask-image: var(--hsk-doodle-mask);
+  }
+}
+
 @media (prefers-color-scheme: dark) {
-  .hsk-cb-main,
+  .hsk-cb-panel,
   .hsk-voice-overlay { --hsk-doodle-ink: 240, 239, 237; --hsk-doodle-tint: 255, 150, 110; }
 }
 
-[data-hsk-theme="light"] .hsk-cb-main,
+[data-hsk-theme="light"] .hsk-cb-panel,
 [data-hsk-theme="light"] .hsk-voice-overlay { --hsk-doodle-ink: 31, 31, 31; --hsk-doodle-tint: 255, 106, 51; }
-[data-hsk-theme="dark"] .hsk-cb-main,
+[data-hsk-theme="dark"] .hsk-cb-panel,
 [data-hsk-theme="dark"] .hsk-voice-overlay { --hsk-doodle-ink: 240, 239, 237; --hsk-doodle-tint: 255, 150, 110; }
 
 .hsk-cb-docked-option-detail,
