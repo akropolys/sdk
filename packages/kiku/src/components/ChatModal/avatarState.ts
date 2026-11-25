@@ -18,8 +18,8 @@ export interface AvatarSignals {
 export function avatarStateFor(s: AvatarSignals): KikuState {
   if (s.handoff) return 'handoff';
   if (s.listening) return 'listening';
-  if ((s.busy || s.revealing) && s.visibleReply) return 'speaking';
-  if (s.busy) return 'thinking';
+  // A short reply can arrive whole before its first words are typed out: still thinking then.
+  if (s.busy || s.revealing) return s.visibleReply ? 'speaking' : 'thinking';
   if (s.failed) return 'failed';
   return 'idle';
 }

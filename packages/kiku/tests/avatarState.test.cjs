@@ -33,3 +33,7 @@ test('handoff and the visitor speaking come first', () => {
   assert.equal(at({ handoff: true, busy: true, visibleReply: true }), 'handoff');
   assert.equal(at({ listening: true, busy: true }), 'listening');
 });
+
+test('a reply that arrived whole but is not typed out yet keeps kiku thinking, never idle', () => {
+  assert.equal(avatarStateFor({ handoff: false, listening: false, busy: false, revealing: true, visibleReply: false, failed: false }), 'thinking');
+});

@@ -16,7 +16,7 @@ later work too. A page with no tag shows kiku in the bottom-right corner.
 ```html
 <kiku-button></kiku-button>
 
-<script src="https://cdn.akropolys.cloud/kiku/2.3.6/kiku.js" data-key="YOUR_KEY"
+<script src="https://cdn.akropolys.cloud/kiku/2.3.7/kiku.js" data-key="YOUR_KEY"
   data-voice="true" data-vision="true" defer></script>
 ```
 
@@ -30,7 +30,7 @@ name, at about 14px tall. To show a wordmark instead of the name, use `data-logo
 when a logo is set, the icon is not shown.
 
 ```html
-<script src="https://cdn.akropolys.cloud/kiku/2.3.6/kiku.js" data-key="YOUR_KEY"
+<script src="https://cdn.akropolys.cloud/kiku/2.3.7/kiku.js" data-key="YOUR_KEY"
   data-title="Harbour Home" data-brand-icon="https://example.com/icon.svg" defer></script>
 ```
 
@@ -102,10 +102,10 @@ microphone permission. Kiku loads its audio processor as a version-matched JavaS
 
 ## CDN files and self-hosting
 
-- [Loader](https://cdn.akropolys.cloud/kiku/2.3.6/kiku.js)
-- [Stylesheet](https://cdn.akropolys.cloud/kiku/2.3.6/styles.css)
-- [Embed module](https://cdn.akropolys.cloud/kiku/2.3.6/embed/embed.js)
-- [Voice audio processor](https://cdn.akropolys.cloud/kiku/2.3.6/voice-worklet.js)
+- [Loader](https://cdn.akropolys.cloud/kiku/2.3.7/kiku.js)
+- [Stylesheet](https://cdn.akropolys.cloud/kiku/2.3.7/styles.css)
+- [Embed module](https://cdn.akropolys.cloud/kiku/2.3.7/embed/embed.js)
+- [Voice audio processor](https://cdn.akropolys.cloud/kiku/2.3.7/voice-worklet.js)
 
 To self-host this release, copy `dist/kiku.js`, `dist/styles.css`,
 `dist/voice-worklet.js`, and the entire `dist/embed` directory to your server. Preserve
