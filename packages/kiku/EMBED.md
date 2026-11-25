@@ -47,6 +47,8 @@ await Kiku.ingest({
 returns the API response. Supply data explicitly; the embed does not guess a
 website's schema. Every catalogue record requires its source record's stable top-level `id`. `fields.url` is optional but recommended when a webpage is available; Kiku can show and save records without one. A supplied URL is kept in saved history. URLs, names and signatures do not replace IDs. Normal ingestion sends one record and works on every plan. An unsigned array uses the batch endpoint and requires Growth, Pro or Business. Signing is optional unless the site requires it in Shell; it is independent of normal versus batch ingestion.
 
+**Protect your catalogue: turn on "Require signed ingestion" in Shell once your server sends your products.** Unsigned ingestion is authorised by the public key, which anyone can copy from your page, so anyone could also send records to your catalogue (a changed price, or text kiku would then repeat). It stays optional only so a site can start from the browser alone. Once your server signs its records with your private key (kept on the server, never in the page), requiring signatures means only your server can change your catalogue.
+
 For a useful minimal record, send `{ id: 'chair-123', title: 'Linen lounge chair' }`.
 Add facts in `fields`. Use `image` for a cover and `images` for an ordered gallery
 of URLs or `{ url, alt?, caption? }` objects. Each record owns its own photos.
