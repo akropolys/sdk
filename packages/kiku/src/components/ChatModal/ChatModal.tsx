@@ -941,7 +941,7 @@ export function ChatModal({
   const halted = (stopped || interrupted) && !loading && !streaming;
 
   const tail = messages[messages.length - 1];
-  const pacedContent = usePacedText(tail?.role === 'assistant' ? tail.content ?? '' : '');
+  const pacedContent = usePacedText(tail?.role === 'assistant' ? tail.content ?? '' : '', streaming || loading);
   const draining = tail?.role === 'assistant' && pacedContent.length < (tail.content?.length ?? 0);
   const revealing = streaming || draining;
   const visibleReply = tail?.role === 'assistant' && parseThinking(stripToolMarkup(pacedContent)).content.trim().length > 0;

@@ -1,5 +1,6 @@
 import React from 'react';
 import { lineDirection } from './textDirection';
+import { writingSlow, reducedMotion } from './writing';
 
 const SPACING_DOUBLE_REGEX = /[ \t]{2,}/g;
 const SPACING_PUNCT_REGEX = / ([.,!?:;])/g;
@@ -55,7 +56,7 @@ const parseInline = (text: string, keyPrefix: string): React.ReactNode => {
     if (part.startsWith('`') && part.endsWith('`')) {
       return (
         <code key={key} className="hsk-markdown-code">
-          {part.slice(1, -1)}
+          {fxText(part.slice(1, -1), key)}
         </code>
       );
     }
@@ -126,13 +127,173 @@ function namePattern(names?: readonly string[]): RegExp | null {
 }
 
 function markNames(text: string, key: string): React.ReactNode {
-  if (!entityNames || !text) return text;
+  if (!entityNames || !text) return fxText(text, key);
   const pieces = text.split(entityNames);
-  if (pieces.length === 1) return text;
+  if (pieces.length === 1) return fxText(text, key);
   // split() puts each matched name at the odd positions.
-  return pieces.map((piece, i) => (i % 2 === 1
-    ? <span key={`${key}-name-${i}`} className="hsk-entity-name">{piece}</span>
-    : piece));
+  return pieces.map((piece, i) => {
+    if (i % 2 === 0) return <React.Fragment key={`${key}-t-${i}`}>{fxText(piece, `${key}-t-${i}`)}</React.Fragment>;
+    const k = `${key}-name-${i}`;
+    if (!fx) return <span key={k} className="hsk-entity-name">{piece}</span>;
+    const seen = pillSeen(fx);
+    return <Pill key={k} seen={seen}>{fxText(piece, k)}</Pill>;
+  });
+}
+
+const STAGGER_MS = 40;
+const STAGGER_CAP = 14;
+const BLUR_MS = 650;
+const DRIFT_MS = 520;
+const PILL_MS = 600;
+const MAX_LIVE = 60;
+
+export interface WritingStore {
+  times: number[][];
+  pills: Map<string, number>;
+  cache: Map<number, { sig: string; node: React.ReactNode }>;
+  ctx: string;
+  seed: boolean;
+}
+
+export function createWriting(live: boolean): WritingStore {
+  return { times: [], pills: new Map(), cache: new Map(), ctx: '', seed: !live };
+}
+
+interface FxFrame {
+  store: WritingStore;
+  now: number;
+  dur: number;
+  slow: boolean;
+  line: number[];
+  lineNo: number;
+  pos: number;
+  w: number;
+  fresh: boolean;
+  gap: boolean;
+}
+
+let fx: FxFrame | null = null;
+
+function enterLine(lineNo: number) {
+  if (!fx) return;
+  fx.lineNo = lineNo;
+  fx.line = fx.store.times[lineNo] ??= [];
+  fx.pos = 0;
+}
+
+function pillSeen(f: FxFrame): number | null {
+  const id = `${f.lineNo}:${f.pos}`;
+  let seen = f.store.pills.get(id);
+  if (seen === undefined) {
+    seen = f.store.seed ? -Infinity : f.now;
+    f.store.pills.set(id, seen);
+  }
+  return f.now - seen < PILL_MS ? seen : null;
+}
+
+function fxText(text: string, key: string): React.ReactNode {
+  const f = fx;
+  if (!f || !text) return text;
+  const start = f.pos;
+  f.pos += text.length;
+  const times = f.line;
+  for (let k = 0; k < text.length; k++) {
+    const space = /\s/.test(text[k]);
+    if (times[start + k] === undefined) {
+      if (f.store.seed) times[start + k] = -Infinity;
+      else {
+        if (f.fresh && !space && f.gap) f.w++;
+        f.fresh = true;
+        times[start + k] = f.now + Math.min(f.w, STAGGER_CAP) * STAGGER_MS;
+      }
+    }
+    f.gap = space;
+  }
+  const live = (k: number) => {
+    const t = times[start + k];
+    return f.now - t < f.dur ? t : null;
+  };
+  const out: React.ReactNode[] = [];
+  for (let a = 0; a < text.length;) {
+    const t = live(a);
+    let b = a + 1;
+    while (b < text.length && live(b) === t) b++;
+    const piece = text.slice(a, b);
+    out.push(t === null ? piece : <Fx key={`${key}-fx-${start + a}`} t={t} slow={f.slow}>{piece}</Fx>);
+    a = b;
+  }
+  return out.length === 1 ? out[0] : out;
+}
+
+const liveFx: Array<() => void> = [];
+
+function Fx({ t, slow, children }: { t: number; slow: boolean; children: React.ReactNode }) {
+  const [delay] = React.useState(() => Math.round(t - performance.now()));
+  const [on, setOn] = React.useState(true);
+  React.useEffect(() => {
+    if (!on) return;
+    const settle = () => setOn(false);
+    liveFx.push(settle);
+    while (liveFx.length > MAX_LIVE) liveFx.shift()!();
+    return () => {
+      const i = liveFx.indexOf(settle);
+      if (i >= 0) liveFx.splice(i, 1);
+    };
+  }, [on]);
+  if (!on) return <span>{children}</span>;
+  return (
+    <span
+      className={slow ? 'hsk-fx-drift' : 'hsk-fx'}
+      style={{ animationDelay: `${delay}ms` }}
+      onAnimationEnd={e => { if (e.target === e.currentTarget) setOn(false); }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function Pill({ seen, children }: { seen: number | null; children: React.ReactNode }) {
+  const [delay] = React.useState(() => (seen === null ? null : Math.round(seen - performance.now())));
+  const [on, setOn] = React.useState(delay !== null);
+  return (
+    <span
+      className={on ? 'hsk-entity-name hsk-entity-name--in' : 'hsk-entity-name'}
+      style={on ? { animationDelay: `${delay}ms` } : undefined}
+      onAnimationEnd={on ? e => { if (e.target === e.currentTarget) setOn(false); } : undefined}
+    >
+      {children}
+    </span>
+  );
+}
+
+function Li({ t, children }: { t: number | null; children: React.ReactNode }) {
+  const [delay] = React.useState(() => (t === null ? null : Math.round(t - performance.now())));
+  const [on, setOn] = React.useState(delay !== null);
+  return (
+    <li
+      className={on ? 'hsk-li-in' : undefined}
+      style={on ? { animationDelay: `${delay}ms` } : undefined}
+      onAnimationEnd={on ? e => { if (e.target === e.currentTarget) setOn(false); } : undefined}
+    >
+      {children}
+    </li>
+  );
+}
+
+function listItem(lineNo: number, text: string): React.ReactNode {
+  const key = `li-${lineNo}`;
+  if (!fx) return <li key={key}>{parseInline(text, key)}</li>;
+  enterLine(lineNo);
+  const body = parseInline(text, key);
+  const first = fx.line[0];
+  return <Li key={key} t={first !== undefined && fx.now - first < fx.dur ? first : null}>{body}</Li>;
+}
+
+function closeOpenMarks(line: string): string {
+  let out = line;
+  if ((out.match(/\*\*/g) || []).length % 2) out = /\*\*\s*$/.test(out) ? out.replace(/\*\*\s*$/, '') : `${out}**`;
+  if ((out.match(/`/g) || []).length % 2) out = out.endsWith('`') ? out.slice(0, -1) : `${out}\``;
+  return out;
 }
 
 const TABLE_SEPARATOR_REGEX = /^\s*\|?[\s:|-]*-[\s:|-]*\|?\s*$/;
@@ -223,18 +384,26 @@ export function TableWrapper({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function renderMarkdown(content: string, streaming = false, hosts?: ReadonlySet<string>, names?: readonly string[]): React.ReactNode {
+export function renderMarkdown(content: string, streaming = false, hosts?: ReadonlySet<string>, names?: readonly string[], store?: WritingStore): React.ReactNode {
   imageHosts = hosts ?? null;
   entityNames = namePattern(names);
+  if (store) {
+    const ctx = `${[...(hosts ?? [])].join(',')}\n${(names ?? []).join('\n')}`;
+    if (store.ctx !== ctx) { store.ctx = ctx; store.cache.clear(); }
+    const slow = writingSlow();
+    fx = reducedMotion() ? null : { store, now: performance.now(), dur: slow ? DRIFT_MS : BLUR_MS, slow, line: [], lineNo: -1, pos: 0, w: 0, fresh: false, gap: true };
+  }
   try {
-    return buildMarkdown(content, streaming);
+    return buildMarkdown(content, streaming, store);
   } finally {
     imageHosts = null;
     entityNames = null;
+    fx = null;
+    if (store) store.seed = false;
   }
 }
 
-function buildMarkdown(content: string, streaming: boolean): React.ReactNode {
+function buildMarkdown(content: string, streaming: boolean, store?: WritingStore): React.ReactNode {
   const lines = content.split('\n');
   if (streaming && lines.length > 0) {
     if (!content.endsWith('\n') && lines[lines.length - 1].trim().startsWith('|')) {
@@ -246,7 +415,19 @@ function buildMarkdown(content: string, streaming: boolean): React.ReactNode {
     if (start < lines.length && !lines.slice(start).some(l => TABLE_SEPARATOR_REGEX.test(l))) {
       lines.length = start;
     }
+    if (lines.length > 0) lines[lines.length - 1] = closeOpenMarks(lines[lines.length - 1]);
   }
+
+  const cached = (lineNo: number, sig: string, make: () => React.ReactNode): React.ReactNode => {
+    if (!store) return make();
+    const hit = store.cache.get(lineNo);
+    if (hit && hit.sig === sig) return hit.node;
+    enterLine(lineNo);
+    const node = make();
+    store.cache.set(lineNo, { sig, node });
+    return node;
+  };
+  const sigOf = (lineNo: number) => `${streaming && lineNo === lines.length - 1 ? 1 : 0}|${lines[lineNo]}`;
 
   // The line still being typed keeps the chat's direction until it has enough letters to call.
   const dirOf = (text: string, at: number) => lineDirection(text, streaming && at === lines.length - 1 ? 15 : 1);
@@ -301,7 +482,8 @@ function buildMarkdown(content: string, streaming: boolean): React.ReactNode {
     if (headerMatch) {
       const level = headerMatch[1].length;
       const Tag = `h${level + 3}` as keyof JSX.IntrinsicElements; // Maps # to h4, ## to h5 to avoid messing up host page hierarchy
-      currentTextNodes.push(<Tag key={key} className={`hsk-markdown-h${level}`} dir={dirOf(headerMatch[2], i)}>{parseInline(headerMatch[2], key)}</Tag>);
+      const at = i;
+      currentTextNodes.push(cached(at, `h|${sigOf(at)}`, () => <Tag key={key} className={`hsk-markdown-h${level}`} dir={dirOf(headerMatch[2], at)}>{parseInline(headerMatch[2], key)}</Tag>));
       i++;
       continue;
     }
@@ -312,7 +494,8 @@ function buildMarkdown(content: string, streaming: boolean): React.ReactNode {
       while (i < lines.length && lines[i].match(/^[\s]*[-*+•]\s+/)) {
         const itemText = lines[i].replace(/^[\s]*[-*+•]\s+/, '');
         listText += itemText + ' ';
-        listItems.push(<li key={`li-${i}`}>{parseInline(itemText, `li-${i}`)}</li>);
+        const at = i;
+        listItems.push(cached(at, `li|${sigOf(at)}`, () => listItem(at, itemText)));
         i++;
       }
       currentTextNodes.push(<ul key={`ul-${key}`} className="hsk-markdown-list hsk-markdown-ul" dir={dirOf(listText, i - 1)}>{listItems}</ul>);
@@ -325,7 +508,8 @@ function buildMarkdown(content: string, streaming: boolean): React.ReactNode {
       while (i < lines.length && lines[i].match(/^[\s]*\d+[\.\)]\s+/)) {
         const itemText = lines[i].replace(/^[\s]*\d+[\.\)]\s+/, '');
         listText += itemText + ' ';
-        listItems.push(<li key={`li-${i}`}>{parseInline(itemText, `li-${i}`)}</li>);
+        const at = i;
+        listItems.push(cached(at, `li|${sigOf(at)}`, () => listItem(at, itemText)));
         i++;
       }
       currentTextNodes.push(<ol key={`ol-${key}`} className="hsk-markdown-list hsk-markdown-ol" dir={dirOf(listText, i - 1)}>{listItems}</ol>);
@@ -422,11 +606,12 @@ function buildMarkdown(content: string, streaming: boolean): React.ReactNode {
       continue;
     }
 
-    currentTextNodes.push(
-      <p key={key} className="hsk-markdown-p" dir={dirOf(line, i)}>
+    const at = i;
+    currentTextNodes.push(cached(at, `p|${sigOf(at)}`, () => (
+      <p key={key} className="hsk-markdown-p" dir={dirOf(line, at)}>
         {parseInline(line, key)}
       </p>
-    );
+    )));
     i++;
   }
 

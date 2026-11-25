@@ -312,6 +312,7 @@
 }
 .hsk-cb-ai-text .hsk-markdown-list li::marker {
   color: var(--hsk-primary, #ff6a33);
+  color: color-mix(in srgb, var(--hsk-primary, #ff6a33) calc(var(--hsk-mark, 1) * 100%), transparent);
 }
 
 .hsk-cb-ai-text .hsk-markdown-h1,
@@ -1257,7 +1258,8 @@
    every site theme. */
 .hsk-cb-ai-text .hsk-entity-name {
   font-weight: 600;
-  background: color-mix(in srgb, var(--hsk-chat-text, #333) 7%, transparent);
+  --hsk-name-bg: color-mix(in srgb, var(--hsk-chat-text, #333) 7%, transparent);
+  background: var(--hsk-name-bg);
   padding: 1px 7px;
   border-radius: 999px;
   -webkit-box-decoration-break: clone;

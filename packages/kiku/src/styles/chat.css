@@ -2726,7 +2726,7 @@
   background: transparent;
   cursor: pointer;
   transition: transform .14s, opacity .14s;
-  animation: hsk-card-in .26s ease-out both;
+  animation: hsk-card-rise .6s cubic-bezier(.16, .7, .12, 1) backwards;
   overflow: visible;
 }
 
@@ -5050,4 +5050,65 @@
   .hsk-cb-exit-btn--ack { animation: none; }
   .hsk-cb-exit-btn--ack svg line { animation: hsk-x-ink 900ms ease-out; }
   .hsk-cb-exit-hint { animation-name: hsk-exit-hint-fade; }
+}
+
+.hsk-fx,
+.hsk-fx-drift {
+  position: relative;
+  animation: hsk-fx-blur .65s cubic-bezier(.16, .7, .12, 1) backwards;
+  will-change: opacity, filter;
+}
+.hsk-fx-drift {
+  animation-name: hsk-fx-drift;
+  animation-duration: .52s;
+  will-change: opacity;
+}
+@keyframes hsk-fx-blur {
+  from { opacity: 0; filter: blur(4px); top: 2px; }
+  to { opacity: 1; filter: blur(0); top: 0; }
+}
+@keyframes hsk-fx-drift {
+  from { opacity: 0; top: 2px; }
+  to { opacity: 1; top: 0; }
+}
+.hsk-cb-ai-text .hsk-entity-name--in {
+  animation: hsk-name-in .6s cubic-bezier(.16, .7, .12, 1) backwards;
+}
+@keyframes hsk-name-in {
+  from { background-color: transparent; box-shadow: 0 0 3px 2px transparent; }
+  40% { box-shadow: 0 0 3px 2px var(--hsk-name-bg); }
+  to { box-shadow: 0 0 0 0 transparent; }
+}
+@property --hsk-mark {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
+.hsk-cb-ai-text .hsk-markdown-list li.hsk-li-in {
+  animation: hsk-mark-in .65s cubic-bezier(.16, .7, .12, 1) backwards;
+}
+@keyframes hsk-mark-in {
+  from { --hsk-mark: 0; }
+  to { --hsk-mark: 1; }
+}
+@keyframes hsk-card-rise {
+  from { opacity: 0; transform: translateY(6px); filter: blur(3px); }
+  to { opacity: 1; transform: none; filter: blur(0); }
+}
+@keyframes hsk-card-drift {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.hsk-cb-sources-wrap--still .hsk-cb-source {
+  animation-name: hsk-card-drift;
+  animation-duration: .52s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hsk-fx,
+  .hsk-fx-drift,
+  .hsk-cb-ai-text .hsk-entity-name--in,
+  .hsk-cb-ai-text .hsk-markdown-list li.hsk-li-in,
+  .hsk-cb-source {
+    animation: none;
+  }
 }

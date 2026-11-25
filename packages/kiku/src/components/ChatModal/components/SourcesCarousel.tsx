@@ -4,6 +4,7 @@ import type { ChatSource, EntityImage } from '@akropolys/sdk';
 import { normalizeEntityImages, useCardFields } from '@akropolys/sdk';
 import { detailsOf } from '../../../utils/cardDetails';
 import { cn } from '../../../utils/cn';
+import { writingSlow } from '../../../utils/writing';
 import { SparkleIcon, ChevronLeftIcon, ChevronRightIcon } from '../icons';
 
 export interface SourcesCarouselProps {
@@ -126,7 +127,7 @@ export function SourcesCarousel({ sources, onSelectSource, onImageClick, referen
   return (
     <>
     {swatchGrid}
-    <div className={cn("hsk-cb-sources-wrap", compact && "hsk-cb-sources-wrap--compact")}>
+    <div className={cn("hsk-cb-sources-wrap", compact && "hsk-cb-sources-wrap--compact", writingSlow() && "hsk-cb-sources-wrap--still")}>
       {showPrev && (
         <>
           <div className="hsk-cb-sources-fade-left" />
@@ -143,7 +144,7 @@ export function SourcesCarousel({ sources, onSelectSource, onImageClick, referen
             <div
               key={`${src.id ?? src.url ?? si}:${image?.url ?? photoIndex}`}
               className={cn("hsk-cb-source", isReferenced && "hsk-cb-source--referenced")}
-              style={{ animationDelay: `${si * 50}ms` }}
+              style={{ animationDelay: `${si * 80}ms` }}
               onClick={() => onSelectSource?.(src)}
             >
               <EntityGallery

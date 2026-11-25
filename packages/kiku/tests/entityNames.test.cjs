@@ -16,7 +16,8 @@ function load(file, modules) {
   return m.exports;
 }
 const textDirection = load('textDirection.ts', {});
-const {renderMarkdown} = load('markdown.tsx', {react: React, './textDirection': textDirection});
+const writing = load('writing.ts', {});
+const {renderMarkdown} = load('markdown.tsx', {react: React, './textDirection': textDirection, './writing': writing});
 const html = (text, names) => renderToStaticMarkup(React.createElement(React.Fragment, null, renderMarkdown(text, false, undefined, names)));
 
 test('the thing being discussed gets a faint pill in the answer text', () => {

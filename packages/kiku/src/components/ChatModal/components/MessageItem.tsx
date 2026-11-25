@@ -2,7 +2,7 @@ import React from 'react';
 import { useAkropolysContext, armActionReturn, type ChatMessage, type ChatSource, type ChatAction } from '@akropolys/sdk';
 import { cn } from '../../../utils/cn';
 import { stripToolMarkup } from '../../../utils/toolMarkup';
-import { renderMarkdown, safeHref } from '../../../utils/markdown';
+import { renderMarkdown, safeHref, createWriting, type WritingStore } from '../../../utils/markdown';
 import { lineDirection } from '../../../utils/textDirection';
 import { LiveTable } from '../../LiveTable';
 import { WorkingVeil } from '../../KikuDoodles';
@@ -22,8 +22,11 @@ import {
 import type { UIStringKey } from '../types';
 
 const MarkdownBlock = React.memo(
-  ({ content, streaming, hosts, names }: { content: string; streaming: boolean; hosts: string; names: string }) =>
-    <>{renderMarkdown(content, streaming, new Set(hosts.split(',')), names ? names.split('\n') : [])}</>,
+  ({ content, streaming, hosts, names, live }: { content: string; streaming: boolean; hosts: string; names: string; live: boolean }) => {
+    const store = React.useRef<WritingStore | null>(null);
+    store.current ??= createWriting(live);
+    return <>{renderMarkdown(content, streaming, new Set(hosts.split(',')), names ? names.split('\n') : [], store.current)}</>;
+  },
   (a, b) => a.content === b.content && a.streaming === b.streaming && a.hosts === b.hosts && a.names === b.names
 );
 MarkdownBlock.displayName = 'MarkdownBlock';
@@ -367,7 +370,7 @@ export function MessageItem({
                   {!cleanContent && hiddenToolMarkup && !(isLast && (streaming || loading)) && <p className="hsk-cb-ai-content">{t('errStreamInterrupted')}</p>}
                   {external.content && (
                     <div className="hsk-cb-ai-content">
-                      <MarkdownBlock content={external.content} streaming={isLast && streaming} hosts={imageHosts} names={entityNames} />
+                      <MarkdownBlock content={external.content} streaming={isLast && streaming} hosts={imageHosts} names={entityNames} live={isLast && (streaming || loading)} />
                     </div>
                   )}
                   <ExternalLinks links={external.links} t={t} onOpen={link => { if (api?.siteId) armActionReturn(api.siteId, link.returnToken); }} />
