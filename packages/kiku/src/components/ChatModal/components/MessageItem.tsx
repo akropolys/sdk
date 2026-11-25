@@ -483,7 +483,7 @@ export function MessageItem({
               const msgIntent = isLast ? lastIntent : msg.intent;
               const hiddenIntent = msgIntent === 'compare' || msgIntent === 'capture' ||
                 msgIntent === 'capture_all' || msgIntent === 'delete' || msgIntent === 'view_history';
-              const showCarousel = msgReferencedIds.length > 0 && !hiddenIntent &&
+              const showCarousel = msgReferencedIds.length > 0 && !hiddenIntent && !(isLast && streaming) &&
                 (!isLast || lastAction?.type !== 'request_kiku_key');
               return showCarousel && (
                 <SourcesCarousel

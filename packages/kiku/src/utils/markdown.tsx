@@ -135,8 +135,9 @@ function markNames(text: string, key: string): React.ReactNode {
     if (i % 2 === 0) return <React.Fragment key={`${key}-t-${i}`}>{fxText(piece, `${key}-t-${i}`)}</React.Fragment>;
     const k = `${key}-name-${i}`;
     if (!fx) return <span key={k} className="hsk-entity-name">{piece}</span>;
-    const seen = pillSeen(fx);
-    return <Pill key={k} seen={seen}>{fxText(piece, k)}</Pill>;
+    const at = fx.pos;
+    const body = fxText(piece, k);
+    return <Pill key={k} seen={pillSeen(fx, at)}>{body}</Pill>;
   });
 }
 
@@ -181,11 +182,11 @@ function enterLine(lineNo: number) {
   fx.pos = 0;
 }
 
-function pillSeen(f: FxFrame): number | null {
-  const id = `${f.lineNo}:${f.pos}`;
+function pillSeen(f: FxFrame, at: number): number | null {
+  const id = `${f.lineNo}:${at}`;
   let seen = f.store.pills.get(id);
   if (seen === undefined) {
-    seen = f.store.seed ? -Infinity : f.now;
+    seen = f.store.seed ? -Infinity : Math.max(f.now, f.line[at] ?? f.now);
     f.store.pills.set(id, seen);
   }
   return f.now - seen < PILL_MS ? seen : null;
@@ -226,11 +227,12 @@ function fxText(text: string, key: string): React.ReactNode {
 }
 
 const liveFx: Array<() => void> = [];
+const useIsoLayoutEffect = typeof window === 'undefined' ? React.useEffect : React.useLayoutEffect;
 
 function Fx({ t, slow, children }: { t: number; slow: boolean; children: React.ReactNode }) {
   const [delay] = React.useState(() => Math.round(t - performance.now()));
   const [on, setOn] = React.useState(true);
-  React.useEffect(() => {
+  useIsoLayoutEffect(() => {
     if (!on) return;
     const settle = () => setOn(false);
     liveFx.push(settle);
