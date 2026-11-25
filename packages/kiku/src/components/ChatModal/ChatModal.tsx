@@ -43,6 +43,8 @@ import { LayoutToggle } from './components/LayoutToggle';
 import { useChatLayout } from './hooks/useChatLayout';
 import { isTeamNote, parseThinking } from './components/ThinkingBlock';
 import { useDelayedClose } from './hooks/useDelayedClose';
+import { avatarStateFor } from './avatarState';
+import { stripToolMarkup } from '../../utils/toolMarkup';
 
 const RadarIcon = ({ size = 14 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -943,6 +945,14 @@ export function ChatModal({
   const pacedContent = usePacedText(tail?.role === 'assistant' ? tail.content ?? '' : '');
   const draining = tail?.role === 'assistant' && pacedContent.length < (tail.content?.length ?? 0);
   const revealing = streaming || draining;
+  const avatarState = avatarStateFor({
+    handoff: humanPending,
+    listening: voicePhase === 'listening' || (voiceMode === 'dictate' && voicePhase === 'speaking'),
+    busy: loading || streaming,
+    revealing,
+    visibleReply: tail?.role === 'assistant' && parseThinking(stripToolMarkup(pacedContent)).content.trim().length > 0,
+    failed: !!error || interrupted,
+  });
 
   const displayMessages = React.useMemo(() => {
     const inFlight = loading || streaming;
@@ -1059,11 +1069,7 @@ export function ChatModal({
               logo={logo}
               brandIcon={brandIcon}
               hasMessages={messages.length > 0}
-              avatarState={
-                humanPending ? 'handoff'
-                : voicePhase === 'listening' || (voiceMode === 'dictate' && voicePhase === 'speaking') ? 'listening'
-                : streaming ? 'speaking' : loading ? 'thinking' : 'idle'
-              }
+              avatarState={avatarState}
               inputRef={textareaRef}
               newMessages={replyCount}
               unread={unreadBelow}

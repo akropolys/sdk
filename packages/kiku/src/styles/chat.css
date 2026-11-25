@@ -238,6 +238,29 @@
   display: none !important;
 }
 
+/* A band in the panel colour, so messages scrolled up slide under the bar instead of showing
+   between its buttons; it runs a short soft fade past the bar's bottom edge. */
+.hsk-cb-topbar::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 -14px;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(to bottom,
+    var(--hsk-chat-bg, #fff) calc(100% - 14px),
+    color-mix(in srgb, var(--hsk-chat-bg, #fff) 72%, transparent) calc(100% - 9px),
+    color-mix(in srgb, var(--hsk-chat-bg, #fff) 28%, transparent) calc(100% - 4px),
+    transparent);
+}
+
+/* Wide desktop: the doodles run past the column, so the band's sides fade rather than cut a box out of them. */
+@media (min-width: 1200px) {
+  [data-hsk-layout="wide"] .hsk-cb-topbar::before {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 48px, #000 calc(100% - 48px), transparent);
+    mask-image: linear-gradient(to right, transparent, #000 48px, #000 calc(100% - 48px), transparent);
+  }
+}
+
 .hsk-cb-topbar-left {
   display: flex;
   align-items: center;
@@ -357,18 +380,19 @@
 /* One blur, one soft edge: stacked blurs draw a ring at every step. */
 .hsk-cb-topbar-scrim {
   position: fixed;
-  inset: 0;
+  inset: 0 0 auto; /* only the part the mask shows: below 75vh the blur was drawn for nothing */
+  height: 75vh;
   z-index: 999;
   background: color-mix(in srgb, var(--hsk-chat-bg, #fff) 30%, transparent);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   mask-image: linear-gradient(to bottom, #000 40vh, rgba(0, 0, 0, .97) 43.5vh, rgba(0, 0, 0, .84) 48.75vh, rgba(0, 0, 0, .5) 57.5vh, rgba(0, 0, 0, .16) 66.25vh, rgba(0, 0, 0, .03) 71.5vh, transparent 75vh);
   -webkit-mask-image: linear-gradient(to bottom, #000 40vh, rgba(0, 0, 0, .97) 43.5vh, rgba(0, 0, 0, .84) 48.75vh, rgba(0, 0, 0, .5) 57.5vh, rgba(0, 0, 0, .16) 66.25vh, rgba(0, 0, 0, .03) 71.5vh, transparent 75vh);
-  animation: hsk-scrim-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: hsk-scrim-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .hsk-cb-topbar-scrim.is-closing {
-  animation: hsk-scrim-out 0.18s cubic-bezier(0.4, 0, 1, 1) both;
+  animation: hsk-scrim-out 0.24s cubic-bezier(0.32, 0.72, 0, 1) both;
 }
 
 .hsk-cb-topbar-scrim.is-discovery {
@@ -376,6 +400,8 @@
   --hsk-discovery-mask: linear-gradient(to bottom, #000 calc(var(--hsk-discovery-edge) + 24px), rgba(0, 0, 0, .84) calc(var(--hsk-discovery-edge) + 100px), rgba(0, 0, 0, .4) calc(var(--hsk-discovery-edge) + 190px), transparent calc(var(--hsk-discovery-edge) + 320px));
   -webkit-mask-image: var(--hsk-discovery-mask);
   mask-image: var(--hsk-discovery-mask);
+  height: auto;
+  bottom: 0;
   animation-duration: .4s;
 }
 
@@ -4445,7 +4471,7 @@
   z-index: 1000;
   animation: hsk-scrim-in .25s cubic-bezier(.16, 1, .3, 1) .08s both;
 }
-.hsk-cb-tray-below.is-closing { animation: hsk-scrim-out .18s cubic-bezier(.4, 0, 1, 1) both; pointer-events: none; }
+.hsk-cb-tray-below.is-closing { animation: hsk-scrim-out .24s cubic-bezier(.32, .72, 0, 1) both; pointer-events: none; }
 .hsk-cb-tray-below .hsk-cb-req-list { position: static; max-height: 32vh; animation: none; }
 .hsk-cb-tray-below-title {
   display: block;
@@ -4550,15 +4576,11 @@
   .hsk-cb-topbar-ooze-menu.is-island,
   .hsk-cb-topbar-ooze-menu.is-island.is-closing {
     animation: none;
-    will-change: clip-path;
-  }
-  .hsk-cb-topbar-ooze-menu.is-island > * {
-    opacity: var(--hsk-island-content, 1);
+    will-change: transform, opacity;
   }
 }
 
-.hsk-cb-topbar-ooze-menu.is-parked,
-.hsk-cb-tray-shadow.is-parked {
+.hsk-cb-topbar-ooze-menu.is-parked {
   visibility: hidden;
   pointer-events: none;
   opacity: 0 !important;
@@ -4572,29 +4594,9 @@
   box-shadow: none !important;
 }
 
-.hsk-cb-tray-shadow.is-parked > div {
-  box-shadow: none !important;
-}
-
-.hsk-cb-tray-shadow {
-  position: absolute;
-  top: var(--hsk-tray-top, 0px);
-  left: 50%;
-  transform: translateX(-50%);
-  width: var(--hsk-tray-w, 0px);
-  height: var(--hsk-tray-h, 0px);
-  z-index: 1000;
-  pointer-events: none;
-}
-
-.hsk-cb-tray-shadow > div {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  border-radius: 18px;
-  box-shadow: 0 16px 38px -6px color-mix(in srgb, #000 16%, transparent);
+/* The dock now grows by transform, which keeps its own shadow, so the shadow lives on the dock. */
+.hsk-cb-topbar .hsk-cb-topbar-ooze-menu:not(.is-parked) {
+  box-shadow: 0 16px 38px -6px color-mix(in srgb, #000 16%, transparent) !important;
 }
 
 /* Allowance pills — what the shopper has left, opposite the theme dock. */

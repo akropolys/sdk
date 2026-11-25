@@ -83,7 +83,6 @@ export function ChatTopbar({
   const hasLayoutControl = Boolean(layoutControl);
   const barRef = React.useRef<HTMLDivElement>(null);
   const trayRef = React.useRef<HTMLDivElement>(null);
-  const shadowRef = React.useRef<HTMLDivElement>(null);
   const nameRef = React.useRef<HTMLElement | null>(null);
   const [dropIn] = React.useState(() => { const first = !droppedIn; droppedIn = true; return first; });
   const clearRef = React.useRef<HTMLButtonElement>(null);
@@ -129,7 +128,6 @@ export function ChatTopbar({
     bar.style.setProperty('--hsk-tray-top', `${pillMiddle}px`);
     bar.style.setProperty('--hsk-tray-head', `${name.offsetHeight / 2 + 8}px`);
     bar.style.setProperty('--hsk-tray-h', `${dock.offsetHeight}px`);
-    bar.style.setProperty('--hsk-tray-w', `${dock.offsetWidth}px`);
   }, [themeMenuOpen, isNarrow, hasLayoutControl]);
   const [trayMotion] = React.useState(() =>
     typeof window !== 'undefined' && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
@@ -155,8 +153,6 @@ export function ChatTopbar({
   const tray = useIslandMorph({
     target: React.useCallback(() => trayRef.current, []),
     trigger: React.useCallback(() => nameRef.current, []),
-    shadow: React.useCallback(() => shadowRef.current, []),
-    radius: 18,
     enabled: isNarrow && themeMenuOpen && trayMotion,
     onClosed: () => onThemeMenuClosed?.(),
   });
@@ -294,9 +290,6 @@ export function ChatTopbar({
         />
       )}
 
-      {trayMounted && (
-        <div className={cn("hsk-cb-tray-shadow", !themeMenuOpen && "is-parked")} aria-hidden="true"><div ref={shadowRef} /></div>
-      )}
       {trayMounted && (
         <div
           ref={trayRef}

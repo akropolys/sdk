@@ -5,141 +5,69 @@ type Opts = {
   target: () => HTMLElement | null;
   // What it grows out of and lands back into; it stays on screen above the shape.
   trigger: () => HTMLElement | null;
-  // Carries the box-shadow that clip-path would cut off, resized to the shape every frame so it never paints inside it.
-  shadow?: () => HTMLElement | null;
-  radius?: number;
   enabled: boolean;
   onClosed: () => void;
 };
 
-type Shell = { top: number; left: number; width: number; height: number; radius: number };
-
-// A clipped box cannot show overshoot, so no spring: a timed ease that never passes its target.
-const OPEN_MS = 300;
-const CLOSE_MS = 220;
+// Transform and opacity only, run by the compositor: the old per-frame clip-path ran on the
+// main thread and stalled whenever React or kiku's own frame loop had work in the same frame.
+const OPEN_MS = 320;
+const CLOSE_MS = 260;
 const MIN_MS = 120;
-const CONTENT_FROM = 0.45;
-const CONTENT_SPAN = 0.4;
-const SHAPE_FADE = 0.25; // the landed glass and its shadow fade under the pill instead of vanishing in one frame
+const REST = 'translateX(-50%)'; // the tray's own centring, set inline by ChatTopbar
+// A damped spring (about 3% overshoot) sampled for linear(); older engines get a near match.
+const SPRING = 'linear(0,.09,.281,.489,.673,.815,.914,.976,1.01,1.025,1.028,1.025,1.02,1.014,1.009,1.005,1.002,1.001,1)';
+const SETTLE = 'cubic-bezier(.32,.72,0,1)';
 
-const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+let springEase: string | undefined;
+const spring = () => springEase ??= typeof CSS !== 'undefined' && CSS.supports?.('transition-timing-function', 'linear(0,1)')
+  ? SPRING : 'cubic-bezier(.34,1.26,.64,1)';
 
-function cubicBezier(x1: number, y1: number, x2: number, y2: number) {
-  const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx;
-  const cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
-  const sx = (t: number) => ((ax * t + bx) * t + cx) * t;
-  const sy = (t: number) => ((ay * t + by) * t + cy) * t;
-  const dx = (t: number) => (3 * ax * t + 2 * bx) * t + cx;
-  return (x: number) => {
-    let t = x;
-    for (let i = 0; i < 8; i++) {
-      const err = sx(t) - x;
-      const d = dx(t);
-      if (Math.abs(err) < 1e-5 || Math.abs(d) < 1e-6) break;
-      t -= err / d;
-    }
-    return sy(clamp01(t));
-  };
-}
+type Run = { shape: Animation; content?: Animation; at: number };
 
-const EASE = cubicBezier(0.32, 0.72, 0, 1); // iOS drawer curve
-
-function readShell(el: HTMLElement): Shell {
-  const b = el.getBoundingClientRect();
-  return {
-    top: b.top, left: b.left, width: b.width, height: b.height,
-    radius: Math.min(parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0, b.height / 2),
-  };
-}
-
-export function useIslandMorph({ target, trigger, shadow, radius = 0, enabled, onClosed }: Opts) {
-  const shellRef = useRef<Shell | null>(null);
-  const boxRef = useRef<DOMRect | null>(null);
-  const closingRef = useRef(false);
-  const progressRef = useRef(0);
-  const rafRef = useRef<number | null>(null);
+export function useIslandMorph({ target, trigger, enabled, onClosed }: Opts) {
+  const pillRef = useRef(REST);
+  const runRef = useRef<Run | null>(null);
   const onClosedRef = useRef(onClosed);
   onClosedRef.current = onClosed;
 
-  const paint = useCallback((p: number) => {
-    progressRef.current = p;
-    const el = target();
-    const r = shellRef.current;
-    const b = boxRef.current;
-    if (!el || !r || !b) return;
-    const q = 1 - p;
-    // A trigger outside the box (a menu under its button) is reached by moving the box.
-    const inTop = Math.min(Math.max(r.top, b.top), b.bottom - r.height);
-    const inLeft = Math.min(Math.max(r.left, b.left), b.right - r.width);
-    const shiftY = (r.top - inTop) * q;
-    const shiftX = (r.left - inLeft) * q;
-    const top = Math.max(0, (inTop - b.top) * q);
-    const left = Math.max(0, (inLeft - b.left) * q);
-    const right = Math.max(0, (b.right - inLeft - r.width) * q);
-    const bottom = Math.max(0, (b.bottom - inTop - r.height) * q);
-    const round = r.radius * q + radius * p;
-    el.style.clipPath = `inset(${top}px ${right}px ${bottom}px ${left}px round ${round}px)`;
-    el.style.translate = shiftX || shiftY ? `${shiftX}px ${shiftY}px` : '';
-    const sh = shadow?.();
-    if (sh) {
-      Object.assign(sh.style, {
-        left: `${left}px`, top: `${top}px`,
-        width: `${Math.max(0, b.width - left - right)}px`, height: `${Math.max(0, b.height - top - bottom)}px`,
-        borderRadius: `${round}px`, translate: el.style.translate,
-      });
-    }
-    el.style.setProperty('--hsk-island-content', String(clamp01((p - CONTENT_FROM) / CONTENT_SPAN)));
-    const fade = String(clamp01(p / SHAPE_FADE));
-    el.style.opacity = fade;
-    if (sh) sh.style.opacity = fade;
-  }, [target, shadow, radius]);
-
-  const release = () => {
-    const el = target();
-    if (el) for (const prop of ['clip-path', 'translate', '--hsk-island-content', 'opacity']) el.style.removeProperty(prop);
-    const sh = shadow?.();
-    if (sh) for (const prop of ['left', 'top', 'width', 'height', 'border-radius', 'translate', 'opacity']) sh.style.removeProperty(prop);
-  };
-
   const stop = () => {
-    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-    rafRef.current = null;
+    const run = runRef.current;
+    runRef.current = null;
+    run?.shape.cancel();
+    run?.content?.cancel();
   };
 
-  // An interrupted run starts from where the shape is, with the time scaled to the distance left.
-  const run = (to: number, fullMs: number, onDone: () => void) => {
-    stop();
-    const from = progressRef.current;
-    const ms = Math.max(MIN_MS, fullMs * Math.abs(to - from));
-    const start = performance.now();
-    const frame = (now: number) => {
-      const k = clamp01((now - start) / ms);
-      paint(from + (to - from) * EASE(k));
-      if (k < 1) rafRef.current = requestAnimationFrame(frame);
-      else { rafRef.current = null; onDone(); }
-    };
-    paint(from);
-    rafRef.current = requestAnimationFrame(frame);
-  };
-
-  const begin = (el: HTMLElement, tr: HTMLElement) => {
-    shellRef.current = readShell(tr);
-    el.style.clipPath = '';
-    el.style.translate = '';
-    boxRef.current = el.getBoundingClientRect();
+  // Measured once, at rest, before a run: the transform that lays the tray over the pill.
+  const measure = (el: HTMLElement, tr: HTMLElement) => {
+    const b = el.getBoundingClientRect(), r = tr.getBoundingClientRect();
+    if (!b.width || !b.height) return REST;
+    return `${REST} translate(${r.left - b.left}px,${r.top - b.top}px) scale(${r.width / b.width},${r.height / b.height})`;
   };
 
   useLayoutEffect(() => {
     if (!enabled) return;
     const el = target();
     const tr = trigger();
-    if (!el || !tr) return;
-    closingRef.current = false;
+    if (!el || !tr || !el.animate) return;
+    stop();
     el.style.removeProperty('pointer-events');
-    begin(el, tr);
-    progressRef.current = 0;
-    run(1, OPEN_MS, release);
-    return () => { stop(); release(); };
+    el.style.transformOrigin = '0 0';
+    const pill = pillRef.current = measure(el, tr);
+    const easing = spring();
+    // Offsets are on the eased progress: the glass shows almost at once, the content once the shape has grown.
+    const shape = el.animate([
+      { transform: pill, opacity: 0 },
+      { opacity: 1, offset: .2 },
+      { transform: REST, opacity: 1 },
+    ], { duration: OPEN_MS, easing });
+    const content = (el.firstElementChild as HTMLElement | null)?.animate(
+      [{ opacity: 0 }, { opacity: 0, offset: .45 }, { opacity: 1, offset: .85 }, { opacity: 1 }],
+      { duration: OPEN_MS, easing },
+    );
+    const run: Run = runRef.current = { shape, content, at: performance.now() };
+    shape.finished.then(() => { if (runRef.current === run) runRef.current = null; }, () => {});
+    return () => { stop(); el.style.removeProperty('transform-origin'); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled]);
 
@@ -148,14 +76,31 @@ export function useIslandMorph({ target, trigger, shadow, radius = 0, enabled, o
     const tr = enabled ? trigger() : null;
     const rect = tr?.getBoundingClientRect();
     const inView = rect && rect.bottom > 0 && rect.top < window.innerHeight;
-    if (!el || !tr || !inView) { onClosedRef.current(); return; }
-    const at = rafRef.current !== null ? progressRef.current : 1;
-    begin(el, tr);
-    closingRef.current = true;
+    if (!el || !tr || !inView || !el.animate) { onClosedRef.current(); return; }
+    // An interrupted open turns back from where it is, in about the time it took to get there.
+    const busy = runRef.current;
+    let from = REST, opacity = '1', contentOpacity = '1', ms = CLOSE_MS;
+    if (busy) {
+      const now = getComputedStyle(el);
+      from = now.transform; opacity = now.opacity;
+      const kid = el.firstElementChild;
+      if (kid) contentOpacity = getComputedStyle(kid).opacity;
+      ms = Math.max(MIN_MS, Math.min(CLOSE_MS, performance.now() - busy.at));
+    } else pillRef.current = measure(el, tr);
+    stop();
     el.style.pointerEvents = 'none'; // the landing tail must not swallow taps meant for the page
-    progressRef.current = at;
-    // Leave the landed shape in place until it unmounts: clearing it first paints one unclipped frame.
-    run(0, CLOSE_MS, () => onClosedRef.current());
+    // Held on the pill (fill) until the tray parks: letting go first paints one full-size frame.
+    const shape = el.animate([
+      { transform: from, opacity },
+      { opacity, offset: .75 },
+      { transform: pillRef.current, opacity: 0 },
+    ], { duration: ms, easing: SETTLE, fill: 'forwards' });
+    const content = (el.firstElementChild as HTMLElement | null)?.animate(
+      [{ opacity: contentOpacity }, { opacity: contentOpacity, offset: .15 }, { opacity: 0, offset: .55 }, { opacity: 0 }],
+      { duration: ms, easing: SETTLE, fill: 'forwards' },
+    );
+    runRef.current = { shape, content, at: -Infinity };
+    shape.finished.then(() => onClosedRef.current(), () => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, target, trigger]);
 
