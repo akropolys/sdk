@@ -164,7 +164,6 @@ export function ChatTopbar({
     if (isNarrow && themeMenuClosing) tray.close();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [themeMenuClosing, isNarrow]);
-  const [isImpacting, setIsImpacting] = React.useState(false);
   const triggerRef = React.useRef<(() => void) | undefined>(undefined);
   const longPressTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const isLongPressRef = React.useRef(false);
@@ -212,7 +211,6 @@ export function ChatTopbar({
     }
   }, [awayFromBottom, isNarrow, onJumpToLatest, onToggleThemeMenu]);
 
-  const handleImpact = React.useCallback((splat: number) => setIsImpacting(splat > 0.04), []);
 
   return (
     <div ref={barRef} className={cn("hsk-cb-topbar", isNarrow && themeMenuOpen && "is-docked")}>
@@ -231,7 +229,6 @@ export function ChatTopbar({
 
       <div
         className={cn("hsk-cb-topbar-mark", isNarrow && themeMenuOpen && "is-oozing", themeDiscovery && themeMenuOpen && !themeMenuClosing && 'is-discovering')}
-        data-impacting={isImpacting ? 'true' : 'false'}
         data-unread={unread ? 'true' : 'false'}
         onTouchStart={startPress}
         onTouchEnd={endPress}
@@ -247,7 +244,6 @@ export function ChatTopbar({
           size={34}
           theme={currentTheme}
           alert={unread}
-          onImpact={handleImpact}
           triggerRef={triggerRef}
           dropIn={dropIn}
           inputRef={inputRef}
@@ -258,7 +254,7 @@ export function ChatTopbar({
             <img ref={nameRef as React.Ref<HTMLImageElement>} className="hsk-cb-topbar-logo" src={logo} alt={title} />
           ) : (
             <span ref={nameRef as React.Ref<HTMLSpanElement>} className={cn('hsk-cb-topbar-name', brandIcon && 'has-brand')}>
-              {brandIcon && <img className="hsk-cb-topbar-brand" src={brandIcon} alt="" />}
+              {brandIcon && <img className="hsk-cb-topbar-brand" src={brandIcon} alt="" width={14} height={14} />}
               {title}
             </span>
           )}
