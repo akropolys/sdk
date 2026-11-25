@@ -45,6 +45,73 @@ export interface ChatTopbarProps {
 
 let droppedIn = false;
 
+const SIDE_MIN = 34;
+const COMPACT_CLEAR = 34;
+const LOGO_H = 16;
+
+function NamePill({ title, brandIcon, pillRef }: { title: string; brandIcon?: string; pillRef: React.MutableRefObject<HTMLElement | null> }) {
+  return (
+    <span ref={pillRef as React.Ref<HTMLSpanElement>} className={cn('hsk-cb-topbar-name', brandIcon && 'has-brand')} title={title}>
+      {brandIcon && <img className="hsk-cb-topbar-brand" src={brandIcon} alt="" width={14} height={14} />}
+      <span className="hsk-cb-topbar-title">{title}</span>
+    </span>
+  );
+}
+
+function ratioKey(src: string): string {
+  let h = 5381;
+  for (let i = 0; i < src.length; i++) h = ((h << 5) + h + src.charCodeAt(i)) | 0;
+  return `kiku-logo-ratio:${(h >>> 0).toString(36)}`;
+}
+
+function readRatio(src: string): number | null {
+  try {
+    const r = Number(localStorage.getItem(ratioKey(src)));
+    return r > 0 && Number.isFinite(r) ? r : null;
+  } catch {
+    return null;
+  }
+}
+
+function LogoPill({ src, title, pillRef }: { src: string; title: string; pillRef: React.MutableRefObject<HTMLElement | null> }) {
+  const [ratio, setRatio] = React.useState<number | null>(() => readRatio(src));
+  const [failed, setFailed] = React.useState(false);
+  const imgRef = React.useRef<HTMLImageElement>(null);
+  const measure = React.useCallback(() => {
+    const img = imgRef.current;
+    if (!img || !img.complete || !img.parentElement) return;
+    const probe = img.cloneNode() as HTMLImageElement;
+    probe.removeAttribute('style');
+    probe.style.cssText = `position:absolute;visibility:hidden;pointer-events:none;height:${LOGO_H}px;width:auto;max-width:none`;
+    img.parentElement.appendChild(probe);
+    const w = probe.offsetWidth, h = probe.offsetHeight;
+    probe.remove();
+    const r = w > 0 && h > 0 ? w / h : img.naturalHeight > 0 ? img.naturalWidth / img.naturalHeight : 0;
+    if (!(r > 0) || !Number.isFinite(r)) return;
+    const rounded = Math.round(r * 1000) / 1000;
+    setRatio(prev => (prev !== null && Math.abs(prev - rounded) < 0.01 ? prev : rounded));
+    try { localStorage.setItem(ratioKey(src), String(rounded)); } catch {}
+  }, [src]);
+  React.useLayoutEffect(() => { measure(); }, [measure]);
+  if (failed) return <NamePill title={title} pillRef={pillRef} />;
+  return (
+    <span
+      ref={pillRef as React.Ref<HTMLSpanElement>}
+      className={cn('hsk-cb-topbar-logo', ratio === null && 'is-loading')}
+      title={title}
+    >
+      <img
+        ref={imgRef}
+        src={src}
+        alt={title}
+        style={ratio === null ? undefined : { width: `${Math.round(LOGO_H * ratio * 100) / 100}px`, aspectRatio: String(ratio) }}
+        onLoad={measure}
+        onError={() => setFailed(true)}
+      />
+    </span>
+  );
+}
+
 const RadarIcon = ({ size = 15 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Z"/>
@@ -93,16 +160,22 @@ export function ChatTopbar({
   const clearLabel = tr('clearChat');
   const [clearFit, setClearFit] = React.useState({ size: 12, compact: false });
   React.useLayoutEffect(() => {
-    const bar = barRef.current, button = clearRef.current, measure = clearMeasureRef.current;
-    if (!bar || !button || !measure) return;
+    const bar = barRef.current;
+    if (!bar) return;
     let active = true;
     const fit = () => {
       if (!active) return;
-      const actions = button.parentElement!;
-      const columns = getComputedStyle(bar).gridTemplateColumns.split(' ');
+      const button = clearRef.current, measure = clearMeasureRef.current;
+      const actions = bar.querySelector<HTMLElement>('.hsk-cb-topbar-actions');
+      const close = actions?.querySelector<HTMLElement>('.hsk-cb-exit-btn') ?? null;
+      const gap = actions ? parseFloat(getComputedStyle(actions).gap) || 0 : 0;
+      const barStyle = getComputedStyle(bar);
+      const inner = bar.clientWidth - parseFloat(barStyle.paddingLeft) - parseFloat(barStyle.paddingRight);
+      const side = Math.max(SIDE_MIN, COMPACT_CLEAR + (close ? close.offsetWidth + gap : 0));
+      bar.style.setProperty('--hsk-name-room', `${Math.max(0, Math.floor(inner - 2 * side - 2 * (parseFloat(barStyle.columnGap) || 0)))}px`);
+      if (!button || !measure || !actions) return;
+      const columns = barStyle.gridTemplateColumns.split(' ');
       const slot = parseFloat(columns[2]) || actions.clientWidth;
-      const close = actions.querySelector<HTMLElement>('.hsk-cb-exit-btn');
-      const gap = parseFloat(getComputedStyle(actions).gap) || 0;
       const available = Math.max(0, slot - (close ? close.offsetWidth + gap : 0) - 30);
       const size = Math.min(12, Math.floor(1200 * available / Math.max(1, measure.scrollWidth)) / 100);
       const compact = size < 10;
@@ -251,12 +324,9 @@ export function ChatTopbar({
         />
         <div className="hsk-cb-topbar-identity">
           {logo ? (
-            <img ref={nameRef as React.Ref<HTMLImageElement>} className="hsk-cb-topbar-logo" src={logo} alt={title} />
+            <LogoPill key={logo} src={logo} title={title} pillRef={nameRef} />
           ) : (
-            <span ref={nameRef as React.Ref<HTMLSpanElement>} className={cn('hsk-cb-topbar-name', brandIcon && 'has-brand')}>
-              {brandIcon && <img className="hsk-cb-topbar-brand" src={brandIcon} alt="" width={14} height={14} />}
-              {title}
-            </span>
+            <NamePill title={title} brandIcon={brandIcon} pillRef={nameRef} />
           )}
         </div>
       </div>

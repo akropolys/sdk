@@ -313,6 +313,11 @@
   margin-top: 0;
   padding: 3px 13px;
   white-space: nowrap;
+  box-sizing: border-box;
+  max-width: var(--hsk-name-room, none);
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
   border-radius: 999px;
   background: var(--hsk-surface-2);
   box-shadow: 0 0 0 3px var(--hsk-chat-bg), 0 1px 3px rgba(0, 0, 0, .12);
@@ -343,9 +348,13 @@
 @keyframes hsk-swell-glow { 22% { opacity: 1; } }
 
 .hsk-cb-topbar-name.has-brand {
-  display: inline-flex;
-  align-items: center;
   gap: 5px;
+}
+
+.hsk-cb-topbar-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* A fixed box, so the pill does not widen when the icon loads. */
@@ -4370,18 +4379,31 @@
   }
 }
 
-/* A brand's logo sits in the same pill as the name, at the same height. */
+/* A brand's logo sits in a pill as tall as the name's, as wide as the logo. */
 .hsk-cb-topbar-logo {
-  display: block;
-  box-sizing: content-box;
-  height: 18px;
-  max-width: 104px;
-  object-fit: contain;
-  padding: 3px 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 24px;
+  padding: 0 11px;
   border-radius: 999px;
   background: var(--hsk-surface-2);
   box-shadow: 0 0 0 3px var(--hsk-chat-bg), 0 1px 3px rgba(0, 0, 0, .12);
+  transform-origin: 50% 0%;
+  transition: opacity .2s ease, transform 0.18s cubic-bezier(0.34, 1.8, 0.64, 1);
 }
+.hsk-cb-topbar-logo.is-loading { opacity: 0; }
+.hsk-cb-topbar-logo > img {
+  display: block;
+  flex: none;
+  height: 16px;
+  width: auto;
+  max-width: max(0px, calc(var(--hsk-name-room, 100vw) - 22px));
+  object-fit: contain;
+}
+.hsk-cb-topbar-logo > img[style] { height: auto; }
+.hsk-cb-topbar-mark:active .hsk-cb-topbar-logo { transform: scale(.95); }
 
 .hsk-cb-sound-pill {
   display: inline-flex;
