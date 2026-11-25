@@ -34,6 +34,9 @@ export function KikuAvatar({ state = 'idle', size = 40, alert = false, onImpact,
 
   useEffect(() => {
     const svg = ref.current!, doc = svg.ownerDocument, root = svg.getRootNode() as Document | ShadowRoot;
+    // The drawing goes in here, not through React: React would rebuild it on a
+    // re-render and the brain would go on moving parts no longer on screen.
+    svg.innerHTML = KIKU_SVG;
     const mq = window.matchMedia?.('(prefers-reduced-motion: reduce)');
     const k = createKiku(svg, s => props.current.onImpact?.(s), !!mq?.matches, dropIn);
     kiku.current = k;
@@ -64,8 +67,7 @@ export function KikuAvatar({ state = 'idle', size = 40, alert = false, onImpact,
   useEffect(() => { if (notice) kiku.current?.react('notice'); }, [notice]);
 
   return (
-    <svg ref={ref} className="hsk-kiku" width={size} height={size} viewBox="-50 -50 100 100" aria-hidden="true"
-      dangerouslySetInnerHTML={{ __html: KIKU_SVG }} />
+    <svg ref={ref} className="hsk-kiku" width={size} height={size} viewBox="-50 -50 100 100" aria-hidden="true" />
   );
 }
 
