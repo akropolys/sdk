@@ -129,7 +129,6 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
   const micAttachRef = useRef<(() => void) | null>(null);
   const lastLoudRef = useRef(0);
   const botSpeakingRef = useRef(false);
-  const spokeLoggedRef = useRef(false);
   const ctxRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const nodeRef = useRef<AudioWorkletNode | null>(null);
@@ -501,10 +500,6 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
             });
           }
         }
-        if (!spokeLoggedRef.current && lastLoudRef.current) {
-          spokeLoggedRef.current = true;
-          console.log('[kiku] wait from last speech to first audio: ' + (Date.now() - lastLoudRef.current) + 'ms');
-        }
         stopHold();
         const pcm = decodeAdpcm(ev.data);
         turnBotAudioChunksRef.current.push(pcm.slice());
@@ -646,7 +641,6 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
           setState('listening');
           break;
         case 'turn_complete':
-          spokeLoggedRef.current = false;
           botSpeakingRef.current = false;
           lastLoudRef.current = 0;
           setTurns(prev => prev.map(x => (x.done ? x : { ...x, done: true })));
@@ -701,7 +695,6 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
     setImages(prev => prev.filter(image => !image.pending));
     flushExchange();
     botSpeakingRef.current = false;
-    spokeLoggedRef.current = false;
     replyingRef.current = false;
     dropHeld();
     setState('connecting');

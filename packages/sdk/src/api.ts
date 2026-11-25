@@ -43,11 +43,12 @@ export interface ScriptFont {
 const MAX_RETRIES = 3;
 const RETRY_DELAYS = [500, 1000, 2000]; // ms
 
+// Only problems reach the console; routine detail (and never a visitor's
+// message) is not printed.
 function log(level: 'info' | 'warn' | 'error', msg: string, data?: unknown) {
   const prefix = '[Akropolys]';
   if (level === 'error') console.error(prefix, msg, data ?? '');
   else if (level === 'warn') console.warn(prefix, msg, data ?? '');
-  else console.debug(prefix, msg, data ?? '');
 }
 
 async function sleep(ms: number) {

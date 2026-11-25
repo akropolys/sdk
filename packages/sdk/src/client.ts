@@ -264,7 +264,6 @@ export class AkropolysClient {
 
     if (typeof window !== 'undefined') {
       this.onlineHandler = () => {
-        console.debug('[Akropolys] Connectivity restored, flushing queued ingestions.');
         this.flushQueue();
         this.flushContentQueue();
       };
@@ -331,20 +330,13 @@ export class AkropolysClient {
   chat(query: string, history: Array<{ role: 'user' | 'assistant'; content: string }> = [], attachments?: ChatAttachment[], forcedIntent?: string, captureTargets?: CaptureTarget[], actionReturn?: string): KikuStream {
     const abortController = new AbortController();
     this.ensureDevice(); // the visitor is chatting: from now on this device is recognised
-    const t0 = performance.now();
-    const marks: string[] = [];
-    const mark = (label: string) => marks.push(`${label}=${Math.round(performance.now() - t0)}ms`);
     const responsePromise = this.getCurrentContextAsync(abortController.signal).then(ctx => {
       if (abortController.signal.aborted) throw abortError();
-      mark('context');
       return this.api.chatStream(query, history, abortController.signal, ctx, attachments, forcedIntent, captureTargets, actionReturn);
-    }).then(res => { mark('headers'); return res; });
+    });
     const stream = new KikuStream(responsePromise, abortController, (request, signal) => this.api.handleBrowserAction(request, signal));
     (this.activeChatStreams ??= new Set()).add(stream);
     abortController.signal.addEventListener('abort', () => this.activeChatStreams.delete(stream), { once: true });
-    let texted = false;
-    stream.on('token', () => { if (!texted) { texted = true; mark('first_text'); } });
-    stream.on('done', () => { mark('done'); console.info(`[kiku timing] ${marks.join(' ')}`); });
     stream.on('meta', (meta: any) => {
       if (meta && typeof meta.language === 'string' && meta.language) {
         this.setShopperLanguage(meta.language);
@@ -837,7 +829,6 @@ export class AkropolysClient {
     }
 
     if (this.authLoading) {
-      console.debug('[Akropolys] Authentication is loading. Deferring ingestion flush.');
       this.isFlushing = false;
       return;
     }
@@ -927,7 +918,6 @@ export class AkropolysClient {
     }
 
     if (this.authLoading) {
-      console.debug('[Akropolys] Authentication is loading. Deferring content ingestion flush.');
       this.isContentFlushing = false;
       return;
     }
