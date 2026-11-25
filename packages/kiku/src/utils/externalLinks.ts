@@ -62,6 +62,9 @@ export function extractExternalLinks(content: string, base: string, contexts: Ac
     const shown = target ?? bareUrl(token);
     if (!externalLink(shown, base)) return token;
     const matches = matchingVerified(shown);
+    // Only links from the site's own actions (set up in Shell) become cards.
+    // An address kiku writes on its own stays an ordinary link in the text.
+    if (!contextByUrl.has(shown) && matches.length === 0) return token;
     if (matches.length > 1 && !contextByUrl.has(shown)) return '';
     const url = contextByUrl.has(shown) ? shown : matches[0]?.url ?? shown;
     const link = externalLink(url, base)!;

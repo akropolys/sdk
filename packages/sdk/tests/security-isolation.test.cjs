@@ -126,17 +126,17 @@ test('site streams isolate same-name values and their timestamps', t => {
   stopA(); stopB(); a.destroy(); b.destroy(); sdk.clearLiveValues();
 });
 
-test('provider forwards a supplied key and enables content indexing without loading a previous public id', t => {
+test('provider forwards a supplied key without loading a previous public id', t => {
   const {localStorage,sessionStorage} = browser(t);
   localStorage.setItem('akropolys_kiku_key','old-secret'); sessionStorage.setItem('akropolys_kiku_pub','old-public');
   localStorage.setItem('akropolys_conversation_a', JSON.stringify({id:'old',token:'old-token',cursor:0}));
   let client;
   function Reader(){ client=sdk.useAkropolysContext(); return null; }
-  renderToStaticMarkup(React.createElement(sdk.AkropolysProvider,{...config('a'),kikuKey:'new-secret',indexContent:true},React.createElement(Reader)));
+  renderToStaticMarkup(React.createElement(sdk.AkropolysProvider,{...config('a'),kikuKey:'new-secret'},React.createElement(Reader)));
   assert.equal(client.getKikuKey(),'new-secret'); assert.equal(client.getKikuPub(),undefined);
   assert.equal(client.api.conversation,null);
   assert.equal(localStorage.getItem('akropolys_kiku_key'),'new-secret');
-  assert.equal(typeof client.contentIndexerCleanup,'function'); client.destroy();
+  client.destroy();
 });
 
 test('page-ingest effect uses its provider client instead of the global client', () => {

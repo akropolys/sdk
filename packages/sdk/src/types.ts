@@ -97,8 +97,6 @@ export interface AkropolysConfig {
 
   authLoading?: boolean;
 
-  indexContent?: boolean;
-
 
   kikuKey?: string;
 }

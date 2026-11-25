@@ -18,7 +18,6 @@ export function AkropolysProvider({
   actionHeaders,
   actionAuth,
   authLoading,
-  indexContent,
   kikuKey,
   onError,
   children
@@ -36,7 +35,6 @@ export function AkropolysProvider({
       actionHeaders,
       actionAuth,
       authLoading,
-      indexContent,
       kikuKey,
       onError
     });
@@ -47,8 +45,7 @@ export function AkropolysProvider({
       voiceUrl,
       apiToken,
       actionAuth,
-      actionHeaders,
-      indexContent
+      actionHeaders
     });
     clientRef.current.reRegister();
   }

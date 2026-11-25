@@ -23,7 +23,7 @@ test('a long signed destination stays exact in its card and out of the answer', 
 });
 
 test('Kiku link labels are preserved, deduplicated and not inferred from URL tokens', () => {
-  const result = extractExternalLinks(`[Payer maintenant](${checkout})\n${checkout}`, base);
+  const result = extractExternalLinks(`[Payer maintenant](${checkout})\n${checkout}`, base, [{ url: checkout }]);
   assert.equal(result.links.length, 1);
   assert.equal(result.links[0].label, 'Payer maintenant');
   assert.equal(result.content, '');
@@ -116,9 +116,16 @@ test('complete action links are preserved across external services', () => {
 test('separate external destinations are not discarded', () => {
   const first = 'https://example.com/items/one?token=123';
   const other = 'https://example.com/items/two';
-  const result = extractExternalLinks(`[Other](${other})`, base, [{ url: first }]);
+  const result = extractExternalLinks(`[Other](${other})`, base, [{ url: first }, { url: other }]);
   assert.equal(result.links.length, 2);
   assert.deepEqual(Array.from(result.links, link => link.url), [other, first]);
+});
+
+test('a link kiku writes on its own stays a plain link, never a card', () => {
+  const planted = 'https://pay-now.example/checkout';
+  const result = extractExternalLinks(`[Pay now](${planted})`, base);
+  assert.equal(result.links.length, 0);
+  assert.equal(result.content, `[Pay now](${planted})`);
 });
 
 test('an ambiguous short link does not replace separate verified destinations', () => {
@@ -129,10 +136,11 @@ test('an ambiguous short link does not replace separate verified destinations', 
 });
 
 test('a link inside a sentence keeps its words; one on its own line becomes only a card', () => {
-  const inline = extractExternalLinks('Read [our sizing guide](https://brand.example/size) before ordering, or see https://youtu.be/abc.', base);
+  const actions = [{ url: 'https://brand.example/size' }, { url: 'https://youtu.be/abc' }];
+  const inline = extractExternalLinks('Read [our sizing guide](https://brand.example/size) before ordering, or see https://youtu.be/abc.', base, actions);
   assert.equal(inline.content, 'Read our sizing guide before ordering, or see YouTube.');
   assert.equal(inline.links.length, 2);
-  const alone = extractExternalLinks('Here it is:\n\n[Sizing guide](https://brand.example/size)\n', base);
+  const alone = extractExternalLinks('Here it is:\n\n[Sizing guide](https://brand.example/size)\n', base, actions);
   assert.equal(alone.content, 'Here it is:');
   assert.equal(alone.links[0].label, 'Sizing guide');
 });

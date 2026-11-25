@@ -9,7 +9,6 @@ import {
 } from './types';
 import { AkropolysAPI, UIStrings, ScriptFont } from './api';
 import { KikuStream } from './stream';
-import { initContentIndexer } from './content/contentIndexer';
 import { stableStringify } from './utils/stableStringify';
 
 declare const process: any;
@@ -184,7 +183,6 @@ export class AkropolysClient {
   private contentIngestTimer: ReturnType<typeof setTimeout> | null = null;
   private isContentFlushing = false;
   private contentRetryCount = 0;
-  private contentIndexerCleanup: (() => void) | null = null;
   private lastIngestedItem: Record<string, any> | null = null;
   private lastIngestedPageURL = '';
 
@@ -273,9 +271,6 @@ export class AkropolysClient {
       window.addEventListener('online', this.onlineHandler);
     }
 
-    if (config.indexContent) {
-      initContentIndexer(this);
-    }
   }
 
   registerContextProvider(fn: (signal?: AbortSignal) => Promise<Record<string, any>>): () => void {
@@ -390,10 +385,8 @@ export class AkropolysClient {
   updateConfig(config: Partial<AkropolysConfig>) {
     const nextSite = config.siteId || (config.apiToken ? siteFromKey(config.apiToken) : '');
     const scopeChanged = !!((nextSite && nextSite !== this.api.siteId) || (config.apiUrl && config.apiUrl !== this.api.apiUrl));
-    const restartIndexer = scopeChanged && !!this.contentIndexerCleanup;
     if (scopeChanged) {
       for (const stream of this.activeChatStreams) stream.destroy();
-      if (restartIndexer) { this.contentIndexerCleanup?.(); this.contentIndexerCleanup = null; }
       this.api.resetSiteState();
       this.lastIngestedItem = null;
       this.lastIngestedPageURL = '';
@@ -404,13 +397,6 @@ export class AkropolysClient {
     if (nextSite) this.api.siteId = nextSite;
     if (config.apiToken) this.api.apiToken = config.apiToken;
     if (config.voiceUrl !== undefined) this.voiceUrl = config.voiceUrl;
-    if ('indexContent' in config || restartIndexer) {
-      if ((config.indexContent ?? restartIndexer) && !this.contentIndexerCleanup) initContentIndexer(this);
-      else if (!config.indexContent && this.contentIndexerCleanup) {
-        this.contentIndexerCleanup();
-        this.contentIndexerCleanup = null;
-      }
-    }
   }
 
   setUserProof(proof: string | undefined) {
@@ -786,10 +772,6 @@ export class AkropolysClient {
     if (this.contentIngestTimer) {
       clearTimeout(this.contentIngestTimer);
       this.contentIngestTimer = null;
-    }
-    if (this.contentIndexerCleanup) {
-      this.contentIndexerCleanup();
-      this.contentIndexerCleanup = null;
     }
     if (getInstance() === this) setInstance(null);
   }
