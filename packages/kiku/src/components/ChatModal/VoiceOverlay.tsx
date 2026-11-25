@@ -7,7 +7,9 @@ import { VoiceCanvas } from '../VoiceCanvas';
 import KikuDoodles, { WorkingVeil } from '../KikuDoodles';
 import { LightboxModal } from './components/LightboxModal';
 import { SourcesCarousel } from './components/SourcesCarousel';
-import { normalizeEntityImages, type ChatSource } from '@akropolys/sdk';
+import { normalizeEntityImages, armActionReturn, type ActionLinkContext, type ChatSource } from '@akropolys/sdk';
+import { ExternalLinks } from './components/ExternalLinks';
+import { extractExternalLinks } from '../../utils/externalLinks';
 import type { LiveImage, LiveSource, LiveTurn } from '../../utils/liveVoice';
 
 // Every image of the call in a row above the wave: the photo, then each edit, newest last.
@@ -138,6 +140,7 @@ export interface VoiceOverlayProps {
     turns?: LiveTurn[];
     images?: LiveImage[];
     sources?: LiveSource[];
+    actionLinks?: ActionLinkContext[];
     photos?: boolean;
   };
   // Earlier calls in this chat, shown above this one until the chat is cleared.
@@ -178,6 +181,7 @@ export function VoiceOverlay({
   const turns = [...earlier.turns, ...(live.turns ?? [])];
   const images = [...earlier.images, ...(live.images ?? [])];
   const sources = live.sources ?? [];
+  const links = extractExternalLinks('', typeof location === 'undefined' ? 'https://akropolys.cloud' : location.href, [...earlier.actionLinks, ...(live.actionLinks ?? [])]).links;
   const [lightbox, setLightbox] = useState<string | null>(null);
   const rendering = images.some(i => i.pending);
   const turnCount = turns.length;
@@ -188,7 +192,7 @@ export function VoiceOverlay({
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end', behavior: scrolledRef.current ? 'smooth' : 'auto' });
     scrolledRef.current = true;
-  }, [turnCount, lastText]);
+  }, [turnCount, lastText, links.length]);
 
   return (
     <div className="hsk-voice-overlay" role="dialog" aria-label={t('voiceModeStart')}>
@@ -244,6 +248,7 @@ export function VoiceOverlay({
             </div>
           ),
         )}
+        <ExternalLinks links={links} t={t} onOpen={link => armActionReturn(siteId, link.returnToken)} />
         <div ref={endRef} />
       </div>
 

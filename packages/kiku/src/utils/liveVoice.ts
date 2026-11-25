@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { actionLinkContexts, type ActionLinkContext } from '@akropolys/sdk';
 import { chime, primeChimes } from './chime';
 import { AdpcmEncoder, decodeAdpcm } from './adpcm';
 import { float32ToWav, int16ToWav } from './wav';
@@ -22,9 +23,10 @@ export interface LiveVoiceExchange {
   duration?: number;
   userAudioUrl?: string;
   audioUrl?: string;
-  // Photos attached and the image rendered this turn, so chat keeps them after voice closes.
+  // Keep the turn’s media and action links when voice closes.
   images?: string[];
   visualization?: string;
+  actionLinks?: ActionLinkContext[];
 }
 
 export interface LiveVoiceOptions {
@@ -43,6 +45,7 @@ export interface LiveVoiceOptions {
 
   language?: string;
   voice?: string;
+  voiceWorkletUrl?: string;
 
   onExchange?: (exchange: LiveVoiceExchange) => void;
   onRefused?: (code: string) => void;
@@ -62,40 +65,9 @@ const HEARING_LEVEL = 0.12;
 const HEARING_HOLD_MS = 500;
 const IDLE_CLOSE_MS = 60_000;
 
-const WORKLET_SRC = `
-class KikuCapture extends AudioWorkletProcessor {
-  constructor() {
-    super();
-    this._ratio = sampleRate / ${INPUT_RATE};
-    this._chunk = ${Math.round(INPUT_RATE * 0.04)};
-    this._acc = new Int16Array(this._chunk);
-    this._n = 0;
-    this._pos = 0;
-  }
-  process(inputs) {
-    const ch = inputs[0] && inputs[0][0];
-    if (!ch) return true;
-    while (this._pos < ch.length) {
-      const i = this._pos | 0;
-      const frac = this._pos - i;
-      const a = ch[i];
-      const b = i + 1 < ch.length ? ch[i + 1] : a;
-      const s = a + (b - a) * frac;
-      const c = s < -1 ? -1 : s > 1 ? 1 : s;
-      this._acc[this._n++] = c < 0 ? c * 0x8000 : c * 0x7fff;
-      if (this._n === this._chunk) {
-        this.port.postMessage(this._acc.buffer, [this._acc.buffer]);
-        this._acc = new Int16Array(this._chunk);
-        this._n = 0;
-      }
-      this._pos += this._ratio;
-    }
-    this._pos -= ch.length;
-    return true;
-  }
-}
-registerProcessor('kiku-capture', KikuCapture);
-`;
+declare const __KIKU_VERSION__: string;
+declare const __KIKU_VOICE_WORKLET__: string;
+const DEFAULT_WORKLET_URL = `https://cdn.akropolys.cloud/kiku/${__KIKU_VERSION__}/voice-worklet.js`;
 
 // A browser cannot set headers on a socket, so the key and the proof ride as subprotocols and stay out of the address.
 function voiceProtocols(o: LiveVoiceOptions): string[] {
@@ -139,6 +111,8 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
   const [state, setState] = useState<LiveState>('idle');
   const [hearing, setHearing] = useState(false);
   const [sources, setSources] = useState<LiveSource[]>([]);
+  const [actionLinks, setActionLinks] = useState<ActionLinkContext[]>([]);
+  const turnActionLinksRef = useRef<ActionLinkContext[]>([]);
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
   const [photos, setPhotos] = useState(false);
 
@@ -232,6 +206,7 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
 
     const images = turnImagesRef.current.length ? turnImagesRef.current : undefined;
     const visualization = turnVizRef.current;
+    const actionLinks = turnActionLinksRef.current.length ? turnActionLinksRef.current : undefined;
 
     turnHeardRef.current = '';
     turnSaidRef.current = '';
@@ -240,9 +215,10 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
     turnUserAudioChunksRef.current = [];
     turnImagesRef.current = [];
     turnVizRef.current = undefined;
+    turnActionLinksRef.current = [];
 
-    if (!heard && !said && !images && !visualization) return;
-    optsRef.current.onExchange?.({ heard, said, duration, userAudioUrl, audioUrl, images, visualization });
+    if (!heard && !said && !images && !visualization && !actionLinks) return;
+    optsRef.current.onExchange?.({ heard, said, duration, userAudioUrl, audioUrl, images, visualization, actionLinks });
   }, []);
 
   const chirp = useCallback(() => {
@@ -283,11 +259,16 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
     if (!AC) return Promise.resolve(null);
     const ctx = new AC({ latencyHint: 'interactive', sampleRate: OUTPUT_RATE });
     ctxRef.current = ctx;
-    const blobUrl = URL.createObjectURL(new Blob([WORKLET_SRC], { type: 'application/javascript' }));
-    workletCtxRef.current = ctx.audioWorklet.addModule(blobUrl)
+    // The CDN copy suits strict page security rules; if it cannot load (offline
+    // CDN, unpublished version), the built-in copy is used instead.
+    const builtIn = () => {
+      const url = URL.createObjectURL(new Blob([__KIKU_VOICE_WORKLET__], { type: 'application/javascript' }));
+      return ctx.audioWorklet.addModule(url).finally(() => URL.revokeObjectURL(url));
+    };
+    workletCtxRef.current = ctx.audioWorklet.addModule(optsRef.current.voiceWorkletUrl || DEFAULT_WORKLET_URL)
+      .catch(builtIn)
       .then(() => ctx)
-      .catch(() => null)
-      .finally(() => URL.revokeObjectURL(blobUrl));
+      .catch(() => null);
     return workletCtxRef.current;
   }, []);
 
@@ -544,6 +525,17 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
             : Promise.resolve({ status: 'failed', error: 'Browser actions are unavailable in this client.' });
           completed.then(result => {
             if (wsRef.current === ws && ws.readyState === WebSocket.OPEN) {
+              const links = actionLinkContexts(result);
+              if (links.length) {
+                const pending = new Map(turnActionLinksRef.current.map(link => [link.url, link]));
+                for (const link of links) pending.set(link.url, link);
+                turnActionLinksRef.current = [...pending.values()];
+                setActionLinks(previous => {
+                  const all = new Map(previous.map(link => [link.url, link]));
+                  for (const link of links) all.set(link.url, link);
+                  return [...all.values()];
+                });
+              }
               ws.send(JSON.stringify({ type: 'action_result', id: f.request.id, result }));
             }
           }).catch(() => {
@@ -801,6 +793,8 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
     turnsRef.current = [];
     setTurns([]);
     setImages([]);
+    setActionLinks([]);
+    turnActionLinksRef.current = [];
     turnHeardRef.current = '';
     turnSaidRef.current = '';
 
@@ -980,8 +974,10 @@ export function useLiveVoice(opts: LiveVoiceOptions) {
   // A typed question into the live call — how a tapped card asks about itself.
   const ask = useCallback((text: string) => {
     const ws = wsRef.current;
-    if (ws && ws.readyState === WebSocket.OPEN && text.trim()) ws.send(JSON.stringify({ type: 'text', text }));
+    if (startedRef.current && readyRef.current && ws && ws.readyState === WebSocket.OPEN && text.trim()) {
+      ws.send(JSON.stringify({ type: 'text', text }));
+    }
   }, []);
 
-  return { state, phase: state, hearing, sources, secondsLeft, photos, turns, images, micLevel, micSpectrum, spectrumBins, start, stop, prewarm, attachPhoto, ask };
+  return { state, phase: state, hearing, sources, actionLinks, secondsLeft, photos, turns, images, micLevel, micSpectrum, spectrumBins, start, stop, prewarm, attachPhoto, ask };
 }

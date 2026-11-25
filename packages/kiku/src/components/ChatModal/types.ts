@@ -240,7 +240,13 @@ export const ONBOARDING_UI_STRINGS: Record<string, string> = {
 export const DEFAULT_UI_STRINGS = {
   themeHoldHint: 'Long press for themes',
   themeClickHint: 'Pick your mood',
+  layoutDockNote: 'Try {button} to change the reply layout.',
   layoutFirstReplyNote: 'Open the dock and try {button} to change the reply layout.',
+  externalOpensOutside: 'This opens outside Kiku.',
+  externalWatchVideo: 'Watch video',
+  externalCheckout: 'Continue to checkout',
+  externalOpenEmail: 'Open email',
+  externalOpenLink: 'Open {destination}',
   back: 'Back',
   langPlaceholder: "Type your language…",
   nameStepTitle: "Good to meet you.",
@@ -248,7 +254,7 @@ export const DEFAULT_UI_STRINGS = {
   namePlaceholder: "Type your name…",
   attachImage: 'Attach a photo',
   vizUnavailable: 'The preview could not be loaded.',
-  vizDisclaimerImage: 'Generated using Artificial Intelligence — colours, size and placement may differ from the real product.',
+  vizDisclaimerImage: 'AI-generated preview, not a real photo — colours, size and placement may differ from the real thing.',
   vizDisclaimerVideo: 'Generated using Artificial Intelligence — colours, size and movement may differ from the real product.',
   calcDisclaimer: 'This is a calculation from live figures, not a guarantee — the market can move against it.',
   staleTitle: 'No longer available',
@@ -507,7 +513,7 @@ export interface ModalOrigin {
   y: number;
 }
 
-export interface ChatModalProps extends Pick<KikuButtonProps, 'title' | 'logo' | 'placeholder' | 'backdropColor' | 'backdropBlur' | 'onSelectSource' | 'chips' | 'theme' | 'classNames' | 'enableVoice' | 'voiceLang' | 'enableVision' | 'ttsVoice'> {
+export interface ChatModalProps extends Pick<KikuButtonProps, 'title' | 'logo' | 'placeholder' | 'backdropColor' | 'backdropBlur' | 'onSelectSource' | 'chips' | 'theme' | 'classNames' | 'enableVoice' | 'voiceWorkletUrl' | 'voiceLang' | 'enableVision' | 'ttsVoice'> {
   theme?: 'light' | 'dark' | AkropolysTheme;
   classNames?: any;
   origin?: ModalOrigin | null;

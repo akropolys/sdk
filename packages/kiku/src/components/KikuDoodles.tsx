@@ -1,3 +1,4 @@
+import { BLOOM_DURATION_MS, BLOOM_REACH, BLOOM_JITTER } from '../utils/bloomTiming';
 import React, { useEffect, useRef, useState } from 'react';
 
 type Rng = () => number;
@@ -622,7 +623,7 @@ function generateGlyphs(
       size,
       seed: glyphSeed,
       normDist,
-      bloom: Math.min(1, Math.hypot(x - ox, y - originY) / reachFromDock) * 0.62 + jitter() * 0.08,
+      bloom: Math.min(1, Math.hypot(x - ox, y - originY) / reachFromDock) * BLOOM_REACH + jitter() * BLOOM_JITTER,
       glow: isDarkMode ? 0.2 : 0.06,
       ux: (x - ox) / (Math.hypot(x - ox, y - originY) || 1),
       uy: (y - originY) / (Math.hypot(x - ox, y - originY) || 1),
@@ -822,7 +823,7 @@ const KikuDoodles = React.memo(function KikuDoodles({
 
       cancelAnimationFrame(animFrameRef.current);
       isAnimatingRef.current = true;
-      const duration = 1500;
+      const duration = BLOOM_DURATION_MS;
       animFrameRef.current = requestAnimationFrame(tick(null, duration, glyphs, isRTL));
     };
 

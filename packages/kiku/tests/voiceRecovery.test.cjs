@@ -36,6 +36,18 @@ test('history snapshot keeps partial transcripts without mutating previous turns
   assert.equal(turns[1].text, 'The');
 });
 
+test('typed voice requests wait until the call is ready', async () => {
+  const h = harness();
+  await h.api.start();
+  h.sockets[0].open();
+  h.api.ask('before ready');
+  assert.ok(!h.sockets[0].sent.some(value => JSON.parse(value).type === 'text'));
+  h.sockets[0].message({ type: 'ready' }); h.render();
+  h.api.ask('after ready');
+  assert.ok(h.sockets[0].sent.some(value => JSON.parse(value).text === 'after ready'));
+  h.api.stop();
+});
+
 function harness(options = {}) {
   const slots = [], effects = [], sockets = [], contexts = [], worklets = [], timers = new Map(), errors = [], exchanges = [];
   let cursor = 0, dirty = false, now = 1000, nextTimer = 1, api;
@@ -76,7 +88,7 @@ function harness(options = {}) {
   const param = () => ({ value: 1, cancelScheduledValues() {}, setValueAtTime() {}, linearRampToValueAtTime() {} });
   const node = () => ({ connect() {}, disconnect() {}, gain: param(), frequencyBinCount: 32, getByteTimeDomainData(out) { out.fill(128); }, getByteFrequencyData(out) { out.fill(0); } });
   class Context {
-    state = 'running'; currentTime = 0; destination = {}; audioWorklet = { addModule: async () => {} };
+    state = 'running'; currentTime = 0; destination = {}; audioWorklet = { addModule: async url => { this.workletUrl = url; } };
     constructor() { contexts.push(this); }
     resume() { this.state = 'running'; return Promise.resolve(); }
     close() { this.state = 'closed'; return Promise.resolve(); }
@@ -88,12 +100,13 @@ function harness(options = {}) {
     window, document: { visibilityState: 'visible', addEventListener() {}, removeEventListener() {} },
     navigator: { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [track], getAudioTracks: () => [track] }) } },
     WebSocket: Ws, AudioWorkletNode: class { constructor() { worklets.push(this); } port = {}; connect() {} disconnect() {} },
-    URL, Blob, ArrayBuffer, Int16Array, Float32Array, Uint8Array, AbortController, console,
+    __KIKU_VERSION__: '2.2.39', URL, Blob, ArrayBuffer, Int16Array, Float32Array, Uint8Array, AbortController, console,
     Date: class extends Date { static now() { return now; } },
     setTimeout: (fn, ms) => setTimer(fn, ms), clearTimeout: clearTimer, clearInterval: clearTimer,
   };
   const { useLiveVoice } = load('liveVoice', globals, name => {
     if (name === 'react') return react;
+    if (name === '@akropolys/sdk') return require('../../sdk/dist/index.js');
     if (name === './voiceRecovery') return recovery;
     if (name === './chime') return { chime() {}, primeChimes() {} };
     if (name === './adpcm') return { AdpcmEncoder: class { encode() { return new ArrayBuffer(4); } }, decodeAdpcm: () => new Float32Array(0) };
@@ -253,6 +266,28 @@ test('stopping voice aborts a pending browser action and discards a late result'
 });
 
 
+test('successful voice actions show and preserve their exact result links', async () => {
+  const url = 'https://checkout.stripe.com/c/pay/cs_test_exact';
+  let result = { status: 'sent', httpStatus: 200, response: { url, checkout_url: url, total_cents: 3600, currency: 'usd' } };
+  const h = harness({ executeBrowserAction: async () => result }); await h.start();
+  h.sockets[0].message({ type: 'heard', text: 'Check out' });
+  h.sockets[0].message({ type: 'browser_action', request: { id: 'checkout' } });
+  await new Promise(resolve => setImmediate(resolve)); h.render();
+  assert.equal(h.api.actionLinks.length, 1);
+  assert.equal(h.api.actionLinks[0].url, url);
+  assert.equal(h.api.actionLinks[0].amount, 36);
+  assert.equal(h.api.actionLinks[0].currency, 'USD');
+  assert.equal(JSON.parse(h.sockets[0].sent.at(-1)).result.response.checkout_url, url);
+  h.sockets[0].message({ type: 'said', text: 'Here is the checkout link.' });
+  h.sockets[0].message({ type: 'turn_complete' }); h.render();
+  assert.equal(h.exchanges.at(-1).actionLinks[0].url, url);
+  result = { status: 'failed', httpStatus: 400, response: { checkout_url: 'https://evil.example/' } };
+  h.sockets[0].message({ type: 'browser_action', request: { id: 'failed' } });
+  await new Promise(resolve => setImmediate(resolve)); h.render();
+  assert.equal(h.api.actionLinks.length, 1);
+  h.api.stop();
+});
+
 const settle = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
 const photoFile = { type: 'image/png' };
 const imageFrames = socket => socket.sent.map(value => JSON.parse(value)).filter(frame => frame.type === 'image');
@@ -340,4 +375,12 @@ test('recovery cancels a pending photo and waits for readiness before accepting 
   h.advance(500); const next = h.sockets[1]; next.open();
   assert.equal(await h.api.attachPhoto(photoFile), false);
   assert.equal(imageFrames(next).length, 0); h.api.stop();
+});
+
+
+test('voice loads the versioned worklet and supports a self-hosted override', async () => {
+  const normal = harness(); await normal.start();
+  assert.equal(normal.contexts[0].workletUrl, 'https://cdn.akropolys.cloud/kiku/2.2.39/voice-worklet.js');
+  const custom = harness({ voiceWorkletUrl: 'https://example.test/voice-worklet.js' }); await custom.start();
+  assert.equal(custom.contexts[0].workletUrl, 'https://example.test/voice-worklet.js');
 });

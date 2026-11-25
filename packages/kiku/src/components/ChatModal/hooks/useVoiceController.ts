@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { useAkropolysContext, type ChatMessage, type SpokenMedia } from '@akropolys/sdk';
+import { useAkropolysContext, type ChatMessage, type SpokenMedia, type ActionLinkContext } from '@akropolys/sdk';
 import { stopSpeech } from '../../../utils/tts';
 import { useVoiceSession } from '../../../utils/voiceSession';
 import { useLiveVoice, type LiveImage, type LiveState, type LiveTurn } from '../../../utils/liveVoice';
@@ -11,27 +11,31 @@ const toVoicePhase = (s: LiveState): VoicePhase =>
 export interface EarlierCalls {
   turns: LiveTurn[];
   images: LiveImage[];
+  actionLinks: ActionLinkContext[];
 }
 
-const NO_EARLIER: EarlierCalls = { turns: [], images: [] };
+const NO_EARLIER: EarlierCalls = { turns: [], images: [], actionLinks: [] };
 
 const newConversation = () => `v${Date.now().toString(36)}`;
 
 function earlierCalls(messages: ChatMessage[], conversation: string): EarlierCalls {
   const turns: LiveTurn[] = [];
   const images: LiveImage[] = [];
+  const actionLinks: ActionLinkContext[] = [];
   for (const m of messages) {
     if (m.live !== conversation) continue;
+    if (m.actionLinks) actionLinks.push(...m.actionLinks);
     if (m.content) turns.push({ role: m.role === 'user' ? 'user' : 'assistant', text: m.content, done: true });
     for (const url of [...(m.images ?? []), ...(m.visualization ? [m.visualization] : [])]) {
       images.push({ id: -(images.length + 1), url, pending: false });
     }
   }
-  return { turns, images };
+  return { turns, images, actionLinks };
 }
 
 export interface UseVoiceControllerOptions {
   voiceLang?: string;
+  voiceWorkletUrl?: string;
   speechLang: string;
   shopperLanguage: string;
   ttsVoice?: string;
@@ -41,6 +45,7 @@ export interface UseVoiceControllerOptions {
 }
 
 export function useVoiceController({
+  voiceWorkletUrl,
   voiceLang,
   speechLang,
   shopperLanguage,
@@ -98,6 +103,7 @@ export function useVoiceController({
   const shopperName = client?.getShopperName?.() || undefined;
 
   const live = useLiveVoice({
+    voiceWorkletUrl,
     apiUrl,
     siteId,
     token,
@@ -114,6 +120,7 @@ export function useVoiceController({
       appendSpokenExchange(exchange.heard, exchange.said, exchange.duration, exchange.userAudioUrl, exchange.audioUrl, {
         images: exchange.images,
         visualization: exchange.visualization,
+        actionLinks: exchange.actionLinks,
         live: conversationRef.current,
       });
     },

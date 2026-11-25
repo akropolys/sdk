@@ -57,29 +57,42 @@ export function ConversationTimeline({
   }
 
   useEffect(() => {
-    const node = itemRefs.current[anchor];
-    const cursor = cursorRef.current;
-    const track = trackRef.current;
     const container = containerRef.current;
-    if (!node) return;
+    const track = trackRef.current;
+    if (!container || !track) return;
 
-    if (cursor) {
-      cursor.style.transform = `translateY(${node.offsetTop + node.offsetHeight / 2}px)`;
-    }
+    const position = () => {
+      const node = itemRefs.current[anchor];
+      const height = container.clientHeight;
+      if (!node || !height) return;
 
-    setWave(buildWave(itemRefs.current, anchor));
-
-    if (track && container) {
-      const containerHeight = container.clientHeight;
-      const trackHeight = track.scrollHeight;
-      if (trackHeight > containerHeight && containerHeight > 0) {
-        const nodeCenter = node.offsetTop + node.offsetHeight / 2;
-        const targetY = containerHeight / 2 - nodeCenter;
-        track.style.transform = `translateY(${targetY}px)`;
-      } else {
-        track.style.transform = 'none';
+      // Only long conversations need room to center the first and last question.
+      const previousPadding = parseFloat(track.style.paddingTop) || 0;
+      const naturalHeight = track.scrollHeight - previousPadding * 2;
+      const overflow = naturalHeight > height + 1;
+      const padding = overflow ? Math.max(0, (height - node.offsetHeight) / 2) : 0;
+      if (Math.abs(previousPadding - padding) > 0.5) {
+        track.style.paddingTop = `${padding}px`;
+        track.style.paddingBottom = `${padding}px`;
       }
-    }
+      container.dataset.overflow = String(overflow);
+
+      const center = node.offsetTop + node.offsetHeight / 2;
+      if (cursorRef.current) cursorRef.current.style.transform = `translateY(${center}px)`;
+      setWave(buildWave(itemRefs.current, anchor));
+      if (overflow) {
+        const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+        container.scrollTo({ top: center - height / 2, behavior: reducedMotion ? 'instant' : 'smooth' });
+      } else {
+        container.scrollTop = 0;
+      }
+    };
+
+    position();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(position);
+    observer?.observe(container);
+    observer?.observe(track);
+    return () => observer?.disconnect();
   }, [anchor, items.length]);
 
   if (items.length < 2) return null;
@@ -112,6 +125,7 @@ export function ConversationTimeline({
             key={item.idx}
             ref={(el) => { itemRefs.current[i] = el; }}
             type="button"
+            aria-current={i === anchor ? "true" : undefined}
             className={cn('hsk-cb-tl-item', i === anchor && 'hsk-cb-tl-item--on')}
             style={{ '--hsk-tl-d': Math.min(Math.abs(i - anchor), 4) } as React.CSSProperties}
             onClick={() => onJump(item.idx)}

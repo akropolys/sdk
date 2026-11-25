@@ -37,6 +37,8 @@ export interface KikuButtonProps {
   };
 
   enableVoice?: boolean;
+  /** Optional URL for a self-hosted voice audio processor. */
+  voiceWorkletUrl?: string;
 
   voiceLang?: string;
 
@@ -60,6 +62,7 @@ export function KikuButton({
   theme,
   classNames = {},
   enableVoice = false,
+  voiceWorkletUrl,
   voiceLang,
   ttsVoice,
   enableVision = false,
@@ -158,7 +161,6 @@ export function KikuButton({
         onPointerDown={warmShadow}
         style={customStyles}
         data-hsk-theme={hskThemeAttr}
-        aria-label="Open AI chat"
         aria-haspopup="dialog"
         aria-expanded={open}
       >
@@ -190,6 +192,7 @@ export function KikuButton({
           theme={theme}
           classNames={classNames}
           enableVoice={enableVoice}
+          voiceWorkletUrl={voiceWorkletUrl}
           voiceLang={voiceLang}
           enableVision={enableVision}
           ttsVoice={ttsVoice}

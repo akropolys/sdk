@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { useT } from '../types';
 import { rememberLayoutHintSeen } from '../../../utils/layoutDiscovery';
 
-export function LayoutDiscoveryNote({ onOpenDock }: { onOpenDock: () => void }) {
+export function LayoutDiscoveryNote({ onOpenDock, placement = 'reply' }: { onOpenDock: () => void; placement?: 'reply' | 'dock' }) {
   const t = useT();
   const ref = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -22,11 +22,11 @@ export function LayoutDiscoveryNote({ onOpenDock }: { onOpenDock: () => void }) 
     return () => observer.disconnect();
   }, []);
   return (
-    <button ref={ref} type="button" className="hsk-cb-layout-discovery-note" onClick={onOpenDock}>
+    <button ref={ref} type="button" className={`hsk-cb-layout-discovery-note hsk-cb-layout-discovery-note--${placement}`} onClick={onOpenDock}>
       <svg viewBox="0 0 44 48" fill="none" aria-hidden="true">
         <path pathLength="1" d="M36 43C14 46 8 27 20 23C32 18 36 31 24 31C11 31 9 15 18 6M10 10L18 5L23 14" />
       </svg>
-      <span>{t('layoutFirstReplyNote', { button: 'Wide' })}</span>
+      <span>{t(placement === 'dock' ? 'layoutDockNote' : 'layoutFirstReplyNote', { button: 'Wide' })}</span>
     </button>
   );
 }

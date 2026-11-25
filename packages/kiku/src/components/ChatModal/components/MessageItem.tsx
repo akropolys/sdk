@@ -1,5 +1,5 @@
 import React from 'react';
-import { useAkropolysContext, type ChatMessage, type ChatSource, type ChatAction } from '@akropolys/sdk';
+import { useAkropolysContext, armActionReturn, type ChatMessage, type ChatSource, type ChatAction } from '@akropolys/sdk';
 import { cn } from '../../../utils/cn';
 import { stripToolMarkup } from '../../../utils/toolMarkup';
 import { renderMarkdown, safeHref } from '../../../utils/markdown';
@@ -9,6 +9,8 @@ import { WorkingVeil } from '../../KikuDoodles';
 import { ThinkingBlock, parseThinking, isTeamNote } from './ThinkingBlock';
 import { SourcesCarousel } from './SourcesCarousel';
 import { SmartContextPills } from './SmartContextPills';
+import { ExternalLinks } from './ExternalLinks';
+import { extractExternalLinks } from '../../../utils/externalLinks';
 import {
   MicIcon,
   ExternalIcon,
@@ -227,6 +229,9 @@ export function MessageItem({
   const CALC_DISCLAIMER_REGEX = /(?:^|\n+)(?:[>*_~`\s]*)(?:This is a calculation from live figures,?\s*not a guarantee\s*[—–-]\s*the market can move against it\.?)(?:[>*_~`\s]*)/gi;
   const hasCalcDisclaimer = CALC_DISCLAIMER_REGEX.test(parsed.content);
   const cleanContent = hasCalcDisclaimer ? parsed.content.replace(CALC_DISCLAIMER_REGEX, '').trimEnd() : parsed.content;
+  const external = React.useMemo(() => isUser ? { content: cleanContent, links: [] }
+    : extractExternalLinks(cleanContent, typeof location === 'undefined' ? 'https://akropolys.cloud' : location.href, msg.actionLinks, isLast && streaming),
+    [cleanContent, isUser, msg.actionLinks, isLast, streaming]);
 
   return (
     <div
@@ -358,11 +363,12 @@ export function MessageItem({
                     </div>
                   )}
                   {!cleanContent && hiddenToolMarkup && !(isLast && (streaming || loading)) && <p className="hsk-cb-ai-content">{t('errStreamInterrupted')}</p>}
-                  {cleanContent && (
+                  {external.content && (
                     <div className="hsk-cb-ai-content">
-                      <MarkdownBlock content={cleanContent} streaming={isLast && streaming} hosts={imageHosts} />
+                      <MarkdownBlock content={external.content} streaming={isLast && streaming} hosts={imageHosts} />
                     </div>
                   )}
+                  <ExternalLinks links={external.links} t={t} onOpen={link => { if (api?.siteId) armActionReturn(api.siteId, link.returnToken); }} />
                   {hasCalcDisclaimer && (
                     <div className="hsk-cb-calc-disclaimer">
                       {t('calcDisclaimer')}
@@ -397,7 +403,7 @@ export function MessageItem({
                   ) : (
                     <img
                       src={msg.visualization}
-                      alt="Product visualized in your photo"
+                      alt="AI-generated preview"
                       className="hsk-markdown-img"
                       style={vizState[msg.visualization] === 'err' ? { display: 'none' } : undefined}
                       onLoad={() => setVizState(p => ({ ...p, [msg.visualization!]: 'ok' }))}

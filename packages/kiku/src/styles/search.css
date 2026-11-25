@@ -23,6 +23,7 @@
     display: flex !important;
     flex-direction: column !important;
     overflow: hidden !important;
+    overflow: clip !important;
     overscroll-behavior: contain !important;
     background: var(--hsk-chat-bg, #0a0a0a) !important;
     box-sizing: border-box !important;

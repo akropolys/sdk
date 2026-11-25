@@ -2,12 +2,25 @@
 
 Add Kiku to any website with the published CDN script before your closing
 `</body>` tag. The same embed works with JavaScript frameworks, plain HTML, and
-HTMX. The loader fetches its stylesheet and embed module automatically.
+HTMX. On each page the loader draws only a small Kiku button (about 2 KB
+gzipped, no API calls or cookies). It fetches the widget and its stylesheet when a
+shopper points at, focuses or touches the button, and mounts it on click. Add
+`data-eager="true"` to load the widget straight away instead.
+
+Put `<kiku-button></kiku-button>` wherever kiku should appear: a header, a
+product page, a sidebar. Use it as many times as you like; each opens the same
+kiku, and `label="Ask about this sofa"` sets its text. Tags your framework adds
+later work too. A page with no tag shows kiku in the bottom-right corner.
+`data-container="#selector"` and `Kiku.mount({ container })` also place it.
 
 ```html
-<script src="https://cdn.akropolys.cloud/kiku/2.2.30/kiku.js" data-site-id="YOUR_SITE_ID"
-  data-api-token="YOUR_PUBLIC_BROWSER_TOKEN" defer></script>
+<kiku-button></kiku-button>
+
+<script src="https://cdn.akropolys.cloud/kiku/2.2.47/kiku.js" data-key="YOUR_KEY"
+  data-voice="true" data-vision="true" defer></script>
 ```
+
+`data-key` is your public key from Shell. It is safe in your pages.
 
 Use the same public browser token as your existing frontend integration. Never
 put secret keys or signing keys in HTML. The embed uses the same domain and
@@ -21,7 +34,7 @@ the script loads:
 await Kiku.mount({
   siteId: 'YOUR_SITE_ID',
   apiToken: 'YOUR_PUBLIC_BROWSER_TOKEN',
-  button: { label: 'Ask us', enableVoice: true },
+  button: { label: 'Ask us', enableVoice: true, enableVision: true },
 });
 await Kiku.open();
 await Kiku.ingest({
@@ -42,7 +55,9 @@ The first gallery image is the cover unless `image` overrides it. Re-ingest the
 same ID to update the record or use `images: []` to clear its gallery.
 
 Reuse loaded data instead of fetching it again just for ingestion. Await
-`Kiku.ready` after automatic setup and catch errors from `Kiku.ingest`. An await
+`Kiku.ready` after automatic setup and catch errors from `Kiku.ingest`. Reading
+`Kiku.ready` or calling any `Kiku` method loads the widget, so leave them out of
+pages that do not need them. An await
 inside an async callback does not block browser rendering. If the embed is
 loaded dynamically, wait for its script load before accessing `window.Kiku`.
 The embed does not accept the ingestion client's `batchSize` parameter.
@@ -60,22 +75,24 @@ its supplied records. Ingestion does not fetch other API pages or refresh stale
 cached source data; full coverage does not require a server-side import.
 
 After login, call `Kiku.updateIdentity({ shopperId, userProof })` with a proof
-issued by your server. On logout pass `{}`. `Kiku.destroy()` removes the widget
+issued by your server. On logout pass `{}`. Identity set before the widget has loaded is
+kept and applied when it opens, so it does not load the widget early. `Kiku.destroy()` removes the widget
 and cleans up its client; call `mount()` again to restart. Automatic mounting
 exposes `Kiku.ready`. Repeated script tags or mount calls reuse the same widget.
 
 For a restrictive CSP, permit the script origin, existing API/voice endpoints,
 and the styles/fonts already needed by Kiku. Voice still requires HTTPS and
-microphone permission.
+microphone permission. Kiku loads its audio processor as a version-matched JavaScript file; allow its origin in `script-src` when using a restrictive CSP.
 
 ## CDN files and self-hosting
 
-- [Loader](https://cdn.akropolys.cloud/kiku/2.2.30/kiku.js)
-- [Stylesheet](https://cdn.akropolys.cloud/kiku/2.2.30/styles.css)
-- [Embed module](https://cdn.akropolys.cloud/kiku/2.2.30/embed/embed.js)
+- [Loader](https://cdn.akropolys.cloud/kiku/2.2.47/kiku.js)
+- [Stylesheet](https://cdn.akropolys.cloud/kiku/2.2.47/styles.css)
+- [Embed module](https://cdn.akropolys.cloud/kiku/2.2.47/embed/embed.js)
+- [Voice audio processor](https://cdn.akropolys.cloud/kiku/2.2.47/voice-worklet.js)
 
-To self-host, install `@akropolys/kiku@2.2.30` and copy `dist/kiku.js`,
-`dist/styles.css`, and the entire `dist/embed` directory to your server. Preserve
+To self-host this release, copy `dist/kiku.js`, `dist/styles.css`,
+`dist/voice-worklet.js`, and the entire `dist/embed` directory to your server. Preserve
 their relative paths and use your hosted loader URL in the script tag. Serve
 JavaScript with the correct MIME type and allow CORS across origins.
 
@@ -101,3 +118,5 @@ For Clerk use `{ provider: "clerk", client: clerk }`; for Auth0 use `{ provider:
 The SDK reads the current token through the existing auth client before every action in text and voice, and adds Authorization internally. The auth client owns renewal. Tokens go directly to the site's API. Adapters default to the page's origin; for a separate API, add `origins: ["https://api.your-site.com"]` and configure browser CORS. `actionHeaders` remains available for custom auth/CSRF headers.
 
 The API must validate the session/token and permissions. A `shopperId` or `userProof` does not authorize it. Return HTTP 401 JSON when sign-in is needed, rather than redirecting to a login screen. Shell's server tester does not share shopper cookies. After a timeout, check the actual site state before retrying a mutation. Read the [site actions guide](https://akropolys.cloud/docs/actions/) for both JavaScript and React examples and troubleshooting.
+
+For a self-hosted React package, copy `dist/voice-worklet.js` to your site and set `voiceWorkletUrl` on `KikuButton` to its URL. Without an override, React uses the version-matched CDN file.

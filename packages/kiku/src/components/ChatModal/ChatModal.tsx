@@ -6,6 +6,7 @@ import { useKiku, ChatSource, ChatAttachment, CaptureTarget, subscribeLiveStream
 import { useAkropolysContext, useCardFields } from '@akropolys/sdk';
 import { detailsOf, detailsText } from '../../utils/cardDetails';
 import { cn } from '../../utils/cn';
+import { animateNudge } from '../../utils/nudge';
 import { resolveTheme } from '../../utils/theme';
 import { useHostFontFace, preloadScriptFont } from '../../utils/hostFont';
 import { useDragToDismiss } from '../../utils/sheetGesture';
@@ -73,6 +74,7 @@ export function ChatModal({
   theme,
   classNames = {},
   enableVoice = false,
+  voiceWorkletUrl,
   voiceLang,
   enableVision = false,
   ttsVoice = 'Algenib',
@@ -370,23 +372,18 @@ export function ChatModal({
   const themingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (themingTimer.current) clearTimeout(themingTimer.current); }, []);
 
-  // When the doodle bloom from the dock reaches the chat, its content nudges up and away, then settles.
-  const nudgeRef = useRef<Animation | null>(null);
-  const nudgeContent = () => {
-    const msgs = msgsContainerRef.current as HTMLElement | null;
-    if (!msgs?.animate || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
-    const away = isRTL ? -3 : 3;
-    nudgeRef.current?.cancel(); // two nudges on one element fight each other and read as a shake
-    nudgeRef.current = msgs.animate(
-      [
-        { transform: 'translate(0, 0)', easing: 'cubic-bezier(.3, 0, .2, 1)' },
-        { offset: 0.26, transform: `translate(${away}px, -6px)`, easing: 'cubic-bezier(.45, 0, .35, 1)' },
-        { offset: 0.52, transform: `translate(${-away * 0.3}px, 1.6px)`, easing: 'cubic-bezier(.45, 0, .35, 1)' },
-        { offset: 0.74, transform: `translate(${away * 0.1}px, -0.6px)`, easing: 'cubic-bezier(.45, 0, .55, 1)' },
-        { transform: 'translate(0, 0)' },
-      ],
-      { duration: 1100, delay: 380 },
+  const nudgeRef = useRef<Animation[]>([]);
+  useEffect(() => () => { nudgeRef.current.forEach(animation => animation.cancel()); }, []);
+  const nudgeContent = (includeText = true) => {
+    nudgeRef.current.forEach(animation => animation.cancel());
+    const side = panelRef.current?.querySelectorAll<HTMLElement>(
+      '.hsk-cb-kiku-id-rail > :not(.hsk-cb-dock-frost), .hsk-cb-timeline-track, .hsk-cb-topbar-mark, .hsk-cb-topbar-actions, .hsk-cb-topbar-left > .hsk-cb-back',
     );
+    const targets = side ? Array.from(side) : [];
+    const msgs = msgsContainerRef.current as HTMLElement | null;
+    if (includeText && msgs) targets.unshift(msgs);
+    const canvas = panelRef.current?.querySelector<HTMLElement>('.hsk-cb-main > .hsk-cb-doodles');
+    nudgeRef.current = animateNudge(targets, isRTL, canvas, msgs);
   };
   // The first bloom waits for the greeting or messages to appear, which can lag the panel on a first open.
   // Text that has only just arrived must not nudge: it reads as landing in the wrong place.
@@ -407,6 +404,7 @@ export function ChatModal({
       observer.disconnect();
       clearTimeout(limit);
       bloomDoodles();
+      nudgeContent(false);
     };
     const observer = new MutationObserver(() => { if (shown()) fire(); });
     observer.observe(box, { childList: true, subtree: true });
@@ -581,6 +579,7 @@ export function ChatModal({
     newVoiceChat,
     attachPhoto,
   } = useVoiceController({
+    voiceWorkletUrl,
     voiceLang,
     speechLang,
     shopperLanguage,
@@ -1028,31 +1027,6 @@ export function ChatModal({
             }
           }}
         >
-          <LightboxModal
-            src={lightboxData?.src}
-            images={lightboxData?.images}
-            initialIndex={lightboxData?.initialIndex}
-            title={lightboxData?.title}
-            onClose={() => setLightboxData(null)}
-          />
-
-          {markupSrc && (
-            <div className="hsk-markup-overlay">
-              <MarkupEditor
-                src={markupSrc}
-                t={t as (key: string, vars?: Record<string, string>) => string}
-                onCancel={() => setMarkupSrc(null)}
-                onSend={(dataUrl, instruction, marks, preview) => {
-                  setMarkupSrc(null);
-                  handleSend(
-                    instruction,
-                    [{ type: 'image', data: dataUrl, annotated: true, marks, instructed: true, preview }],
-                  );
-                }}
-              />
-            </div>
-          )}
-
           <div className="hsk-cb-main">
             <KikuDoodles seed={(client as any)?.api?.siteId ?? ''} theme={hskThemeAttr} dir={isRTL ? 'rtl' : 'ltr'} waitForContent />
 
@@ -1284,7 +1258,12 @@ export function ChatModal({
 
             {!isNarrow && themeMenuOpen && themeDiscovery && <ThemeDiscoveryHint closing={themeMenuClosing} />}
 
-            {hasLayoutContent && <LayoutToggle wide={chatLayout.wide} onToggle={handleToggleLayout} emphasized={layoutGuidance} />}
+            {hasLayoutContent && (
+              <div className="hsk-cb-layout-dock-anchor">
+                <LayoutToggle wide={chatLayout.wide} onToggle={handleToggleLayout} emphasized={layoutGuidance} />
+                {layoutHintIndex !== null && <LayoutDiscoveryNote placement="dock" onOpenDock={handleToggleLayout} />}
+              </div>
+            )}
 
           </div>
 
@@ -1352,6 +1331,33 @@ export function ChatModal({
             />
           )}
         </div>
+
+        <>
+            <LightboxModal
+              src={lightboxData?.src}
+              images={lightboxData?.images}
+              initialIndex={lightboxData?.initialIndex}
+              title={lightboxData?.title}
+              onClose={() => setLightboxData(null)}
+            />
+
+            {markupSrc && (
+              <div className="hsk-markup-overlay">
+                <MarkupEditor
+                  src={markupSrc}
+                  t={t as (key: string, vars?: Record<string, string>) => string}
+                  onCancel={() => setMarkupSrc(null)}
+                  onSend={(dataUrl, instruction, marks, preview) => {
+                    setMarkupSrc(null);
+                    handleSend(
+                      instruction,
+                      [{ type: 'image', data: dataUrl, annotated: true, marks, instructed: true, preview }],
+                    );
+                  }}
+                />
+              </div>
+            )}
+        </>
       </div>
     </UIStringsContext.Provider>
   );

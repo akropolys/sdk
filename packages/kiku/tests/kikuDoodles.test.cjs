@@ -6,6 +6,10 @@ const vm = require('node:vm');
 const sdk = path.resolve(__dirname, '../../..');
 const ts = require(sdk + '/node_modules/typescript');
 const source = fs.readFileSync(sdk + '/packages/kiku/src/components/KikuDoodles.tsx', 'utf8');
+const timingModule = { exports: {} };
+const timingSource = fs.readFileSync(sdk + '/packages/kiku/src/utils/bloomTiming.ts', 'utf8');
+vm.runInNewContext(ts.transpileModule(timingSource, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText,
+  { module: timingModule, exports: timingModule.exports });
 
 function harness({ waitForContent = false, reducedMotion = false, width = 390, height = 760 } = {}) {
   let now = 0, next = 0, paints = 0;
@@ -25,7 +29,10 @@ function harness({ waitForContent = false, reducedMotion = false, width = 390, h
   vm.runInNewContext(ts.transpileModule(source, { compilerOptions: {
     module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React, esModuleInterop: true,
   } }).outputText, {
-    module, exports: module.exports, require: name => { assert.equal(name, 'react'); return react; },
+    module, exports: module.exports, require: name => {
+      if (name === '../utils/bloomTiming') return timingModule.exports;
+      assert.equal(name, 'react'); return react;
+    },
     window, performance: { now: () => now },
     getComputedStyle: () => ({ direction: 'ltr', getPropertyValue: () => '80,80,80' }),
     requestAnimationFrame: fn => { const id = ++next; frames.set(id, fn); return id; },

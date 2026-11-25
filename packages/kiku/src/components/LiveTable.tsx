@@ -1,30 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import {
   describeAge,
-  getLiveValue,
+  useLiveValues as useScopedLiveValues,
   isFresh,
   isStale,
   labelFor,
   formatLiveValue,
-  subscribeLiveValues,
   LIVE_FLASH_MS,
   type LiveValue,
 } from '@akropolys/sdk';
 
 function useLiveValues(keys: string[]): (LiveValue | undefined)[] {
+  const records = useScopedLiveValues(keys, false);
   const [, bump] = useState(0);
-  const joined = JSON.stringify(keys);
-
-  useEffect(() => subscribeLiveValues(k => {
-    if (keys.includes(k)) bump(n => n + 1);
-  }), [joined]);
-
   useEffect(() => {
     const id = setInterval(() => bump(n => n + 1), 1000);
     return () => clearInterval(id);
   }, []);
-
-  return keys.map(getLiveValue);
+  return records;
 }
 
 const TITLE_KEYS = ['title', 'name', 'label', 'headline', 'subject'];

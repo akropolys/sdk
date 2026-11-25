@@ -161,9 +161,14 @@ export function SourcesCarousel({ sources, onSelectSource, onImageClick, referen
                 ) : isSingleEntity && totalPhotos > 1 ? (
                   <div className="hsk-cb-src-detail">{`Photo ${photoIndex + 1} of ${totalPhotos}`}</div>
                 ) : null}
-                {detailsOf(src, cardFields).slice(0, 2).map(d => (
-                  <div key={d.label} className="hsk-cb-src-detail">{d.value}</div>
-                ))}
+                <div className="hsk-cb-src-fields">
+                  {detailsOf(src, cardFields).map(d => (
+                    <span key={d.label} className="hsk-cb-src-field" dir="auto">
+                      <span className="hsk-cb-src-field-label">{d.label}:</span>
+                      <span className="hsk-cb-src-field-value">{d.value}</span>
+                    </span>
+                  ))}
+                </div>
               </div>
             </div>
           );
