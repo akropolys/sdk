@@ -387,6 +387,46 @@
   border-bottom: none;
 }
 
+/* The first column (what each row is) stays in view while the table scrolls
+   sideways. separate borders keep its rules attached while it is stuck. */
+.hsk-markdown-table { border-collapse: separate; }
+
+.hsk-markdown-table th:first-child,
+.hsk-markdown-table td:first-child {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 1;
+  background: var(--hsk-chat-bg, #fff) !important; /* the panel's own surface, every theme */
+}
+
+/* A soft edge the next columns fade into, shown once the table is scrolled
+   (TableWrapper sets the --left/--middle/--right classes). */
+.hsk-markdown-table th:first-child::after,
+.hsk-markdown-table td:first-child::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  inset-inline-end: -14px;
+  width: 14px;
+  pointer-events: none;
+  background: linear-gradient(to right, var(--hsk-chat-bg, #fff), transparent);
+  opacity: 0;
+  transition: opacity .15s ease;
+}
+.hsk-markdown-table :is(th, td):first-child:dir(rtl)::after {
+  background: linear-gradient(to left, var(--hsk-chat-bg, #fff), transparent);
+}
+.hsk-table-wrapper--middle :is(th, td):first-child::after,
+.hsk-table-wrapper--right:dir(ltr) :is(th, td):first-child::after,
+.hsk-table-wrapper--left:dir(rtl) :is(th, td):first-child::after { opacity: 1; }
+
+/* On phones the stuck column must not take the screen. */
+@media (max-width: 480px) {
+  .hsk-markdown-table th:first-child,
+  .hsk-markdown-table td:first-child { min-width: 104px; max-width: 38vw; }
+}
+
 .hsk-markdown-table td * {
   color: inherit;
 }

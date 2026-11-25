@@ -155,7 +155,7 @@ export function SourcesCarousel({ sources, onSelectSource, onImageClick, referen
                 onImageClick={onImageClick}
               />
               <div className="hsk-cb-src-info">
-                <div className="hsk-cb-src-name">{src.name}</div>
+                <div className="hsk-cb-src-name"><TitleParts name={src.name} /></div>
                 {isSingleEntity && image?.caption ? (
                   <div className="hsk-cb-src-detail">{image.caption}</div>
                 ) : isSingleEntity && totalPhotos > 1 ? (
@@ -204,4 +204,11 @@ export function SourcesCarousel({ sources, onSelectSource, onImageClick, referen
     </div>
     </>
   );
+}
+
+// A card title reads as a title, not a sentence: the part before the first
+// comma (a street, a product) in full weight, the rest (a city) muted.
+function TitleParts({ name }: { name: string }) {
+  const [head, ...rest] = name.split(', ');
+  return <>{head}{rest.length > 0 && <span className="hsk-cb-src-sub">, {rest.join(', ')}</span>}</>;
 }

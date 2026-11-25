@@ -2721,7 +2721,7 @@
 }
 
 .hsk-cb-src-info {
-  padding: 8px 2px 0;
+  padding: 6px 2px 0; /* close to the photo, so the title reads as its caption */
 }
 
 .hsk-cb-sources-wrap--compact { margin-top: 10px; }
@@ -2734,10 +2734,11 @@
 .hsk-cb-sources-wrap--compact .hsk-cb-src-detail { font-size: 11px; padding: 1px 6px; }
 
 .hsk-cb-src-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--hsk-chat-text, #333);
-  line-height: 1.4;
+  font-size: 13.5px;
+  font-weight: 650;
+  letter-spacing: -0.012em;
+  color: var(--hsk-src-title, var(--hsk-chat-text, #333));
+  line-height: 1.3;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -4976,3 +4977,6 @@
 }
 .hsk-cb-src-field-label { font-weight: 600; text-transform: capitalize; }
 .hsk-cb-src-field-value { min-width: 0; }
+
+/* The muted rest of a card title (a city after the street). */
+.hsk-cb-src-sub { font-weight: 500; color: var(--hsk-src-desc, var(--hsk-chat-muted, #777)); }
