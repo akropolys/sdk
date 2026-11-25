@@ -498,6 +498,15 @@ const thumpListeners = new Set<(t: Thump) => void>();
 // Something struck the table at a viewport point: the doodles lying on it jump and land a little moved.
 const bloomListeners = new Set<() => void>();
 
+// The chat column's width (--hsk-col in chat.css).
+const CHAT_COLUMN_PX = 720;
+
+// Canvas sharpness: the wide desktop canvas is drawn at most at 2x, which is
+// sharp on every screen and keeps the opening animation smooth.
+function canvasScale(width: number): number {
+  return Math.min(window.devicePixelRatio || 1, width > 900 ? 2 : 3);
+}
+
 // Starts the opening bloom of a canvas that is waiting for the chat's content to appear.
 export function bloomDoodles() {
   for (const start of bloomListeners) start();
@@ -540,9 +549,7 @@ function generateGlyphs(
   const noise = makeNoise(mulberry32(seed ^ 0x9e3779b9));
 
   const area = w * h;
-  // The wide desktop canvas reaches past the chat column; 800 keeps the field
-  // as dense behind the column on tall screens.
-  const target = Math.max(40, Math.min(800, Math.round(area / 3100)));
+  const target = Math.max(40, Math.min(520, Math.round(area / 3100)));
   const raw = target / 0.48;
   const r = Math.max(26, Math.sqrt((0.7 * area) / raw));
   const pts = poisson(w, h, r, rng);
@@ -559,8 +566,12 @@ function generateGlyphs(
   const glyphs: DoodleGlyph[] = [];
   const maxDist = Math.hypot(w, h) || 1;
   const jitter = mulberry32(seed ^ 0x5bd1e995);
-  const ox = isRTL ? w : 0;
-  const reachFromDock = Math.hypot(w, originY) || 1;
+  // The wave starts at the chat column's bottom corner and is timed across
+  // the column, so a canvas wider than the column (desktop, reaching past it)
+  // opens as quickly as before; doodles out to the sides bloom early.
+  const column = Math.min(w, CHAT_COLUMN_PX);
+  const ox = isRTL ? (w + column) / 2 : (w - column) / 2;
+  const reachFromDock = Math.hypot(column, originY) || 1;
   // light ink means it is being drawn onto a dark surface
   const [ir, ig, ib] = ink.split(',').map(n => parseFloat(n) || 0);
   const isDarkMode = 0.2126 * ir + 0.7152 * ig + 0.0722 * ib > 128;
@@ -753,7 +764,7 @@ const KikuDoodles = React.memo(function KikuDoodles({
       const elapsed = startTime === null ? 0 : now - startTime;
       const rawProgress = Math.min(1, elapsed / duration);
       if (w && h) {
-        const dpr = Math.min(window.devicePixelRatio || 1, 3);
+        const dpr = canvasScale(w);
         const targetW = Math.round(w * dpr);
         const targetH = Math.round(h * dpr);
         if (cv.width !== targetW || cv.height !== targetH) {
@@ -775,7 +786,7 @@ const KikuDoodles = React.memo(function KikuDoodles({
         const h = cv.clientHeight;
         const ctx = cv.getContext('2d');
         if (ctx && w && h) {
-          const dpr = Math.min(window.devicePixelRatio || 1, 3);
+          const dpr = canvasScale(w);
           ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
           renderDoodles(ctx, glyphs, w, h, -1);
         }
@@ -787,7 +798,7 @@ const KikuDoodles = React.memo(function KikuDoodles({
       const h = cv.clientHeight;
       if (!w || !h) return;
 
-      const dpr = Math.min(window.devicePixelRatio || 1, 3);
+      const dpr = canvasScale(w);
       const ctx = cv.getContext('2d');
       if (!ctx) return;
 
@@ -838,7 +849,7 @@ const KikuDoodles = React.memo(function KikuDoodles({
         if (isAnimatingRef.current || waitingRef.current || !h) return;
         const ctx = cv.getContext('2d');
         if (!ctx) return;
-        const dpr = Math.min(window.devicePixelRatio || 1, 3);
+        const dpr = canvasScale(w);
         cv.width = Math.round(w * dpr);
         cv.height = Math.round(h * dpr);
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -851,10 +862,19 @@ const KikuDoodles = React.memo(function KikuDoodles({
 
     updateCanvas();
 
+    // The doodles were already placed at mount; starting the bloom only
+    // animates them. Placing them again here would land a long task in the
+    // middle of the panel sliding open, which made the opening stutter.
     const start = () => {
       if (!waitingRef.current) return;
       waitingRef.current = false;
-      updateCanvas();
+      const glyphs = cachedGlyphsRef.current;
+      const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+      if (!glyphs || cv.clientWidth !== lastWidthRef.current || reduced) { updateCanvas(); return; }
+      const isRTL = dir === 'rtl' || getComputedStyle(cv).direction === 'rtl' || cv.closest('[dir="rtl"]') !== null;
+      cancelAnimationFrame(animFrameRef.current);
+      isAnimatingRef.current = true;
+      animFrameRef.current = requestAnimationFrame(tick(null, BLOOM_DURATION_MS, glyphs, isRTL));
     };
     bloomListeners.add(start);
     const waitLimit = waitingRef.current ? window.setTimeout(start, 2000) : 0;
@@ -874,7 +894,7 @@ const KikuDoodles = React.memo(function KikuDoodles({
       const w = cv.clientWidth;
       const h = cv.clientHeight;
       if (!glyphs || !ctx || !w || !h) return;
-      const dpr = Math.min(window.devicePixelRatio || 1, 3);
+      const dpr = canvasScale(w);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       renderDoodles(ctx, glyphs, w, h, -1);
     };
@@ -948,7 +968,7 @@ export function DoodleShimmer({ seed = '', theme, alphaScale = 1.8, weight = 0.6
     const start = () => {
       const w = cv.clientWidth;
       const h = cv.clientHeight;
-      const dpr = Math.min(window.devicePixelRatio || 1, 3);
+      const dpr = canvasScale(w);
       cv.width = Math.round(w * dpr);
       cv.height = Math.round(h * dpr);
 

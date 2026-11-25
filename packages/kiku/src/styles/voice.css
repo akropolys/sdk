@@ -487,6 +487,16 @@
   }
 }
 
+/* Phones: the canvas fills the screen; it fades out over a narrow band at
+   the left and right edges, so the doodles behind the text stay full. */
+@media (max-width: 768px) {
+  .hsk-cb-panel > .hsk-cb-doodles {
+    --hsk-m-fade: min(12%, 48px);
+    -webkit-mask-image: linear-gradient(to right, transparent 0, #000 var(--hsk-m-fade), #000 calc(100% - var(--hsk-m-fade)), transparent 100%);
+    mask-image: linear-gradient(to right, transparent 0, #000 var(--hsk-m-fade), #000 calc(100% - var(--hsk-m-fade)), transparent 100%);
+  }
+}
+
 @media (prefers-color-scheme: dark) {
   .hsk-cb-panel,
   .hsk-voice-overlay { --hsk-doodle-ink: 240, 239, 237; --hsk-doodle-tint: 255, 150, 110; }

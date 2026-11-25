@@ -18,7 +18,7 @@ export function cachedBaseFont(client: any): Promise<ScriptFont | null> {
     .then((f: ScriptFont | null) => {
       if (f) {
         BASE_FONT_READY.set(client, f);
-        preloadScriptFont(f, 0).catch(() => {});
+        preloadScriptFont(f, 1500).catch(() => {});
       }
       return f;
     })

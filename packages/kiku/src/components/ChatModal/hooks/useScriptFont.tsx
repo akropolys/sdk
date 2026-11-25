@@ -259,7 +259,10 @@ export function useScriptFont({ shopperLanguage, theme, preloadedStrings }: UseS
     (async () => {
       try {
         const f = await cachedBaseFont(client);
-        if (!cancelled && f) setBaseFont(f);
+        if (!cancelled && f) {
+          setBaseFont(f);
+          await preloadScriptFont(f, 1200); // wait for the faces, so text does not swap after showing
+        }
       } catch {
 
       }

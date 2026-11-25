@@ -51,7 +51,7 @@
     flex-direction: column !important;
     justify-content: space-between !important;
     overflow: hidden !important;
-    background: var(--hsk-chat-bg, #0a0a0a) !important;
+    background: transparent !important; /* the panel paints it; the doodles show through */
     box-sizing: border-box !important;
   }
 
