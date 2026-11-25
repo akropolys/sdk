@@ -21,5 +21,5 @@ export default defineConfig({
     js: "'use client';",
   },
   external: ['react', 'react-dom', '@akropolys/sdk'],
-  sourcemap: true,
+  sourcemap: false,
 });

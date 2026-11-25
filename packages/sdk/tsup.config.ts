@@ -14,7 +14,7 @@ export default defineConfig([
       js: "'use client';",
     },
     external: ['react', 'react-dom'],
-    sourcemap: true,
+    sourcemap: false,
   },
   {
     entry: {
@@ -26,6 +26,6 @@ export default defineConfig([
     splitting: false,
     clean: false,
     external: ['react', 'react-dom'],
-    sourcemap: true,
+    sourcemap: false,
   },
 ]);
