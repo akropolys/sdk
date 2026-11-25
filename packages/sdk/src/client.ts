@@ -309,9 +309,9 @@ export class AkropolysClient {
   getCurrentContext(): any {
     if (typeof window === 'undefined') return null;
     const ctx: any = {
-      // The page without its query string or #hash, which can hold personal
-      // details (emails, tokens, order ids); pages are matched by their path.
-      url: window.location.origin + window.location.pathname,
+      // The page as it is identified (a query like ?id=5 can name the product),
+      // without its #hash or ad-tracking parameters.
+      url: pageAddress(window.location.href),
       title: document.title,
       raw: {}
     };
@@ -1039,4 +1039,19 @@ export function getAkropolysClient(): AkropolysClient {
     }
   }
   return instance;
+}
+
+// pageAddress is a page's address without its #hash and ad-tracking
+// parameters (utm_*, gclid, fbclid, msclkid), which identify the visit, not the page.
+function pageAddress(href: string): string {
+  try {
+    const u = new URL(href);
+    u.hash = '';
+    for (const key of [...u.searchParams.keys()]) {
+      if (/^utm_/i.test(key) || /^(gclid|fbclid|msclkid|mc_eid|_ga)$/i.test(key)) u.searchParams.delete(key);
+    }
+    return u.toString();
+  } catch {
+    return href.split('#')[0];
+  }
 }
