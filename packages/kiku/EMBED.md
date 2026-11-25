@@ -16,7 +16,7 @@ later work too. A page with no tag shows kiku in the bottom-right corner.
 ```html
 <kiku-button></kiku-button>
 
-<script src="https://cdn.akropolys.cloud/kiku/2.3.0/kiku.js" data-key="YOUR_KEY"
+<script src="https://cdn.akropolys.cloud/kiku/2.3.1/kiku.js" data-key="YOUR_KEY"
   data-voice="true" data-vision="true" defer></script>
 ```
 
@@ -88,10 +88,10 @@ microphone permission. Kiku loads its audio processor as a version-matched JavaS
 
 ## CDN files and self-hosting
 
-- [Loader](https://cdn.akropolys.cloud/kiku/2.3.0/kiku.js)
-- [Stylesheet](https://cdn.akropolys.cloud/kiku/2.3.0/styles.css)
-- [Embed module](https://cdn.akropolys.cloud/kiku/2.3.0/embed/embed.js)
-- [Voice audio processor](https://cdn.akropolys.cloud/kiku/2.3.0/voice-worklet.js)
+- [Loader](https://cdn.akropolys.cloud/kiku/2.3.1/kiku.js)
+- [Stylesheet](https://cdn.akropolys.cloud/kiku/2.3.1/styles.css)
+- [Embed module](https://cdn.akropolys.cloud/kiku/2.3.1/embed/embed.js)
+- [Voice audio processor](https://cdn.akropolys.cloud/kiku/2.3.1/voice-worklet.js)
 
 To self-host this release, copy `dist/kiku.js`, `dist/styles.css`,
 `dist/voice-worklet.js`, and the entire `dist/embed` directory to your server. Preserve
