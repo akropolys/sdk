@@ -713,6 +713,30 @@ export function ChatModal({
     else closeNow(false);
   }, [humanPending, closeNow, leaveAsk, nudgeLeave]);
 
+  // A click outside the chat closes it only before a conversation starts.
+  // After that a stray click redraws the close X instead (at most 4 times,
+  // never stacked), and the second one shows a short note, once per session.
+  const strayRef = useRef({ n: 0, busyUntil: 0, touch: false });
+  const [exitAck, setExitAck] = useState(0);
+  const [exitHint, setExitHint] = useState<string | null>(null);
+  const hasConversation = messages.length > 0;
+  const onBackdropClick = useCallback(() => {
+    if (leaveAsk) return nudgeLeave();
+    if (!hasConversation || isNarrow) return requestClose();
+    const stray = strayRef.current, now = Date.now();
+    if (now < stray.busyUntil || stray.n >= 4) return;
+    stray.n += 1;
+    stray.busyUntil = now + 1500;
+    setExitAck(k => k + 1);
+    let seen = false;
+    try { seen = sessionStorage.getItem('kiku:exitHint') === '1'; } catch { /* storage blocked */ }
+    if (stray.n === 2 && !seen) {
+      try { sessionStorage.setItem('kiku:exitHint', '1'); } catch { /* storage blocked */ }
+      setExitHint(stray.touch ? 'Tap ✕ to close' : 'Close with ✕ or Esc');
+      window.setTimeout(() => setExitHint(null), 2800);
+    }
+  }, [leaveAsk, nudgeLeave, hasConversation, isNarrow, requestClose]);
+
   useDragToDismiss({
     panel: useCallback(() => panelRef.current, []),
     scroller: useCallback(() => msgsContainerRef.current, []),
@@ -986,13 +1010,14 @@ export function ChatModal({
         className={cn("hsk-cb-overlay", origin && "hsk-cb-overlay--grows", overlayClosing && "hsk-cb-overlay--closing", classNames.overlay)}
         onPointerDown={e => {
           primeChimes();
+          strayRef.current.touch = e.pointerType !== 'mouse';
           if (e.target === e.currentTarget) {
             (overlayRef.current as any)._ptrDown = true;
           }
         }}
         onClick={e => {
           if (e.target === e.currentTarget && (overlayRef.current as any)?._ptrDown && Date.now() - mountTimeRef.current > 200) {
-            requestClose();
+            onBackdropClick();
           }
           if (overlayRef.current) (overlayRef.current as any)._ptrDown = false;
         }}
@@ -1051,6 +1076,8 @@ export function ChatModal({
               onToggleThemeMenu={() => (themeMenuOpen ? closeThemeMenu() : setThemeMenuOpen(true))}
               onSelectTheme={(t) => { handleToggleTheme(t, true); }}
               themeAttr={hskThemeAttr}
+              exitAck={exitAck}
+              exitHint={exitHint}
             />
 
             <div className="hsk-cb-msgs" ref={msgsContainerRef as any}>

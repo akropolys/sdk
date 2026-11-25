@@ -30,6 +30,10 @@ export interface ChatTopbarProps {
   themeAttr?: string;
   layoutControl?: React.ReactNode;
   below?: React.ReactNode; // shown under the open phone dock
+  // A stray click outside the chat: each bump redraws the close X once, and
+  // exitHint is the one-time note under it ("Close with ✕ or Esc").
+  exitAck?: number;
+  exitHint?: string | null;
 }
 
 let droppedIn = false;
@@ -64,6 +68,8 @@ export function ChatTopbar({
   themeAttr,
   below,
   layoutControl,
+  exitAck = 0,
+  exitHint = null,
 }: ChatTopbarProps) {
   const tr = useT();
   const hasLayoutControl = Boolean(layoutControl);
@@ -269,14 +275,19 @@ export function ChatTopbar({
         )}
 
         {!isNarrow && (
-          <button
-            type="button"
-            className="hsk-cb-squircle-btn hsk-cb-exit-btn"
-            onClick={onClose}
-            aria-label="Close Chat"
-          >
-            <CloseIcon />
-          </button>
+          <span className="hsk-cb-exit-wrap">
+            <button
+              key={exitAck}
+              type="button"
+              className={`hsk-cb-squircle-btn hsk-cb-exit-btn${exitAck > 0 ? ' hsk-cb-exit-btn--ack' : ''}`}
+              onClick={onClose}
+              aria-label="Close Chat"
+            >
+              <CloseIcon />
+            </button>
+            {exitHint && <span className="hsk-cb-exit-hint" aria-hidden="true">{exitHint}</span>}
+            <span className="hsk-sr-only" aria-live="polite">{exitHint ?? ''}</span>
+          </span>
         )}
       </div>
 
