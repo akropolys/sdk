@@ -41,6 +41,7 @@ import { chime, primeChimes } from '../../utils/chime';
 import { SoundToggle } from './components/SoundToggle';
 import { LayoutToggle } from './components/LayoutToggle';
 import { useChatLayout } from './hooks/useChatLayout';
+import { usePhoneKeyboard } from './hooks/usePhoneKeyboard';
 import { isTeamNote, parseThinking } from './components/ThinkingBlock';
 import { useDelayedClose } from './hooks/useDelayedClose';
 import { avatarStateFor, afterReply, pleased } from './avatarState';
@@ -763,20 +764,9 @@ export function ChatModal({
     };
   }, []);
 
-  useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
-    const root = document.documentElement;
-    const apply = () => { root.style.setProperty('--hsk-vvh', `${vv.height}px`); };
-    apply();
-    vv.addEventListener('resize', apply);
-    vv.addEventListener('scroll', apply);
-    return () => {
-      vv.removeEventListener('resize', apply);
-      vv.removeEventListener('scroll', apply);
-      root.style.removeProperty('--hsk-vvh');
-    };
-  }, []);
+  const mainRef = useRef<HTMLDivElement>(null);
+  const dockRef = useRef<HTMLDivElement>(null);
+  usePhoneKeyboard(overlayRef, mainRef, dockRef, msgsContainerRef);
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
@@ -1111,7 +1101,7 @@ export function ChatModal({
           {/* Outside the chat column, so in the wide layout the doodles can reach
               past it and fade out toward the screen edges. */}
           <KikuDoodles seed={(client as any)?.api?.siteId ?? ''} theme={hskThemeAttr} dir={isRTL ? 'rtl' : 'ltr'} waitForContent />
-          <div className="hsk-cb-main">
+          <div className="hsk-cb-main" ref={mainRef}>
 
             <ChatTopbar
               layoutControl={hasLayoutContent ? <LayoutToggle wide={chatLayout.wide} onToggle={handleToggleLayout} emphasized={layoutGuidance} /> : undefined}
@@ -1142,6 +1132,7 @@ export function ChatModal({
               exitHint={exitHint}
             />
 
+            <div className="hsk-cb-dock" ref={dockRef}>
             <div className="hsk-cb-msgs" ref={msgsContainerRef as any}>
               {displayMessages.length === 0 ? (
                 <OnboardingView
@@ -1287,6 +1278,7 @@ export function ChatModal({
                 />
               </div>
             )}
+            </div>
           </div>
 
           {voiceMode !== 'converse' && (
