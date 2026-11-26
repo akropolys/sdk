@@ -332,7 +332,7 @@ export const DEFAULT_UI_STRINGS = {
   micNoSpeech: "Didn't catch anything. Try again, a little closer to the mic.",
   micFailed: "Couldn't hear that. Try again.",
   clearChat: 'Clear chat',
-  memoryAsk: 'kiku can remember this chat for 24 hours, so you can pick up where you left off, even after leaving the page.',
+  memoryAsk: 'Remember this chat for 24 hours?',
   memoryRemember: 'Remember',
   memoryNotNow: 'Not now',
   memoryOn: 'kiku remembers this chat for 24 hours.',

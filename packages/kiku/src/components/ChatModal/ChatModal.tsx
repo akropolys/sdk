@@ -88,7 +88,7 @@ export function ChatModal({
   const client = useAkropolysContext();
   const cardFields = useCardFields();
   const { messages, sources, loading, streaming, error, errorCode, lastAction, lastIntent, allowedActions, send, queuedMessage, sendQueuedNow, appendSpokenExchange, stop, stopped, interrupted, continueGenerating, reset, referencedIds, humanPending, leaveHuman, memory, resumeFromReturn } = useKiku();
-  const [leaveAsk, setLeaveAsk] = useState<'close' | 'reset' | null>(null);
+  const [leaveAsk, setLeaveAsk] = useState<'close' | 'reset' | 'memory' | null>(null);
   const leaveRef = useRef<HTMLDivElement>(null);
   // A side-to-side nudge when the visitor tries anything else while the warning waits for an answer.
   const nudgeLeave = useCallback(() => {
@@ -100,13 +100,17 @@ export function ChatModal({
   }, []);
   useEffect(() => {
     if (!leaveAsk) return;
+    // The memory ask is a question, not a warning: anything else keeps the visitor in the chat.
+    const soft = leaveAsk === 'memory';
     const onKey = (e: KeyboardEvent) => {
+      if (soft && (e.key === 'Escape' || e.key.length === 1 || e.key === 'Enter' || e.key === 'Backspace')) { setLeaveAsk(null); return; }
       if (e.key.length === 1 || e.key === 'Enter' || e.key === 'Backspace') nudgeLeave();
     };
     // The conversation is frozen too, so retry, edit and suggestions cannot send behind the warning.
     const onPointer = (e: PointerEvent) => {
       const hit = (cls: string) => e.composedPath().some(n => (n as Element).classList?.contains(cls));
-      if (!hit('hsk-cb-leave') && !hit('hsk-cb-topbar')) nudgeLeave();
+      if (hit('hsk-cb-leave') || hit('hsk-cb-topbar')) return;
+      if (soft) setLeaveAsk(null); else nudgeLeave();
     };
     const msgs = msgsContainerRef.current as HTMLElement | null;
     msgs?.setAttribute('inert', '');
@@ -224,7 +228,6 @@ export function ChatModal({
     if (!askedFirst || inOnboarding || humanPending || memory.choice !== null || !client?.getKikuKey?.()) return;
     void memory.enable().then(() => setMemoryNote(true));
   }, [askedFirst, inOnboarding, humanPending, memory, client]);
-  const memoryAsk = askedFirst && !inOnboarding && !humanPending && memory.choice === null && !client?.getKikuKey?.();
   const [memoryBusy, setMemoryBusy] = useState(false);
   // A remembered chat, reopened, says so once; the next message lets it go.
   const noteShown = useRef(false);
@@ -734,12 +737,33 @@ export function ChatModal({
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) onClose();
     else exitOverlay();
   }, [exitOverlay, onClose, leaveHuman]);
+  // Asks once whether to remember the chat, then carries on with what the visitor was doing.
+  const afterMemoryRef = useRef<(() => void) | null>(null);
+  const askMemory = useCallback((then: () => void) => {
+    const worth = messages.some(m => m.role === 'user') && !inOnboarding && !humanPending && memory.choice === null && !memory.on;
+    if (!worth) return then();
+    afterMemoryRef.current = then;
+    setLeaveAsk('memory');
+  }, [messages, inOnboarding, humanPending, memory.choice, memory.on]);
+  const answerMemory = useCallback(async (remember: boolean) => {
+    if (remember) {
+      setMemoryBusy(true);
+      try { await memory.enable(); } catch { /* still close */ }
+      setMemoryBusy(false);
+    } else {
+      memory.decline();
+    }
+    setLeaveAsk(null);
+    const then = afterMemoryRef.current;
+    afterMemoryRef.current = null;
+    then?.();
+  }, [memory]);
   // While a person is on the request, the visitor chooses whether to keep it or end it.
   const requestClose = useCallback(() => {
     if (leaveAsk) nudgeLeave();
     else if (humanPending) setLeaveAsk('close');
-    else closeNow(false);
-  }, [humanPending, closeNow, leaveAsk, nudgeLeave]);
+    else askMemory(() => closeNow(false));
+  }, [humanPending, closeNow, leaveAsk, nudgeLeave, askMemory]);
 
   // A click outside the chat closes it only before a conversation starts.
   // After that a stray click redraws the close X instead (at most 4 times,
@@ -1250,27 +1274,23 @@ export function ChatModal({
                   composerRevealing && 'hsk-composer-reveal',
                 )}
               >
-                {(memoryAsk || memoryNote) && (
+                {memoryNote && (
                   <div className="hsk-cb-memory" role="status">
-                    <span className="hsk-cb-memory-text">{memoryAsk ? t('memoryAsk') : t('memoryOn')}</span>
-                    {memoryAsk ? (
-                      <span className="hsk-cb-memory-actions">
-                        <button type="button" className="hsk-cb-memory-btn" onClick={memory.decline}>{t('memoryNotNow')}</button>
-                        <button type="button" className="hsk-cb-memory-btn hsk-cb-memory-btn--primary" disabled={memoryBusy}
-                          onClick={() => { setMemoryBusy(true); memory.enable().catch(() => {}).finally(() => setMemoryBusy(false)); }}>
-                          {t('memoryRemember')}
-                        </button>
-                      </span>
-                    ) : (
-                      <span className="hsk-cb-memory-actions">
-                        <button type="button" className="hsk-cb-memory-btn" onClick={() => { memory.disable(); setMemoryNote(false); }}>{t('memoryTurnOff')}</button>
-                        <button type="button" className="hsk-cb-memory-btn" aria-label="Dismiss" onClick={() => setMemoryNote(false)}>×</button>
-                      </span>
-                    )}
+                    <span className="hsk-cb-memory-text">{t('memoryOn')}</span>
+                    <span className="hsk-cb-memory-actions">
+                      <button type="button" className="hsk-cb-memory-btn" onClick={() => { memory.disable(); setMemoryNote(false); }}>{t('memoryTurnOff')}</button>
+                      <button type="button" className="hsk-cb-memory-btn" aria-label="Dismiss" onClick={() => setMemoryNote(false)}>×</button>
+                    </span>
                   </div>
                 )}
                 <ChatComposer
-                  notice={leaveAsk && (
+                  notice={leaveAsk === 'memory' ? (
+                    <div className="hsk-cb-leave hsk-cb-leave--ask" role="alertdialog" ref={leaveRef}>
+                      <span>{t('memoryAsk')}</span>
+                      <button type="button" className="hsk-cb-leave-btn" disabled={memoryBusy} onClick={() => void answerMemory(false)}>{t('memoryNotNow')}</button>
+                      <button type="button" className="hsk-cb-leave-btn hsk-cb-leave-btn--end" disabled={memoryBusy} onClick={() => void answerMemory(true)}>{t('memoryRemember')}</button>
+                    </div>
+                  ) : leaveAsk && (
                     <div className="hsk-cb-leave" role="alertdialog" ref={leaveRef}>
                       <span>{t('leaveHumanWarning')}</span>
                       <button type="button" className="hsk-cb-leave-btn" onClick={() => setLeaveAsk(null)}>{t('leaveHumanStay')}</button>

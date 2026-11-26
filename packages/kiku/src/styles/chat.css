@@ -3809,6 +3809,11 @@
   background: var(--hsk-primary, #ff6a33);
   color: #fff;
 }
+/* A longer question wraps on a phone; its buttons stay together on the right. */
+.hsk-cb-leave--ask { flex-wrap: wrap; white-space: normal; justify-content: flex-end; row-gap: 3px; border-radius: 16px; }
+.hsk-cb-leave--ask > span { flex: 1 1 auto; line-height: 18px; padding: 3px 0; }
+.hsk-cb-leave--ask > .hsk-cb-leave-btn { white-space: nowrap; }
+@media (max-width: 480px) { .hsk-cb-leave--ask > span { flex-basis: 100%; } }
 
 .hsk-cb-error {
   display: block;
