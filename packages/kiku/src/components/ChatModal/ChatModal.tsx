@@ -39,6 +39,7 @@ const TRAY_EXIT_CEILING_MS = 700;
 const OVERLAY_EXIT_MS = 200;
 import { chime, primeChimes } from '../../utils/chime';
 import { SoundToggle } from './components/SoundToggle';
+import { MemoryToggle } from './components/MemoryToggle';
 import { LayoutToggle } from './components/LayoutToggle';
 import { useChatLayout } from './hooks/useChatLayout';
 import { usePhoneKeyboard } from './hooks/usePhoneKeyboard';
@@ -221,25 +222,14 @@ export function ChatModal({
   const awaitingConsent = onboarding && !!shopperLanguage && !!shopperName && !!entityLangPref && !termsAgreed;
   const inOnboarding = awaitingLang || awaitingName || awaitingEntityLang || awaitingConsent || isLangPreparing;
 
-  // Memory is asked once, after the first message; a visitor with a Kiku ID has it on.
-  const [memoryNote, setMemoryNote] = useState(false);
+  // A visitor who already has a Kiku ID has memory on, quietly.
   const askedFirst = messages.some(m => m.role === 'user');
   useEffect(() => {
     if (!askedFirst || inOnboarding || humanPending || memory.choice !== null || !client?.getKikuKey?.()) return;
-    void memory.enable().then(() => setMemoryNote(true));
+    void memory.enable();
   }, [askedFirst, inOnboarding, humanPending, memory, client]);
+  const memoryOff = memory.on ? { label: `${t('memoryOn')} ${t('memoryTurnOff')}`, onOff: memory.disable } : null;
   const [memoryBusy, setMemoryBusy] = useState(false);
-  // A remembered chat, reopened, says so once; the next message lets it go.
-  const noteShown = useRef(false);
-  useEffect(() => {
-    if (noteShown.current || !memory.on || !memory.hydrated || messages.length === 0) return;
-    noteShown.current = true;
-    setMemoryNote(true);
-  }, [memory.on, memory.hydrated, messages.length]);
-  const userTurns = messages.filter(m => m.role === 'user').length;
-  const userTurnsAtNote = useRef(0);
-  useEffect(() => { if (memoryNote) userTurnsAtNote.current = userTurns; }, [memoryNote]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (memoryNote && userTurns > userTurnsAtNote.current) setMemoryNote(false); }, [userTurns, memoryNote]);
 
   // Opened by a return from a link: kiku speaks first, from what the page shows.
   const returnDone = useRef(false);
@@ -1178,6 +1168,7 @@ export function ChatModal({
               currentTheme={currentTheme}
               onJumpToLatest={jumpToBottom}
               onReset={handleReset}
+              memoryOff={memoryOff}
               onClose={requestClose}
               onToggleThemeMenu={() => (themeMenuOpen ? closeThemeMenu() : setThemeMenuOpen(true))}
               onSelectTheme={(t) => { handleToggleTheme(t, true); }}
@@ -1274,15 +1265,6 @@ export function ChatModal({
                   composerRevealing && 'hsk-composer-reveal',
                 )}
               >
-                {memoryNote && (
-                  <div className="hsk-cb-memory" role="status">
-                    <span className="hsk-cb-memory-text">{t('memoryOn')}</span>
-                    <span className="hsk-cb-memory-actions">
-                      <button type="button" className="hsk-cb-memory-btn" onClick={() => { memory.disable(); setMemoryNote(false); }}>{t('memoryTurnOff')}</button>
-                      <button type="button" className="hsk-cb-memory-btn" aria-label="Dismiss" onClick={() => setMemoryNote(false)}>×</button>
-                    </span>
-                  </div>
-                )}
                 <ChatComposer
                   notice={leaveAsk === 'memory' ? (
                     <div className="hsk-cb-leave hsk-cb-leave--ask" role="alertdialog" ref={leaveRef}>
@@ -1364,6 +1346,7 @@ export function ChatModal({
           <div className={cn("hsk-cb-kiku-id-rail", isRTL ? "hsk-cb-kiku-id-rail--right" : "hsk-cb-kiku-id-rail--left", themeMenuOpen && !themeMenuClosing && 'is-theme-open')}>
             <div className="hsk-cb-dock-frost" aria-hidden="true" />
             <SoundToggle />
+            {memoryOff && <MemoryToggle label={memoryOff.label} onOff={memoryOff.onOff} />}
 
             {/* One pill that grows into the theme grid and shrinks back, like the voices pill. */}
             <div className={cn("hsk-cb-theme-squircle-wrap", themeMenuOpen && !themeMenuClosing && "is-open")} ref={themeMenuRef}>

@@ -794,7 +794,8 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
       images: attachments?.filter(a => a.type === 'image').map(a => a.preview || a.data),
     };
 
-    if (loading || streaming || memory.elsewhere) {
+    // A remembered chat is restored before anything is sent, so the model sees it.
+    if (loading || streaming || memory.elsewhere || !memory.hydrated) {
       if (pendingRef.current) return; // one queued message at a time
       pendingRef.current = { query, displayQuery, attachments, forcedIntent, captureTargets };
       setQueuedMessage({ ...userMsg, queued: true });
@@ -804,10 +805,10 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     setMessages(prev => [...prev, userMsg]);
     const history = messages.map(m => ({ role: m.role, content: m.content }));
     beginTurn(history, query, attachments, forcedIntent, captureTargets);
-  }, [messages, loading, streaming, beginTurn, memory.elsewhere]);
+  }, [messages, loading, streaming, beginTurn, memory.elsewhere, memory.hydrated]);
 
   useEffect(() => {
-    if (loading || streaming || memory.elsewhere) return;
+    if (loading || streaming || memory.elsewhere || !memory.hydrated) return;
 
     let settled = messages;
     if (spokenQueueRef.current.length > 0) {
@@ -832,7 +833,7 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
       images: pending.attachments?.filter(a => a.type === 'image').map(a => a.preview || a.data),
     }]);
     beginTurn(history, pending.query, pending.attachments, pending.forcedIntent, pending.captureTargets);
-  }, [loading, streaming, messages, beginTurn, memory.elsewhere]);
+  }, [loading, streaming, messages, beginTurn, memory.elsewhere, memory.hydrated]);
 
   const continueGenerating = useCallback(() => {
     if (loading || streaming) return;

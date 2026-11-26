@@ -4,6 +4,7 @@ import { ChevronLeftIcon, CloseIcon, TrashIcon } from './icons';
 import { THEMES, type ThemeId } from './themes';
 import { KikuAvatar, type KikuState, type KikuCue } from '../KikuAvatar';
 import { SoundToggle } from './components/SoundToggle';
+import { MemoryToggle } from './components/MemoryToggle';
 import { cn } from '../../utils/cn';
 import { useIslandMorph } from '../../utils/island';
 import { ThemeDiscoveryHint } from './components/ThemeDiscoveryHint';
@@ -31,6 +32,7 @@ export interface ChatTopbarProps {
   currentTheme?: ThemeId;
   onJumpToLatest?: () => void;
   onReset: () => void;
+  memoryOff?: { label: string; onOff: () => void } | null;
   onClose: () => void;
   onToggleThemeMenu?: () => void;
   onSelectTheme?: (theme: ThemeId) => void;
@@ -142,6 +144,7 @@ export function ChatTopbar({
   currentTheme = 'dark',
   onJumpToLatest,
   onReset,
+  memoryOff,
   onClose,
   onToggleThemeMenu,
   onSelectTheme,
@@ -385,6 +388,7 @@ export function ChatTopbar({
           <div className="hsk-cb-theme-block">
             <div className="hsk-cb-tray-aside">
               <SoundToggle compact />
+              {memoryOff && <MemoryToggle compact label={memoryOff.label} onOff={memoryOff.onOff} />}
               <span className="hsk-cb-tray-rule" aria-hidden="true" />
               <span className="hsk-cb-theme-vlabel" aria-hidden="true">Themes</span>
             </div>

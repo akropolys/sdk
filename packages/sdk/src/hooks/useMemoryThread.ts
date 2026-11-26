@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AkropolysClient } from '../client';
 import type { ChatMessage } from '../stream';
-import { memoryChoice, setMemoryChoice, toStoredMessages, holdTurn, releaseTurn, turnElsewhere, clearReturn, memoryKeys } from '../memory';
+import { memoryChoice, setMemoryChoice, toStoredMessages, holdTurn, releaseTurn, turnElsewhere, clearReturn, memoryKeys, mergeRestored } from '../memory';
 
 export interface MemoryState {
   on: boolean;          // this chat is remembered
@@ -42,7 +42,7 @@ export function useMemoryThread(
       if (thread?.session) client.adoptSessionId(thread.session);
       if (thread?.messages?.length && !busy) {
         savedRef.current = JSON.stringify(thread.messages);
-        setMessages(thread.messages);
+        setMessages(mergeRestored(messagesRef.current, thread.messages));
       }
     } catch { /* offline: keep what is shown */ }
     setHydrated(true);

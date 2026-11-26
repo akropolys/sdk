@@ -3809,11 +3809,14 @@
   background: var(--hsk-primary, #ff6a33);
   color: #fff;
 }
-/* A longer question wraps on a phone; its buttons stay together on the right. */
-.hsk-cb-leave--ask { flex-wrap: wrap; white-space: normal; justify-content: flex-end; row-gap: 3px; border-radius: 16px; }
-.hsk-cb-leave--ask > span { flex: 1 1 auto; line-height: 18px; padding: 3px 0; }
-.hsk-cb-leave--ask > .hsk-cb-leave-btn { white-space: nowrap; }
-@media (max-width: 480px) { .hsk-cb-leave--ask > span { flex-basis: 100%; } }
+/* One row: the question may wrap to two lines, the buttons stay beside it. */
+.hsk-cb-leave--ask { flex-wrap: nowrap; white-space: normal; gap: 6px; padding: 5px 5px 5px 12px; border-radius: 18px; }
+.hsk-cb-leave--ask > span { flex: 1 1 auto; min-width: 0; line-height: 15px; }
+.hsk-cb-leave--ask > .hsk-cb-leave-btn { flex: none; white-space: nowrap; height: 26px; padding: 0 10px; }
+@media (max-width: 400px) {
+  .hsk-cb-leave--ask { margin-inline-start: 10px; max-width: calc(100% - 20px); }
+  .hsk-cb-leave--ask > .hsk-cb-leave-btn { padding: 0 8px; }
+}
 
 .hsk-cb-error {
   display: block;
@@ -5139,52 +5142,4 @@
   .hsk-cb-source {
     animation: none;
   }
-}
-
-/* Opt-in memory: one calm line above the input. */
-.hsk-cb-memory {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 0 var(--hsk-gutter, 24px) 8px;
-  padding: 10px 10px 10px 14px;
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--hsk-chat-input-bg, #f3f4f6) 85%, transparent);
-  -webkit-backdrop-filter: blur(16px) saturate(1.4);
-  backdrop-filter: blur(16px) saturate(1.4);
-  box-shadow: 0 0 0 .5px color-mix(in srgb, var(--hsk-chat-text, #111) 12%, transparent);
-  color: var(--hsk-chat-muted, #6b7280);
-  font-size: 13px;
-  line-height: 1.4;
-  animation: hsk-fade-in-up .3s cubic-bezier(.2, 0, 0, 1) both;
-}
-
-.hsk-cb-memory { flex-wrap: wrap; row-gap: 4px; }
-.hsk-cb-memory-text { flex: 1 1 240px; min-width: 0; }
-.hsk-cb-memory-actions { display: flex; align-items: center; gap: 4px; flex: none; margin-inline-start: auto; }
-
-.hsk-cb-memory-btn {
-  border: 0;
-  background: none;
-  font: inherit;
-  font-weight: 600;
-  color: var(--hsk-chat-text, #111);
-  padding: 7px 12px;
-  border-radius: 999px;
-  cursor: pointer;
-}
-
-.hsk-cb-memory-btn--primary {
-  background: var(--hsk-primary, #ff6a33);
-  color: #fff;
-}
-
-.hsk-cb-memory-btn:disabled { opacity: .5; cursor: default; }
-
-@media (max-width: 768px) {
-  .hsk-cb-memory { margin: 0 8px 6px; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .hsk-cb-memory { animation: none; }
 }

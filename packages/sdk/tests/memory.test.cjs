@@ -80,3 +80,12 @@ test('the landing page is read as plain capped text', () => {
   assert.ok(page.text.startsWith('Order 12'));
   assert.equal(page.text.length, 4000);
 });
+
+test('a restored chat goes first and nothing is shown twice', () => {
+  const { m } = load();
+  const restored = [{ role: 'user', content: 'a gift for my son' }, { role: 'assistant', content: 'The Ceramic Mug' }];
+  assert.deepEqual([...m.mergeRestored([], restored).map(x => x.content)], ['a gift for my son', 'The Ceramic Mug']);
+  const typedEarly = [{ role: 'user', content: 'what did you recommend?' }];
+  assert.deepEqual([...m.mergeRestored(typedEarly, restored).map(x => x.content)], ['a gift for my son', 'The Ceramic Mug', 'what did you recommend?']);
+  assert.equal(m.mergeRestored(restored, restored).length, 2);
+});
