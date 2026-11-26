@@ -9,6 +9,7 @@ import {
 } from './types';
 import { AkropolysAPI, UIStrings, ScriptFont } from './api';
 import { KikuStream } from './stream';
+import type { ReturnPage } from './memory';
 import { stableStringify } from './utils/stableStringify';
 
 declare const process: any;
@@ -327,12 +328,12 @@ export class AkropolysClient {
     return ctx;
   }
 
-  chat(query: string, history: Array<{ role: 'user' | 'assistant'; content: string }> = [], attachments?: ChatAttachment[], forcedIntent?: string, captureTargets?: CaptureTarget[], actionReturn?: string): KikuStream {
+  chat(query: string, history: Array<{ role: 'user' | 'assistant'; content: string }> = [], attachments?: ChatAttachment[], forcedIntent?: string, captureTargets?: CaptureTarget[], actionReturn?: string, returnPage?: ReturnPage): KikuStream {
     const abortController = new AbortController();
     this.ensureDevice(); // the visitor is chatting: from now on this device is recognised
     const responsePromise = this.getCurrentContextAsync(abortController.signal).then(ctx => {
       if (abortController.signal.aborted) throw abortError();
-      return this.api.chatStream(query, history, abortController.signal, ctx, attachments, forcedIntent, captureTargets, actionReturn);
+      return this.api.chatStream(query, history, abortController.signal, ctx, attachments, forcedIntent, captureTargets, actionReturn, returnPage);
     });
     const stream = new KikuStream(responsePromise, abortController, (request, signal) => this.api.handleBrowserAction(request, signal));
     (this.activeChatStreams ??= new Set()).add(stream);
@@ -423,6 +424,13 @@ export class AkropolysClient {
 
   getSessionId(): string {
     return this.sessionId;
+  }
+
+  // A remembered chat keeps one session across this site's tabs.
+  adoptSessionId(sid: string): void {
+    if (!/^[A-Za-z0-9-]{8,64}$/.test(sid) || sid === this.sessionId) return;
+    this.sessionId = sid;
+    try { window.sessionStorage.setItem('akropolys_session_id', sid); } catch {}
   }
 
   private initSession() {

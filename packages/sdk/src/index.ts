@@ -6,6 +6,8 @@ export { executeBrowserAction } from './browserActions';
 export { actionLinkContexts } from './actionLinks';
 export type { ActionLinkContext } from './actionLinks';
 export { armActionReturn } from './actionReturns';
+export { memoryChoice, setMemoryChoice, markReturn, takeReturn, returnPage } from './memory';
+export type { MemoryChoice, ReturnPage, StoredThread } from './memory';
 export type { ActionHeaders, BrowserActionRequest, BrowserActionResult } from './browserActions';
 export type { ActionAuth, ClerkActionClient, ClerkActionTokenOptions, Auth0ActionClient, Auth0ActionParams, SupabaseActionClient } from './actionAuth';
 export type { UIStrings, ScriptFont, SpeechResult, VoiceRefusal } from './api';

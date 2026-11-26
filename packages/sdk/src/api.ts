@@ -10,6 +10,7 @@ import { executeBrowserAction, type ActionHeaders, type BrowserActionRequest, ty
 import type { ActionAuth } from './actionAuth';
 import { normalizeIngestRecord, recordID, ingestionEntity } from './ingestionRecord';
 import { loadConversation, saveConversation, listenConversation, type HumanConversation, type ConversationEvent, type VisitorRequest } from './conversation';
+import type { StoredThread, ReturnPage } from './memory';
 
 export interface UIStrings {
   strings: Record<string, string>;
@@ -155,6 +156,27 @@ export class AkropolysAPI {
 
   // The visitor's requests on this site, found by their Kiku identity; empty for a visitor without one.
   // null when the answer is stale (the visitor switched conversation meanwhile): keep the list you have.
+  // The visitor's remembered chat; needs their Kiku identity. null when there is none.
+  async getThread(): Promise<StoredThread | null> {
+    if (!this.getKikuKey?.()) return null;
+    const res = await fetch(`${this.apiUrl}/threads/current?siteId=${encodeURIComponent(this.siteId)}`, { headers: this.buildHeaders() });
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`thread ${res.status}`);
+    const body = await res.json();
+    return body?.thread && Array.isArray(body.thread.messages) ? body.thread : null;
+  }
+
+  async putThread(thread: StoredThread): Promise<void> {
+    if (!this.getKikuKey?.()) return;
+    const res = await fetch(`${this.apiUrl}/threads/current?siteId=${encodeURIComponent(this.siteId)}`, { method: 'PUT', headers: this.buildHeaders(), body: JSON.stringify(thread), keepalive: true });
+    if (!res.ok) throw new Error(`thread ${res.status}`);
+  }
+
+  async deleteThread(): Promise<void> {
+    if (!this.getKikuKey?.()) return;
+    await fetch(`${this.apiUrl}/threads/current?siteId=${encodeURIComponent(this.siteId)}`, { method: 'DELETE', headers: this.buildHeaders(), keepalive: true });
+  }
+
   async myRequests(): Promise<VisitorRequest[] | null> {
     const generation = this.conversationGeneration;
     if (!this.getKikuKey?.()) return [];
@@ -575,12 +597,14 @@ export class AkropolysAPI {
     attachments?: ChatAttachment[],
     forcedIntent?: string,
     captureTargets?: CaptureTarget[],
-    actionReturn?: string
+    actionReturn?: string,
+    returnPage?: ReturnPage
   ): Promise<Response> {
     log('info', 'chatStream query', query);
     const headers = this.buildHeaders(true);
     const body: Record<string, any> = { query, siteId: this.siteId, history, currentContext };
     if (actionReturn) body.actionReturn = actionReturn;
+    if (returnPage) body.returnPage = returnPage;
     const shopperName = this.getShopperName?.();
     if (shopperName) body.shopperName = shopperName;
     const shopperLanguage = this.getShopperLanguage?.();

@@ -1,6 +1,8 @@
 import { normalizeEntityImages } from '../entityImages';
 import { actionLinkContexts } from '../actionLinks';
 import { watchActionReturns } from '../actionReturns';
+import { useMemoryThread, type MemoryState } from './useMemoryThread';
+import { returnPending, clearReturn, type ReturnPage } from '../memory';
 import type { BrowserActionResult } from '../browserActions';
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import type { VisitorRequest } from '../conversation';
@@ -48,6 +50,8 @@ interface UseKikuReturn {
   requests: VisitorRequest[]; // the visitor's requests for a person on this site, newest first
   activeRequestId: string | null;
   openRequest: (id: string) => void;
+  memory: MemoryState; // opt-in: this chat kept for 24 hours under the visitor's Kiku identity
+  resumeFromReturn: (token?: string, page?: ReturnPage) => boolean;
   // A key Kiku made for the visitor with their request, until it has been shown to them.
 }
 
@@ -159,6 +163,10 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
   const [humanStatus, setHumanStatus] = useState<string | null>(null);
   // A request found at mount is replayed once, so a reload or page change keeps what was said to the team.
   const resumeRef = useRef({ id: conversationId, upTo: client?.api.conversation?.cursor ?? 0, shown: 0, auto: true });
+
+  const memory = useMemoryThread(client, messages, setMessages, loading || streaming, !!conversationId);
+  const memoryRef = useRef(memory);
+  memoryRef.current = memory;
 
   const [requests, setRequests] = useState<VisitorRequest[]>([]);
   const [attached, setAttached] = useState(0);
@@ -708,6 +716,7 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     forcedIntent?: string,
     captureTargets?: CaptureTarget[],
     actionReturn?: string,
+    returnPage?: ReturnPage,
   ) => {
     setMessages(prev => [...prev, { role: 'assistant', content: '', thinking: '' }]);
     setLoading(true);
@@ -723,7 +732,7 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     displayedLenRef.current = 0;
 
     try {
-      const stream = client.chat(query, history, attachments, forcedIntent, captureTargets, actionReturn);
+      const stream = client.chat(query, history, attachments, forcedIntent, captureTargets, actionReturn, returnPage);
       activeStreamRef.current = stream;
       if (actionReturn) {
         let accepted = false;
@@ -746,6 +755,12 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
   const resumeReturn = useRef<(token: string) => boolean>(() => false);
   resumeReturn.current = token => {
     if (loadingRef.current || streamingRef.current || humanStatus === 'waiting' || humanStatus === 'human') return false;
+    const site = client?.api.siteId;
+    if (memoryRef.current.on && site) {
+      // Another tab already picked this return up.
+      if (!returnPending(site, token)) { returnWatcher.current?.clear(); return false; }
+      clearReturn(site);
+    }
     loadingRef.current = true;
     beginTurn(messages.map(message => ({ role: message.role, content: message.content })),
       'Check the result of the external action I returned from.', undefined, undefined, undefined, token);
@@ -760,6 +775,15 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
   }, [client, client?.api.siteId]);
   useEffect(() => { returnWatcher.current?.check(); }, [loading, streaming, humanStatus]);
 
+  // Back from a link in another tab or after a reload: kiku speaks first.
+  const resumeFromReturn = useCallback((token?: string, page?: ReturnPage) => {
+    if (loadingRef.current || streamingRef.current || humanStatus === 'waiting' || humanStatus === 'human') return false;
+    loadingRef.current = true;
+    beginTurn(messages.map(message => ({ role: message.role, content: message.content })),
+      'Check the result of the external action I returned from.', undefined, undefined, undefined, token, page);
+    return true;
+  }, [messages, beginTurn, humanStatus]);
+
   const send = useCallback(async (query: string, displayQuery?: string, attachments?: ChatAttachment[], forcedIntent?: string, captureTargets?: CaptureTarget[]) => {
     if (!query.trim()) return;
     lastSentAtRef.current = Date.now();
@@ -770,7 +794,7 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
       images: attachments?.filter(a => a.type === 'image').map(a => a.preview || a.data),
     };
 
-    if (loading || streaming) {
+    if (loading || streaming || memory.elsewhere) {
       if (pendingRef.current) return; // one queued message at a time
       pendingRef.current = { query, displayQuery, attachments, forcedIntent, captureTargets };
       setQueuedMessage({ ...userMsg, queued: true });
@@ -780,10 +804,10 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     setMessages(prev => [...prev, userMsg]);
     const history = messages.map(m => ({ role: m.role, content: m.content }));
     beginTurn(history, query, attachments, forcedIntent, captureTargets);
-  }, [messages, loading, streaming, beginTurn]);
+  }, [messages, loading, streaming, beginTurn, memory.elsewhere]);
 
   useEffect(() => {
-    if (loading || streaming) return;
+    if (loading || streaming || memory.elsewhere) return;
 
     let settled = messages;
     if (spokenQueueRef.current.length > 0) {
@@ -808,7 +832,7 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
       images: pending.attachments?.filter(a => a.type === 'image').map(a => a.preview || a.data),
     }]);
     beginTurn(history, pending.query, pending.attachments, pending.forcedIntent, pending.captureTargets);
-  }, [loading, streaming, messages, beginTurn]);
+  }, [loading, streaming, messages, beginTurn, memory.elsewhere]);
 
   const continueGenerating = useCallback(() => {
     if (loading || streaming) return;
@@ -842,6 +866,7 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
   }, [client, messages, loading, streaming, consumeStream]);
 
   const reset = useCallback(() => {
+    memoryRef.current.end();
     returnWatcher.current?.clear();
     activeStreamRef.current?.destroy();
     stopFlush();
@@ -941,5 +966,5 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
   return { messages, sources: resolvedSources, referencedIds, loading, streaming, error, errorCode, lastAction, lastIntent, allowedActions, send, queuedMessage, sendQueuedNow, appendSpokenExchange, stop, stopped, interrupted, continueGenerating, reset, humanPending: !!conversationId && (humanStatus === 'waiting' || humanStatus === 'human'), leaveHuman,
     // A visitor with no Kiku identity still sees the one request this browser remembers.
     requests: requests.length > 0 || !conversationId ? requests : [{ id: conversationId, status: (humanStatus ?? 'waiting') as VisitorRequest['status'], summary: '' }],
-    activeRequestId: conversationId, openRequest };
+    activeRequestId: conversationId, openRequest, memory, resumeFromReturn };
 }
