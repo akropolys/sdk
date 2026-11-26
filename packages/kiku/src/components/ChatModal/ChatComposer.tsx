@@ -194,18 +194,6 @@ export function ChatComposer({
   // While a notice asks for a decision, the input takes no typing or clicks.
   const cardRef = useRef<HTMLDivElement>(null);
   const blocked = !!notice;
-
-  // Phones: one round button that is voice, send or stop.
-  const hasContent = !!input.trim() || attachments.length > 0;
-  const actState = (loading || streaming) && !launching ? 'stop' : (hasContent || !(enableVoice && canConverse)) ? 'send' : 'voice';
-  const onAct = () => {
-    if (actState === 'stop') stop();
-    else if (actState === 'voice') { if (voiceBlocked) setVoiceError?.(t('errAccountRequired')); else startVoice('converse'); }
-    else { launch(); handleSend(); }
-  };
-  const actDisabled = actState === 'send'
-    ? langSwitching || inputLocked || chromeLoading || !hasContent
-    : actState === 'voice' ? loading || chromeLoading : false;
   useEffect(() => { cardRef.current?.toggleAttribute('inert', blocked); }, [blocked]);
 
   return (
@@ -370,7 +358,6 @@ export function ChatComposer({
             className={cn("hsk-cb-input-box", chromeLoading && "hsk-cb-input-box--waiting")}
             data-cascade={placeholderReplay % 2 ? 'b' : 'a'}
             data-tools={toolsOpen ? 'open' : 'closed'}
-            data-mimi={onOpenMimi ? '' : undefined}
             style={{ '--hsk-text-sweep': `${placeholderSweepMs}ms` } as React.CSSProperties}
           >
             <input
@@ -476,19 +463,6 @@ export function ChatComposer({
                 </span>
               </button>
             )}
-            <button
-              type="button"
-              className={cn('hsk-cb-act', classNames.sendButton)}
-              data-state={actState}
-              onClick={onAct}
-              onMouseDown={e => e.preventDefault()}
-              disabled={actDisabled}
-              aria-label={actState === 'stop' ? 'Stop generating' : actState === 'voice' ? 'Voice conversation' : 'Send message'}
-            >
-              <span className="hsk-cb-act-ico hsk-cb-act-ico--voice" aria-hidden="true"><WaveformIcon /></span>
-              <span className="hsk-cb-act-ico hsk-cb-act-ico--send" aria-hidden="true"><ArrowUpIcon /></span>
-              <span className="hsk-cb-act-ico hsk-cb-act-ico--stop" aria-hidden="true"><StopIcon /></span>
-            </button>
           </div>
         </div>
       {voiceBlocked ? (

@@ -1266,15 +1266,13 @@
   box-decoration-break: clone;
 }
 
-/* Phones: one layer for chat + input; a glass pill with attach, text and one action. */
+/* Phones: the input floats as a glass pill over the chat: [+] text [send]. */
 .hsk-cb-dock {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
 }
-
-.hsk-cb-act { display: none; }
 
 @media (max-width: 768px) {
   .hsk-cb-overlay .hsk-cb-msgs {
@@ -1289,28 +1287,30 @@
 
   .hsk-cb-overlay .hsk-cb-input-wrap {
     padding: 6px 8px !important;
-    padding-bottom: max(10px, env(safe-area-max-inset-bottom, 0px), env(safe-area-inset-bottom)) !important;
+    padding-bottom: max(8px, env(safe-area-inset-bottom)) !important;
     background: transparent !important;
   }
 
   .hsk-cb-overlay .hsk-cb-input-wrap[data-kb] {
-    padding-bottom: 10px !important;
+    padding-bottom: 8px !important;
   }
 
+  /* Solid from the pill's middle down, so nothing peeks out beneath it. */
   .hsk-cb-overlay .hsk-cb-input-wrap::before {
     content: '';
     position: absolute;
-    inset: -24px 0 0;
+    inset: -20px 0 0;
     z-index: -1;
     pointer-events: none;
-    background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--hsk-chat-bg, #0a0a0a) 82%, transparent) 60%);
-    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 50%);
-    mask-image: linear-gradient(to bottom, transparent, #000 50%);
+    background: linear-gradient(to bottom,
+      color-mix(in srgb, var(--hsk-chat-bg, #0a0a0a) 0%, transparent) 0,
+      color-mix(in srgb, var(--hsk-chat-bg, #0a0a0a) 70%, transparent) 30px,
+      var(--hsk-chat-bg, #0a0a0a) 52px);
   }
 
   .hsk-cb-overlay .hsk-cb-input-card {
     border-radius: 24px;
-    background: color-mix(in srgb, var(--hsk-chat-input-bg, #191919) 76%, transparent) !important;
+    background: color-mix(in srgb, var(--hsk-chat-input-bg, #191919) 78%, transparent) !important;
     -webkit-backdrop-filter: blur(18px) saturate(1.5);
     backdrop-filter: blur(18px) saturate(1.5);
     box-shadow:
@@ -1327,89 +1327,78 @@
 
   .hsk-cb-overlay .hsk-cb-input-box,
   .hsk-cb-overlay .hsk-cb-input-box[data-expanded="true"] {
-    grid-template-columns: auto 1fr auto;
-    column-gap: 2px;
-    min-height: 48px;
-    padding: 6px 6px 6px 2px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    column-gap: 4px;
+    min-height: 40px;
+    padding: 4px;
+    box-sizing: content-box;
   }
 
-  .hsk-cb-overlay .hsk-cb-input-box > .hsk-cb-send,
-  .hsk-cb-overlay .hsk-cb-input-box > .hsk-chat-send,
-  .hsk-cb-overlay .hsk-cb-input-box > .hsk-cb-voice-mode-btn,
-  .hsk-cb-overlay .hsk-cb-input-box > .hsk-cb-tools-toggle {
+  .hsk-cb-overlay .hsk-cb-input-box > .hsk-cb-attach-btn,
+  .hsk-cb-overlay .hsk-cb-input-box > .hsk-cb-voice-mode-btn {
     display: none !important;
   }
 
-  .hsk-cb-overlay .hsk-cb-input-box > .hsk-cb-attach-btn {
+  .hsk-cb-overlay .hsk-cb-input-box > .hsk-cb-tools-toggle {
     display: inline-flex !important;
     grid-column: 1;
     grid-row: 1;
     width: 40px !important;
-    height: 36px !important;
-    border-radius: 18px !important;
+    height: 40px !important;
+    border-radius: 50% !important;
     background: transparent !important;
     color: var(--hsk-chat-muted, #888) !important;
   }
 
-  .hsk-cb-overlay .hsk-cb-input-box[data-mimi] > .hsk-cb-attach-btn { display: none !important; }
-  .hsk-cb-overlay .hsk-cb-input-box[data-mimi] > .hsk-cb-tools-toggle {
-    display: inline-flex !important;
-    grid-column: 1;
-    grid-row: 1;
-    background: transparent !important;
+  .hsk-cb-overlay .hsk-cb-input-box > .hsk-cb-tools-toggle svg { width: 24px; height: 24px; stroke-width: 1.8; }
+
+  .hsk-cb-overlay .hsk-cb-input-box > .hsk-cb-tools-toggle--open {
+    background: color-mix(in srgb, var(--hsk-primary, #ff6a33) 14%, transparent) !important;
+    color: var(--hsk-primary, #ff6a33) !important;
   }
 
-  .hsk-cb-overlay .hsk-cb-input-box > .hsk-cb-field { grid-column: 2; grid-row: 1; }
+  .hsk-cb-overlay .hsk-cb-input-box > .hsk-cb-field {
+    grid-column: 2;
+    grid-row: 1;
+    margin-inline: 2px 0;
+    padding-inline-end: 4px;
+    box-sizing: border-box;
+    min-width: 0;
+  }
+
+  .hsk-cb-overlay .hsk-cb-input-box > .hsk-cb-send,
+  .hsk-cb-overlay .hsk-cb-input-box > .hsk-chat-send {
+    grid-column: 3;
+    grid-row: 1;
+    width: 40px !important;
+    height: 40px !important;
+    border-radius: 50% !important;
+  }
+
+  .hsk-cb-overlay .hsk-cb-input-box > .hsk-cb-send svg,
+  .hsk-cb-overlay .hsk-cb-input-box > .hsk-chat-send svg { width: 22px !important; height: 22px !important; }
+
+  .hsk-cb-overlay .hsk-cb-textarea {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    padding-inline-end: 6px;
+  }
+
+  .hsk-cb-overlay .hsk-cb-input-box[data-expanded="true"] {
+    grid-template-rows: auto 40px;
+    row-gap: 2px;
+  }
 
   .hsk-cb-overlay .hsk-cb-input-box[data-expanded="true"] > .hsk-cb-field {
     grid-column: 1 / -1;
     grid-row: 1;
-    padding: 4px 8px 0 12px;
+    margin-inline: 0;
+    padding: 6px 12px 0 14px;
   }
 
-  .hsk-cb-overlay .hsk-cb-input-box[data-expanded="true"] > .hsk-cb-attach-btn,
   .hsk-cb-overlay .hsk-cb-input-box[data-expanded="true"] > .hsk-cb-tools-toggle { grid-column: 1; grid-row: 2; }
-  .hsk-cb-overlay .hsk-cb-input-box[data-expanded="true"] > .hsk-cb-act { grid-column: 3; grid-row: 2; }
-
-  .hsk-cb-act {
-    display: inline-grid;
-    grid-column: 3;
-    grid-row: 1;
-    justify-self: end;
-    position: relative;
-    width: 36px;
-    height: 36px;
-    padding: 0;
-    border: 0;
-    border-radius: 50%;
-    color: #fff;
-    background: var(--hsk-primary, #ff6a33);
-    cursor: pointer;
-    transition: background-color .18s cubic-bezier(.2, 0, 0, 1), opacity .18s cubic-bezier(.2, 0, 0, 1), transform .12s;
-  }
-
-  .hsk-cb-act:active:not(:disabled) { transform: scale(.94); }
-  .hsk-cb-act[data-state="stop"] { background: #e5342a; }
-  .hsk-cb-act:disabled { opacity: .4; cursor: default; }
-
-  .hsk-cb-act-ico {
-    position: absolute;
-    inset: 0;
-    display: grid;
-    place-items: center;
-    opacity: 0;
-    transform: scale(.6);
-    transition: opacity .18s cubic-bezier(.2, 0, 0, 1), transform .18s cubic-bezier(.2, 0, 0, 1);
-  }
-
-  .hsk-cb-act[data-state="voice"] .hsk-cb-act-ico--voice,
-  .hsk-cb-act[data-state="send"] .hsk-cb-act-ico--send,
-  .hsk-cb-act[data-state="stop"] .hsk-cb-act-ico--stop {
-    opacity: 1;
-    transform: none;
-  }
-
-  .hsk-cb-act-ico svg { width: 18px; height: 18px; }
+  .hsk-cb-overlay .hsk-cb-input-box[data-expanded="true"] > .hsk-cb-send,
+  .hsk-cb-overlay .hsk-cb-input-box[data-expanded="true"] > .hsk-chat-send { grid-column: 3; grid-row: 2; }
 }
 
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
@@ -1422,9 +1411,4 @@
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .hsk-cb-act,
-  .hsk-cb-act-ico { transition: none; }
 }

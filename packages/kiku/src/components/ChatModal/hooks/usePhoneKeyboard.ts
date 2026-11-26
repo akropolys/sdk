@@ -22,10 +22,10 @@ const IME_EASE = bezier(0.2, 0, 0, 1);
 const LEAD_EASE = bezier(0, 0, 0.2, 1);
 const IME_MS = 285;
 const DOWN_MS = 240;
-const GAP = 10;
+const GAP = 8;
 const LEARN_KEY = 'hsk-kb';
 
-type Anim = { from: number; to: number; t0: number; dur: number; ease: (p: number) => number; done?: () => void };
+type Anim = { c0: number; c1: number; s0: number; s1: number; t0: number; dur: number; ease: (p: number) => number; done?: () => void };
 
 const store = {
   get(): { d: number; t: number } | null {
@@ -37,8 +37,9 @@ const store = {
 };
 
 /**
- * Phone keyboard: the panel always covers the screen; the chat and the input
- * move together as one layer and land just above the keyboard.
+ * Phone keyboard: the panel always covers the screen and the input lands just
+ * above the keyboard. Layout changes once; the input and the chat glide into
+ * place from where they were, on the keyboard's curve.
  */
 export function usePhoneKeyboard(
   overlayRef: RefObject<HTMLElement | null>,
@@ -82,33 +83,29 @@ export function usePhoneKeyboard(
     const themeObs = new MutationObserver(() => { paintRoot(); clearTimeout(repaintT); repaintT = window.setTimeout(paintRoot, 420); });
     themeObs.observe(ov, { attributes: true, attributeFilter: ['data-hsk-theme'] });
 
-    const probe = (h: string) => {
-      const el = document.createElement('div');
-      el.setAttribute('aria-hidden', 'true');
-      el.style.cssText = `position:fixed;bottom:0;width:0;visibility:hidden;pointer-events:none;height:${h}`;
-      ov.appendChild(el);
-      return el;
-    };
-    const sab = probe('env(safe-area-inset-bottom, 0px)');
-    const sabMax = probe('env(safe-area-max-inset-bottom, 0px)');
+    const sab = document.createElement('div');
+    sab.setAttribute('aria-hidden', 'true');
+    sab.style.cssText = 'position:fixed;bottom:0;width:0;visibility:hidden;pointer-events:none;height:env(safe-area-inset-bottom,0px)';
+    ov.appendChild(sab);
 
     const lh0 = ov.clientHeight;
     const dpr = window.devicePixelRatio || 1;
     const snap = (v: number) => Math.round(v * dpr) / dpr;
+    const comp = () => dock.querySelector('.hsk-cb-composer-wrapper') as HTMLElement | null;
     const wrap = () => dock.querySelector('.hsk-cb-input-wrap') as HTMLElement | null;
     const pill = () => dock.querySelector('.hsk-cb-input-card') as HTMLElement | null;
     const list = () => scrollerRef.current;
     const isField = (t: EventTarget | null) => !!(t as HTMLElement | null)?.classList?.contains('hsk-cb-textarea');
 
-    let y = 0, anim: Anim | null = null, raf = 0, guard = 0, watchUntil = 0;
+    let cY = 0, sY = 0, anim: Anim | null = null, raf = 0, guard = 0, watchUntil = 0;
     let lhPrev = lh0, focusAt = 0, padTop = 0, padBottom = 0, vkLift = 0, kb = 0, kbY = 0, nav = 0;
     let anchorEnd = 0, writing = false, compH = -1, compEl: Element | null = null;
+    let seen: { c: number; s: number } | null = null;
     let learned = store.get();
 
     const off = () => (vv ? vv.offsetTop : 0);
     const vh = () => (vv ? vv.height : ov.clientHeight);
     const pad = () => { const w = wrap(); return w ? parseFloat(getComputedStyle(w).paddingBottom) || GAP : GAP; };
-    const navProbe = () => Math.max(sab.offsetHeight, sabMax.offsetHeight);
 
     const onListScroll = () => {
       const l = list();
@@ -128,84 +125,121 @@ export function usePhoneKeyboard(
       padTop = t; padBottom = b;
       restoreAnchor();
     };
-    const setY = (v: number) => {
-      y = v;
-      const r = snap(v);
-      dock.style.transform = r ? `translate3d(0,${r}px,0)` : '';
+
+    // Two transforms, one clock: the input and the chat content.
+    const apply = () => {
+      const c = comp(), l = list();
+      const rc = snap(cY), rs = snap(sY);
+      if (c) c.style.transform = rc ? `translate3d(0,${rc}px,0)` : '';
+      if (l) l.style.transform = rs ? `translate3d(0,${rs}px,0)` : '';
     };
-    const stop = () => { anim = null; dock.style.willChange = ''; };
+    const setT = (c: number, s: number) => { cY = c; sY = s; apply(); };
+    const willChange = (on: boolean) => {
+      const c = comp(), l = list();
+      if (c) c.style.willChange = on ? 'transform' : '';
+      if (l) l.style.willChange = on ? 'transform' : '';
+    };
+    const stop = () => { anim = null; willChange(false); };
+    const animate = (c1: number, s1: number, dur: number, ease: (p: number) => number, done?: () => void) => {
+      if (reduce.matches || dur <= 0 || (c1 === cY && s1 === sY)) { stop(); setT(c1, s1); done?.(); return; }
+      anim = { c0: cY, c1, s0: sY, s1, t0: performance.now(), dur, ease, done };
+      willChange(true);
+      if (!raf) raf = requestAnimationFrame(step);
+    };
+
+    // Where the input and the first line of chat sit on screen right now.
+    const contentEl = () => { const l = list(); return (l?.firstElementChild as HTMLElement | null) || l; };
+    const where = () => {
+      const c = comp(), e = contentEl();
+      return c && e ? { c: c.getBoundingClientRect().top, s: e.getBoundingClientRect().top } : null;
+    };
+    // After a layout change, start both from where they were and glide home.
+    const glideFrom = (before: { c: number; s: number } | null, dur: number, clampUp = false) => {
+      setT(0, 0);
+      const after = where();
+      if (!before || !after) { stop(); return; }
+      let dc = before.c - after.c;
+      if (clampUp && dc > 0) dc = 0; // never draw the input below a shrunk layout
+      setT(dc, before.s - after.s);
+      animate(0, 0, dur, IME_EASE);
+    };
 
     const step = (now: number) => {
       raf = 0;
       if (ov.clientHeight !== lhPrev) onLayout();
+      if (useVk) pollVk();
       if (anim) {
         const a = anim;
         const p = Math.max(0, Math.min(1, (now - a.t0) / a.dur));
-        setY(a.from + (a.to - a.from) * a.ease(p));
-        if (p >= 1) { anim = null; dock.style.willChange = ''; a.done?.(); }
+        const e = a.ease(p);
+        setT(a.c0 + (a.c1 - a.c0) * e, a.s0 + (a.s1 - a.s0) * e);
+        if (p >= 1) { anim = null; willChange(false); a.done?.(); }
       }
-      if (anim || performance.now() < watchUntil) raf = requestAnimationFrame(step);
-    };
+      const live = performance.now() < watchUntil;
+      seen = live ? where() : null;
+      if (anim || live) raf = requestAnimationFrame(step);
+    }
     const watch = (ms: number) => { watchUntil = performance.now() + ms; if (!raf) raf = requestAnimationFrame(step); };
-    const animate = (to: number, dur: number, ease: (p: number) => number, done?: () => void) => {
-      if (reduce.matches || dur <= 0 || to === y) { stop(); setY(to); done?.(); return; }
-      anim = { from: y, to, t0: performance.now(), dur, ease, done };
-      dock.style.willChange = 'transform';
-      if (!raf) raf = requestAnimationFrame(step);
-    };
 
-    // The chat runs under the glass input; its last line stays clear of it.
+    // The chat's last line stays clear of the glass input.
     const roComp = typeof ResizeObserver === 'function' ? new ResizeObserver(() => syncComp()) : null;
     const syncComp = () => {
-      const w = dock.querySelector('.hsk-cb-composer-wrapper');
+      const w = comp();
       if (w !== compEl) { if (compEl) roComp?.unobserve(compEl); compEl = w; if (w) roComp?.observe(w); }
-      const ch = w ? (w as HTMLElement).offsetHeight : 0;
+      const ch = w ? w.offsetHeight : 0;
       if (ch === compH) return;
       compH = ch;
       dock.style.setProperty('--hsk-composer-h', `${ch}px`);
       restoreAnchor();
     };
 
-    // Every viewport change: keep the panel's top in view, place the chat, catch the one-step resize.
+    const keyboardShown = () => (useVk && kb > 0) || lh0 - vh() > 80;
     const onLayout = () => {
       syncComp();
       const lh = ov.clientHeight, o = off(), h = vh();
-      if (useVk ? !kb : lh0 - h <= 80) nav = navProbe();
+      if (!keyboardShown()) nav = sab.offsetHeight;
       const d = lhPrev - lh;
       lhPrev = lh;
+      // Keyboard API not honoured: fall back to the visual viewport.
+      const vkLive = useVk && (kb > 0 || lh - h <= 80);
       let lift = vkLift;
-      if (!useVk) {
+      if (!vkLive) {
         const pinned = lh >= lh0 - 80 && lh0 - h > 80;
         const kbTop = o + h - (pinned ? nav : 0);
         lift = Math.max(0, (lh - pad()) - (kbTop - GAP));
-        if (pinned && y < 0 && !(anim && anim.to === 0)) { clearTimeout(guard); stop(); setY(0); }
+        if (pinned && cY < 0 && !(anim && anim.c1 === 0)) { clearTimeout(guard); stop(); setT(0, 0); }
       }
-      place(Math.round(o), Math.round(lift));
-      if (!useVk && Math.abs(d) > 40) {
+      if (Math.abs(d) > 40 && !useVk) {
         clearTimeout(guard);
+        const before = seen;
+        place(Math.round(o), Math.round(lift));
         if (d > 0) {
           const t = focusAt ? Math.round(performance.now() - focusAt) : 0;
           if (t > 0 && t < 1000) { learned = { d, t }; store.set(learned); }
-          stop(); setY(0);
+          glideFrom(before, 200, true);
         } else {
-          stop(); setY(d); animate(0, DOWN_MS, IME_EASE);
+          glideFrom(before, DOWN_MS);
         }
+        return;
       }
-    };
+      place(Math.round(o), Math.round(lift));
+    }
 
     const onFocus = (e: FocusEvent) => {
       if (!isField(e.target)) return;
       focusAt = performance.now();
       onListScroll();
       watch(1200);
-      if (!useVk && learned && ov.clientHeight >= lh0 - 40 && window.matchMedia('(pointer: coarse)').matches) {
-        animate(-learned.d, Math.max(60, learned.t - 15), LEAD_EASE);
-        guard = window.setTimeout(() => { if (ov.clientHeight >= lh0 - 40) animate(0, DOWN_MS, IME_EASE); }, 900);
+      if (useVk) { pollVk(); return; }
+      // Lead with the input only, so the chat moves once.
+      if (learned && ov.clientHeight >= lh0 - 40 && window.matchMedia('(pointer: coarse)').matches) {
+        animate(-learned.d, sY, Math.max(60, learned.t - 15), LEAD_EASE);
+        guard = window.setTimeout(() => { if (ov.clientHeight >= lh0 - 40) animate(0, 0, DOWN_MS, IME_EASE); }, 900);
       }
     };
     const onBlur = (e: FocusEvent) => { if (isField(e.target)) { onListScroll(); watch(1200); } };
 
-    // The reported rect leaves out the gesture bar the panel reaches under.
+    // The reported rect leaves out a gesture bar the panel reaches under.
     const kbEdge = () => (kbY > 0 ? kbY : ov.clientHeight - kb) - nav;
     const pillGap = () => { const p = pill(); return p ? kbEdge() - GAP - p.getBoundingClientRect().bottom : 0; };
     const settle = () => requestAnimationFrame(() => {
@@ -213,17 +247,31 @@ export function usePhoneKeyboard(
       const g = pillGap();
       if (Math.abs(g) > 0.5) { vkLift = Math.max(0, Math.round(vkLift - g)); place(padTop, vkLift); }
     });
-    const onGeo = (e: any) => {
-      const r = e.target.boundingRect;
-      kb = r.height; kbY = r.y;
+    const onKeyboard = (height: number, y: number) => {
+      if (height === kb && y === kbY) return;
+      const before = where();
+      kb = height; kbY = y;
       wrap()?.toggleAttribute('data-kb', kb > 0);
-      const cur = vkLift - y;
-      const target = kb ? Math.max(0, Math.round(cur - pillGap())) : 0;
-      place(padTop, 0); vkLift = 0; setY(-cur);
-      animate(-target, IME_MS, IME_EASE, () => { vkLift = target; setY(0); place(padTop, target); settle(); });
+      const target = kb ? Math.max(0, Math.round(vkLift - cY - pillGap())) : 0;
+      onListScroll();
+      vkLift = target;
+      place(padTop, target);
+      glideFrom(before, IME_MS);
+      if (anim) anim.done = settle; else settle();
+      watch(600);
     };
+    // geometrychange can be missed (keyboard already up, or a race); read it too.
+    const pollVk = () => {
+      const r = vk?.boundingRect;
+      if (r) onKeyboard(r.height, r.y);
+    };
+    const onGeo = (e: any) => { const r = e.target.boundingRect; onKeyboard(r.height, r.y); };
 
-    const tick = window.setInterval(() => { if (!anim) onLayout(); }, 150);
+    const tick = window.setInterval(() => {
+      if (anim) return;
+      onLayout();
+      if (useVk) { pollVk(); if (kb && Math.abs(pillGap()) > 1) settle(); }
+    }, 150);
     const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(() => onLayout()) : null;
     ro?.observe(ov);
     const scroller = list();
@@ -234,6 +282,7 @@ export function usePhoneKeyboard(
     dock.addEventListener('focusin', onFocus);
     dock.addEventListener('focusout', onBlur);
     onLayout();
+    if (useVk) pollVk();
 
     return () => {
       stop(); cancelAnimationFrame(raf); clearTimeout(guard); clearTimeout(repaintT); clearInterval(tick);
@@ -248,9 +297,10 @@ export function usePhoneKeyboard(
       if (meta && metaPrev !== null) meta.setAttribute('content', metaPrev);
       html.style.overflow = prevOverflow;
       [html, body].forEach((el, i) => el.style.setProperty('background-color', bgPrev[i][0], bgPrev[i][1]));
-      sab.remove(); sabMax.remove();
+      sab.remove();
       ov.removeAttribute('data-hsk-solid');
-      dock.style.transform = ''; dock.style.willChange = ''; dock.style.removeProperty('--hsk-composer-h');
+      setT(0, 0);
+      dock.style.removeProperty('--hsk-composer-h');
       main.style.removeProperty('padding-top'); main.style.removeProperty('padding-bottom');
       wrap()?.removeAttribute('data-kb');
     };
