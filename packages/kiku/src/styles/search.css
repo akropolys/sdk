@@ -1287,7 +1287,7 @@
 
   .hsk-cb-overlay .hsk-cb-input-wrap {
     padding: 6px 8px !important;
-    padding-bottom: max(8px, env(safe-area-inset-bottom)) !important;
+    padding-bottom: max(10px, env(safe-area-inset-bottom)) !important;
     background: transparent !important;
   }
 
@@ -1314,9 +1314,8 @@
     -webkit-backdrop-filter: blur(18px) saturate(1.5);
     backdrop-filter: blur(18px) saturate(1.5);
     box-shadow:
-      0 0 0 .5px var(--hsk-glass-edge, color-mix(in srgb, var(--hsk-chat-text, #fff) 14%, transparent)),
-      inset 0 1px 0 var(--hsk-glass-edge-top, transparent),
-      0 6px 20px rgba(0, 0, 0, .1) !important;
+      0 0 0 .5px color-mix(in srgb, var(--hsk-chat-text, #fff) 12%, transparent),
+      0 6px 20px rgba(0, 0, 0, .08) !important;
   }
 
   .hsk-cb-overlay[data-hsk-solid] .hsk-cb-input-card {
@@ -1361,7 +1360,7 @@
   .hsk-cb-overlay .hsk-cb-input-box > .hsk-cb-field {
     grid-column: 2;
     grid-row: 1;
-    margin-inline: 2px 0;
+    margin-inline: 0;
     padding-inline-end: 4px;
     box-sizing: border-box;
     min-width: 0;
@@ -1378,6 +1377,16 @@
 
   .hsk-cb-overlay .hsk-cb-input-box > .hsk-cb-send svg,
   .hsk-cb-overlay .hsk-cb-input-box > .hsk-chat-send svg { width: 20px !important; height: 20px !important; }
+
+  .hsk-cb-overlay .hsk-cb-input-box > .hsk-cb-send:disabled {
+    opacity: 1;
+    background: color-mix(in srgb, var(--hsk-chat-muted, #888) 45%, transparent) !important;
+    color: #fff !important;
+    box-shadow: none !important;
+  }
+
+  .hsk-cb-overlay .hsk-cb-input-box .hsk-cb-textarea,
+  .hsk-cb-overlay .hsk-cb-input-box .hsk-animated-placeholder { --hsk-input-font-size: 16px; }
 
   /* Solid kite, nudged to its optical centre. */
   .hsk-cb-overlay .hsk-cb-input-box > .hsk-cb-send .hsk-kite-wing { fill: currentColor; }
@@ -1405,6 +1414,14 @@
   .hsk-cb-overlay .hsk-cb-input-box[data-expanded="true"] > .hsk-cb-tools-toggle { grid-column: 1; grid-row: 2; }
   .hsk-cb-overlay .hsk-cb-input-box[data-expanded="true"] > .hsk-cb-send,
   .hsk-cb-overlay .hsk-cb-input-box[data-expanded="true"] > .hsk-chat-send { grid-column: 3; grid-row: 2; }
+}
+
+/* Home: the greeting sits centred; the doodles step back. */
+@media (max-width: 768px) {
+  .hsk-cb-onboarding-card:has(> .hsk-cb-hello-wrap--home) { align-items: center; }
+  .hsk-cb-onboarding-card .hsk-cb-hello-wrap--home { align-items: center !important; text-align: center !important; }
+  .hsk-cb-onboarding-card .hsk-cb-hello-wrap--home > * { text-align: center !important; }
+  .hsk-cb-panel:has(.hsk-cb-hello-wrap--home) > .hsk-cb-doodles { opacity: .55 !important; transition: opacity .4s ease; }
 }
 
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {

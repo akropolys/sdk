@@ -303,7 +303,7 @@ export function OnboardingView({
           </div>
 
         ) : justCompleted ? (
-          <div className="hsk-cb-hello-wrap" key="step-completed">
+          <div className="hsk-cb-hello-wrap hsk-cb-hello-wrap--home" key="step-completed">
             <h2 className="hsk-cb-hello">{tNode('allSet', { name: shopperName })}</h2>
             <p className="hsk-cb-hello-lead">
               {entityLangPref === 'translated'
@@ -313,13 +313,13 @@ export function OnboardingView({
           </div>
 
         ) : shopperName ? (
-          <div className="hsk-cb-hello-wrap" key="step-returning">
+          <div className="hsk-cb-hello-wrap hsk-cb-hello-wrap--home" key="step-returning">
             <h2 className="hsk-cb-hello">{tNode('greetReturning', { name: shopperName })}</h2>
             <p className="hsk-cb-hello-lead">{t('greetReturningLead')}</p>
           </div>
 
         ) : (
-          <div className="hsk-cb-hello-wrap" key="step-initial">
+          <div className="hsk-cb-hello-wrap hsk-cb-hello-wrap--home" key="step-initial">
             <h2 className="hsk-cb-hello">Hello, I am <b>kiku</b>.</h2>
             <p className="hsk-cb-hello-lead">
               Ask me to find, show or save anything. I look through this whole website for you.
