@@ -66,17 +66,28 @@ export function usePhoneKeyboard(
     const prevVk = vk ? vk.overlaysContent : null;
     try { if (vk && window.isSecureContext) { vk.overlaysContent = true; useVk = vk.overlaysContent === true; } } catch {}
 
+    // While open: reach under the gesture bar, and resize with the keyboard if the API is out.
     const meta = document.querySelector('meta[name="viewport"]');
     const metaPrev = meta ? meta.getAttribute('content') : null;
-    if (meta && metaPrev && !useVk && /width\s*=\s*device-width/i.test(metaPrev) && !/interactive-widget/i.test(metaPrev)) {
-      meta.setAttribute('content', metaPrev + ', interactive-widget=resizes-content');
+    if (meta && metaPrev && /width\s*=\s*device-width/i.test(metaPrev)) {
+      let next = metaPrev;
+      if (!/viewport-fit/i.test(next)) next += ', viewport-fit=cover';
+      if (!useVk && !/interactive-widget/i.test(next)) next += ', interactive-widget=resizes-content';
+      if (next !== metaPrev) meta.setAttribute('content', next);
     }
+    // The browser's own bars take the panel colour too.
+    const themeMeta = (document.querySelector('meta[name="theme-color"]:not([media])') as HTMLMetaElement | null)
+      || Object.assign(document.createElement('meta'), { name: 'theme-color' });
+    const themeOwned = !themeMeta.isConnected;
+    const themePrev = themeMeta.getAttribute('content');
+    if (themeOwned) document.head.appendChild(themeMeta);
 
     // The root wears the panel colour, so nothing shows past a shrinking layout.
     const bgPrev = [html, body].map(el => [el.style.getPropertyValue('background-color'), el.style.getPropertyPriority('background-color')]);
     const paintRoot = () => {
       const c = getComputedStyle(panel).backgroundColor;
       [html, body].forEach(el => el.style.setProperty('background-color', c, 'important'));
+      themeMeta.setAttribute('content', c);
     };
     paintRoot();
     let repaintT = 0;
@@ -295,6 +306,7 @@ export function usePhoneKeyboard(
       dock.removeEventListener('focusout', onBlur);
       try { if (vk) vk.overlaysContent = prevVk; } catch {}
       if (meta && metaPrev !== null) meta.setAttribute('content', metaPrev);
+      if (themeOwned) themeMeta.remove(); else if (themePrev !== null) themeMeta.setAttribute('content', themePrev);
       html.style.overflow = prevOverflow;
       [html, body].forEach((el, i) => el.style.setProperty('background-color', bgPrev[i][0], bgPrev[i][1]));
       sab.remove();

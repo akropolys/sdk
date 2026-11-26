@@ -1329,8 +1329,9 @@
   .hsk-cb-overlay .hsk-cb-input-box[data-expanded="true"] {
     grid-template-columns: auto minmax(0, 1fr) auto;
     column-gap: 4px;
+    row-gap: 0;
     min-height: 40px;
-    padding: 4px;
+    padding: 4px 6px;
     box-sizing: content-box;
   }
 
@@ -1376,7 +1377,12 @@
   }
 
   .hsk-cb-overlay .hsk-cb-input-box > .hsk-cb-send svg,
-  .hsk-cb-overlay .hsk-cb-input-box > .hsk-chat-send svg { width: 22px !important; height: 22px !important; }
+  .hsk-cb-overlay .hsk-cb-input-box > .hsk-chat-send svg { width: 20px !important; height: 20px !important; }
+
+  /* Solid kite, nudged to its optical centre. */
+  .hsk-cb-overlay .hsk-cb-input-box > .hsk-cb-send .hsk-kite-wing { fill: currentColor; }
+  .hsk-cb-overlay .hsk-cb-input-box > .hsk-cb-send .hsk-kite-spine { stroke: transparent; }
+  .hsk-cb-overlay .hsk-cb-input-box > .hsk-cb-send .hsk-telegram-icon { margin: 1px 1px 0 0; }
 
   .hsk-cb-overlay .hsk-cb-textarea {
     overflow-wrap: anywhere;
