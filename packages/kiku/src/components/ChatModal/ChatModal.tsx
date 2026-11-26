@@ -39,7 +39,6 @@ const TRAY_EXIT_CEILING_MS = 700;
 const OVERLAY_EXIT_MS = 200;
 import { chime, primeChimes } from '../../utils/chime';
 import { SoundToggle } from './components/SoundToggle';
-import { MemoryToggle } from './components/MemoryToggle';
 import { LayoutToggle } from './components/LayoutToggle';
 import { useChatLayout } from './hooks/useChatLayout';
 import { usePhoneKeyboard } from './hooks/usePhoneKeyboard';
@@ -228,7 +227,6 @@ export function ChatModal({
     if (!askedFirst || inOnboarding || humanPending || memory.choice !== null || !client?.getKikuKey?.()) return;
     void memory.enable();
   }, [askedFirst, inOnboarding, humanPending, memory, client]);
-  const memoryOff = memory.on ? { label: `${t('memoryOn')} ${t('memoryTurnOff')}`, onOff: memory.disable } : null;
   const [memoryBusy, setMemoryBusy] = useState(false);
 
   // Opened by a return from a link: kiku speaks first, from what the page shows.
@@ -1168,7 +1166,6 @@ export function ChatModal({
               currentTheme={currentTheme}
               onJumpToLatest={jumpToBottom}
               onReset={handleReset}
-              memoryOff={memoryOff}
               onClose={requestClose}
               onToggleThemeMenu={() => (themeMenuOpen ? closeThemeMenu() : setThemeMenuOpen(true))}
               onSelectTheme={(t) => { handleToggleTheme(t, true); }}
@@ -1346,7 +1343,6 @@ export function ChatModal({
           <div className={cn("hsk-cb-kiku-id-rail", isRTL ? "hsk-cb-kiku-id-rail--right" : "hsk-cb-kiku-id-rail--left", themeMenuOpen && !themeMenuClosing && 'is-theme-open')}>
             <div className="hsk-cb-dock-frost" aria-hidden="true" />
             <SoundToggle />
-            {memoryOff && <MemoryToggle label={memoryOff.label} onOff={memoryOff.onOff} />}
 
             {/* One pill that grows into the theme grid and shrinks back, like the voices pill. */}
             <div className={cn("hsk-cb-theme-squircle-wrap", themeMenuOpen && !themeMenuClosing && "is-open")} ref={themeMenuRef}>

@@ -335,8 +335,6 @@ export const DEFAULT_UI_STRINGS = {
   memoryAsk: 'Remember this chat for 24 hours?',
   memoryRemember: 'Remember',
   memoryNotNow: 'Not now',
-  memoryOn: 'kiku remembers this chat for 24 hours.',
-  memoryTurnOff: 'Turn off',
   thinking: 'Thinking',
   thoughtForSeconds: 'Thought for {duration}',
   thoughtProcess: 'Thought process',
