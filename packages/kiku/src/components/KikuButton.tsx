@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { primeChimes } from '../utils/chime';
 import { getShadowContainer } from '../utils/shadowRoot';
 import type { AkropolysTheme, ChatSource } from '@akropolys/sdk';
-import { useAkropolysContext } from '@akropolys/sdk';
+import { useAkropolysContext, memoryChoice, takeReturn } from '@akropolys/sdk';
 import { cn } from '../utils/cn';
 import { resolveTheme } from '../utils/theme';
 import { warmChrome, warmLanguage } from '../utils/chromeWarm';
@@ -77,6 +77,17 @@ export function KikuButton({
 
   // Replies from the team that arrived while the chat was closed.
   const [unread, setUnread] = useState(0);
+  const [returnClaim, setReturnClaim] = useState<{ token?: string } | null>(null);
+
+  // Back from a link left from a remembered chat: reopen it here.
+  useEffect(() => {
+    const site = client?.api?.siteId;
+    if (!site || !client?.getKikuKey?.() || memoryChoice(site) !== 'on') return;
+    const claim = takeReturn(site);
+    if (!claim) return;
+    setReturnClaim(claim);
+    setOpen(true);
+  }, [client]);
   useEffect(() => {
     if (open) { setUnread(0); return; }
     let current = true;
@@ -147,6 +158,7 @@ export function KikuButton({
   }, [warmShadow]);
 
   const close = useCallback(() => {
+    setReturnClaim(null);
     setOpen(false);
     requestAnimationFrame(() => btnRef.current?.focus());
   }, []);
@@ -200,6 +212,7 @@ export function KikuButton({
           voiceLang={voiceLang}
           enableVision={enableVision}
           ttsVoice={ttsVoice}
+          returnClaim={returnClaim}
         />,
         getShadowContainer() ?? document.body
       )}

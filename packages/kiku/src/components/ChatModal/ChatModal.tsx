@@ -3,7 +3,7 @@ import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useId
 import { flushSync } from 'react-dom';
 import { THEMES, isThemeId, themeDef, DEFAULT_THEME, type ThemeId } from './themes';
 import { useKiku, ChatSource, ChatAttachment, CaptureTarget, subscribeLiveStream, type ChatMessage } from '@akropolys/sdk';
-import { useAkropolysContext, useCardFields } from '@akropolys/sdk';
+import { useAkropolysContext, useCardFields, returnPage } from '@akropolys/sdk';
 import { detailsOf, detailsText } from '../../utils/cardDetails';
 import { cn } from '../../utils/cn';
 import { animateNudge } from '../../utils/nudge';
@@ -83,10 +83,11 @@ export function ChatModal({
   enableVision = false,
   ttsVoice = 'Algenib',
   origin,
+  returnClaim,
 }: ChatModalProps) {
   const client = useAkropolysContext();
   const cardFields = useCardFields();
-  const { messages, sources, loading, streaming, error, errorCode, lastAction, lastIntent, allowedActions, send, queuedMessage, sendQueuedNow, appendSpokenExchange, stop, stopped, interrupted, continueGenerating, reset, referencedIds, humanPending, leaveHuman } = useKiku();
+  const { messages, sources, loading, streaming, error, errorCode, lastAction, lastIntent, allowedActions, send, queuedMessage, sendQueuedNow, appendSpokenExchange, stop, stopped, interrupted, continueGenerating, reset, referencedIds, humanPending, leaveHuman, memory, resumeFromReturn } = useKiku();
   const [leaveAsk, setLeaveAsk] = useState<'close' | 'reset' | null>(null);
   const leaveRef = useRef<HTMLDivElement>(null);
   // A side-to-side nudge when the visitor tries anything else while the warning waits for an answer.
@@ -215,6 +216,35 @@ export function ChatModal({
   const awaitingEntityLang = onboarding && !!shopperLanguage && !!shopperName && !entityLangPref;
   const awaitingConsent = onboarding && !!shopperLanguage && !!shopperName && !!entityLangPref && !termsAgreed;
   const inOnboarding = awaitingLang || awaitingName || awaitingEntityLang || awaitingConsent || isLangPreparing;
+
+  // Memory is asked once, after the first message; a visitor with a Kiku ID has it on.
+  const [memoryNote, setMemoryNote] = useState(false);
+  const askedFirst = messages.some(m => m.role === 'user');
+  useEffect(() => {
+    if (!askedFirst || inOnboarding || humanPending || memory.choice !== null || !client?.getKikuKey?.()) return;
+    void memory.enable().then(() => setMemoryNote(true));
+  }, [askedFirst, inOnboarding, humanPending, memory, client]);
+  const memoryAsk = askedFirst && !inOnboarding && !humanPending && memory.choice === null && !client?.getKikuKey?.();
+  const [memoryBusy, setMemoryBusy] = useState(false);
+  // A remembered chat, reopened, says so once; the next message lets it go.
+  const noteShown = useRef(false);
+  useEffect(() => {
+    if (noteShown.current || !memory.on || !memory.hydrated || messages.length === 0) return;
+    noteShown.current = true;
+    setMemoryNote(true);
+  }, [memory.on, memory.hydrated, messages.length]);
+  const userTurns = messages.filter(m => m.role === 'user').length;
+  const userTurnsAtNote = useRef(0);
+  useEffect(() => { if (memoryNote) userTurnsAtNote.current = userTurns; }, [memoryNote]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (memoryNote && userTurns > userTurnsAtNote.current) setMemoryNote(false); }, [userTurns, memoryNote]);
+
+  // Opened by a return from a link: kiku speaks first, from what the page shows.
+  const returnDone = useRef(false);
+  useEffect(() => {
+    if (!returnClaim || returnDone.current || !memory.on || !memory.hydrated) return;
+    returnDone.current = true;
+    resumeFromReturn(returnClaim.token, returnPage());
+  }, [returnClaim, memory.on, memory.hydrated, resumeFromReturn]);
   const inputLocked = awaitingEntityLang || awaitingConsent || isLangPreparing;
 
   const [prevPreparingForComposer, setPrevPreparingForComposer] = useState(isLangPreparing);
@@ -1220,6 +1250,25 @@ export function ChatModal({
                   composerRevealing && 'hsk-composer-reveal',
                 )}
               >
+                {(memoryAsk || memoryNote) && (
+                  <div className="hsk-cb-memory" role="status">
+                    <span className="hsk-cb-memory-text">{memoryAsk ? t('memoryAsk') : t('memoryOn')}</span>
+                    {memoryAsk ? (
+                      <span className="hsk-cb-memory-actions">
+                        <button type="button" className="hsk-cb-memory-btn" onClick={memory.decline}>{t('memoryNotNow')}</button>
+                        <button type="button" className="hsk-cb-memory-btn hsk-cb-memory-btn--primary" disabled={memoryBusy}
+                          onClick={() => { setMemoryBusy(true); memory.enable().catch(() => {}).finally(() => setMemoryBusy(false)); }}>
+                          {t('memoryRemember')}
+                        </button>
+                      </span>
+                    ) : (
+                      <span className="hsk-cb-memory-actions">
+                        <button type="button" className="hsk-cb-memory-btn" onClick={() => { memory.disable(); setMemoryNote(false); }}>{t('memoryTurnOff')}</button>
+                        <button type="button" className="hsk-cb-memory-btn" aria-label="Dismiss" onClick={() => setMemoryNote(false)}>×</button>
+                      </span>
+                    )}
+                  </div>
+                )}
                 <ChatComposer
                   notice={leaveAsk && (
                     <div className="hsk-cb-leave" role="alertdialog" ref={leaveRef}>

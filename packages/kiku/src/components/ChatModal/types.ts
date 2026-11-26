@@ -218,7 +218,7 @@ export const ONBOARDING_UI_STRINGS: Record<string, string> = {
   termsSessionTitle: "A random code",
   termsSessionDesc: "Your browser keeps a random code so kiku can remember your conversation. The code is not linked to your name.",
   termsMemoryTitle: "What is kept",
-  termsMemoryDesc: "Chat messages aren't saved for analytics. Search-bar queries and usage counts help this website improve. If you ask to speak to its team, that support conversation is saved. Things you save with @kiku are kept at mimi.akropolys.cloud, and only your secret key opens them.",
+  termsMemoryDesc: "Chat messages aren't saved for analytics. If you let kiku remember a chat, it is kept for 24 hours after your last message under a Kiku ID made for this browser, so you can pick up where you left off. Only you can open it, and Clear chat deletes it at once. Search-bar queries and usage counts help this website improve. If you ask to speak to its team, that support conversation is saved. Things you save with @kiku are kept at mimi.akropolys.cloud, and only your secret key opens them.",
   termsCookieTitle: "This website's own rules",
   termsCookieDesc: "This website may use cookies or collect more information. kiku does not control this.",
   termsAiTitle: "From this website, explained by AI",
@@ -288,7 +288,7 @@ export const DEFAULT_UI_STRINGS = {
   termsSessionTitle: "A random code",
   termsSessionDesc: "Your browser keeps a random code so kiku can remember your conversation. The code is not linked to your name.",
   termsMemoryTitle: "What is kept",
-  termsMemoryDesc: "Chat messages aren't saved for analytics. Search-bar queries and usage counts help this website improve. If you ask to speak to its team, that support conversation is saved. Things you save with @kiku are kept at mimi.akropolys.cloud, and only your secret key opens them.",
+  termsMemoryDesc: "Chat messages aren't saved for analytics. If you let kiku remember a chat, it is kept for 24 hours after your last message under a Kiku ID made for this browser, so you can pick up where you left off. Only you can open it, and Clear chat deletes it at once. Search-bar queries and usage counts help this website improve. If you ask to speak to its team, that support conversation is saved. Things you save with @kiku are kept at mimi.akropolys.cloud, and only your secret key opens them.",
   termsCookieTitle: "This website's own rules",
   termsCookieDesc: "This website may use cookies or collect more information. kiku does not control this.",
   termsAiTitle: "From this website, explained by AI",
@@ -332,6 +332,11 @@ export const DEFAULT_UI_STRINGS = {
   micNoSpeech: "Didn't catch anything. Try again, a little closer to the mic.",
   micFailed: "Couldn't hear that. Try again.",
   clearChat: 'Clear chat',
+  memoryAsk: 'kiku can remember this chat for 24 hours, so you can pick up where you left off, even after leaving the page.',
+  memoryRemember: 'Remember',
+  memoryNotNow: 'Not now',
+  memoryOn: 'kiku remembers this chat for 24 hours.',
+  memoryTurnOff: 'Turn off',
   thinking: 'Thinking',
   thoughtForSeconds: 'Thought for {duration}',
   thoughtProcess: 'Thought process',
@@ -518,6 +523,8 @@ export interface ChatModalProps extends Pick<KikuButtonProps, 'title' | 'logo' |
   classNames?: any;
   origin?: ModalOrigin | null;
   onClose: () => void;
+  // Opened because the visitor came back from a link left from a remembered chat.
+  returnClaim?: { token?: string } | null;
 }
 
 // A photo in the composer shows at once from its file; data fills in when the sending copy is ready.

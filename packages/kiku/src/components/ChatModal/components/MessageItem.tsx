@@ -1,6 +1,7 @@
 import React from 'react';
-import { useAkropolysContext, armActionReturn, type ChatMessage, type ChatSource, type ChatAction } from '@akropolys/sdk';
+import { useAkropolysContext, type ChatMessage, type ChatSource, type ChatAction } from '@akropolys/sdk';
 import { cn } from '../../../utils/cn';
+import { noteLeaving } from '../../../utils/leaving';
 import { stripToolMarkup } from '../../../utils/toolMarkup';
 import { renderMarkdown, safeHref, createWriting, type WritingStore } from '../../../utils/markdown';
 import { lineDirection } from '../../../utils/textDirection';
@@ -140,7 +141,8 @@ export function MessageItem({
   workingOn,
   doodleTheme,
 }: MessageItemProps) {
-  const api = useAkropolysContext()?.api;
+  const client = useAkropolysContext();
+  const api = client?.api;
   const doodleSeed = api?.siteId ?? '';
   const imageHosts = hostsOf([api?.apiUrl, ...(isLast ? sources : (msg.sources ?? [])).flatMap(s => [s.image, s.url])]);
   // The products this answer is about; their names get a faint pill in the text.
@@ -373,7 +375,7 @@ export function MessageItem({
                       <MarkdownBlock content={external.content} streaming={isLast && streaming} hosts={imageHosts} names={entityNames} live={isLast && (streaming || loading)} />
                     </div>
                   )}
-                  <ExternalLinks links={external.links} t={t} onOpen={link => { if (api?.siteId) armActionReturn(api.siteId, link.returnToken); }} />
+                  <ExternalLinks links={external.links} t={t} onOpen={link => noteLeaving(client, link.returnToken)} />
                   {hasCalcDisclaimer && (
                     <div className="hsk-cb-calc-disclaimer">
                       {t('calcDisclaimer')}

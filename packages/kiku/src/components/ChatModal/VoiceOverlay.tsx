@@ -7,9 +7,10 @@ import { VoiceCanvas } from '../VoiceCanvas';
 import KikuDoodles, { WorkingVeil } from '../KikuDoodles';
 import { LightboxModal } from './components/LightboxModal';
 import { SourcesCarousel } from './components/SourcesCarousel';
-import { normalizeEntityImages, armActionReturn, type ActionLinkContext, type ChatSource } from '@akropolys/sdk';
+import { normalizeEntityImages, useAkropolysContext, type ActionLinkContext, type ChatSource } from '@akropolys/sdk';
 import { ExternalLinks } from './components/ExternalLinks';
 import { extractExternalLinks } from '../../utils/externalLinks';
+import { noteLeaving } from '../../utils/leaving';
 import type { LiveImage, LiveSource, LiveTurn } from '../../utils/liveVoice';
 
 // Every image of the call in a row above the wave: the photo, then each edit, newest last.
@@ -177,6 +178,7 @@ export function VoiceOverlay({
 }: VoiceOverlayProps) {
   const threadRef = useRef<HTMLDivElement | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
+  const client = useAkropolysContext();
   const fileRef = useRef<HTMLInputElement | null>(null);
   const turns = [...earlier.turns, ...(live.turns ?? [])];
   const images = [...earlier.images, ...(live.images ?? [])];
@@ -248,7 +250,7 @@ export function VoiceOverlay({
             </div>
           ),
         )}
-        <ExternalLinks links={links} t={t} onOpen={link => armActionReturn(siteId, link.returnToken)} />
+        <ExternalLinks links={links} t={t} onOpen={link => noteLeaving(client, link.returnToken)} />
         <div ref={endRef} />
       </div>
 
