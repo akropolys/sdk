@@ -4403,6 +4403,7 @@
   object-fit: contain;
 }
 .hsk-cb-topbar-logo > img[style] { height: auto; }
+.hsk-cb-topbar-logo > img, .hsk-cb-topbar-brand { pointer-events: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 .hsk-cb-topbar-mark:active .hsk-cb-topbar-logo { transform: scale(.95); }
 
 .hsk-cb-sound-pill {

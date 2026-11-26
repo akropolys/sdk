@@ -21,8 +21,8 @@ export function externalLink(value: string, base: string): ExternalLink | undefi
       : on('youtube.com') || on('youtu.be') ? 'youtube'
       : host === 'mail.google.com' || on('gmail.com') ? 'gmail'
       : on('mpesa.com') || on('m-pesa.com') || on('safaricom.co.ke') ? 'mpesa'
-      : host === 'checkout.stripe.com' ? 'checkout' : undefined;
-    const names = { youtube: 'YouTube', gmail: 'Gmail', slack: 'Slack', mpesa: 'M-Pesa', checkout: 'Stripe', email: 'Email', phone: 'Phone' };
+      : host === 'checkout.stripe.com' || host === 'buy.polar.sh' || (on('polar.sh') && url.pathname.startsWith('/checkout')) ? 'checkout' : undefined;
+    const names = { youtube: 'YouTube', gmail: 'Gmail', slack: 'Slack', mpesa: 'M-Pesa', checkout: on('polar.sh') ? 'Polar' : 'Stripe', email: 'Email', phone: 'Phone' };
     return {
       url: value,
       destination: service ? names[service] : host.replace(/^www\./, ''),

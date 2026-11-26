@@ -52,7 +52,7 @@ const LOGO_H = 16;
 function NamePill({ title, brandIcon, pillRef }: { title: string; brandIcon?: string; pillRef: React.MutableRefObject<HTMLElement | null> }) {
   return (
     <span ref={pillRef as React.Ref<HTMLSpanElement>} className={cn('hsk-cb-topbar-name', brandIcon && 'has-brand')} title={title}>
-      {brandIcon && <img className="hsk-cb-topbar-brand" src={brandIcon} alt="" width={14} height={14} />}
+      {brandIcon && <img className="hsk-cb-topbar-brand" src={brandIcon} alt="" width={14} height={14} draggable={false} onContextMenu={e => e.preventDefault()} />}
       <span className="hsk-cb-topbar-title">{title}</span>
     </span>
   );
@@ -104,6 +104,8 @@ function LogoPill({ src, title, pillRef }: { src: string; title: string; pillRef
         ref={imgRef}
         src={src}
         alt={title}
+        draggable={false}
+        onContextMenu={e => e.preventDefault()}
         style={ratio === null ? undefined : { width: `${Math.round(LOGO_H * ratio * 100) / 100}px`, aspectRatio: String(ratio) }}
         onLoad={measure}
         onError={() => setFailed(true)}
