@@ -426,6 +426,12 @@ export class AkropolysClient {
     return this.sessionId;
   }
 
+  // A new chat starts a new session, so nothing the server noted carries over.
+  renewSession(): void {
+    this.sessionId = generateUUID();
+    try { window.sessionStorage.setItem('akropolys_session_id', this.sessionId); } catch {}
+  }
+
   // A remembered chat keeps one session across this site's tabs.
   adoptSessionId(sid: string): void {
     if (!/^[A-Za-z0-9-]{8,64}$/.test(sid) || sid === this.sessionId) return;

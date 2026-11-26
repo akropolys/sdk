@@ -869,6 +869,7 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
   const reset = useCallback(() => {
     memoryRef.current.end();
     returnWatcher.current?.clear();
+    client?.renewSession?.();
     activeStreamRef.current?.destroy();
     stopFlush();
     streamDoneRef.current = true;
@@ -892,7 +893,7 @@ export function useKiku(options: UseKikuOptions = {}): UseKikuReturn {
     setLastAction(null);
     setLastIntent(null);
     detach();
-  }, [detach, stopFlush]);
+  }, [detach, stopFlush, client]);
 
   // Never carry one site's visible history or pending input into another site.
   const previousSiteScope = useRef(liveValueScope(client));

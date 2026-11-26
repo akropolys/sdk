@@ -1416,12 +1416,11 @@
   .hsk-cb-overlay .hsk-cb-input-box[data-expanded="true"] > .hsk-chat-send { grid-column: 3; grid-row: 2; }
 }
 
-/* Home: the greeting sits centred; the doodles step back. */
+/* Home: the greeting sits centred. */
 @media (max-width: 768px) {
   .hsk-cb-onboarding-card:has(> .hsk-cb-hello-wrap--home) { align-items: center; }
   .hsk-cb-onboarding-card .hsk-cb-hello-wrap--home { align-items: center !important; text-align: center !important; }
   .hsk-cb-onboarding-card .hsk-cb-hello-wrap--home > * { text-align: center !important; }
-  .hsk-cb-panel:has(.hsk-cb-hello-wrap--home) > .hsk-cb-doodles { opacity: .55 !important; transition: opacity .4s ease; }
 }
 
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {

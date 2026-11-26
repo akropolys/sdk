@@ -331,7 +331,7 @@ export const DEFAULT_UI_STRINGS = {
   pillReplies: '{n} replies',
   micNoSpeech: "Didn't catch anything. Try again, a little closer to the mic.",
   micFailed: "Couldn't hear that. Try again.",
-  clearChat: 'Clear chat',
+  clearChat: 'New chat',
   memoryAsk: 'Remember this chat for 24 hours?',
   memoryRemember: 'Remember',
   memoryNotNow: 'Not now',

@@ -7,7 +7,7 @@ Chat, voice, photos and room previews for your website, answered from your own p
 ```html
 <kiku-button></kiku-button>
 
-<script src="https://cdn.akropolys.cloud/kiku/2.4.3/kiku.js"
+<script src="https://cdn.akropolys.cloud/kiku/2.4.4/kiku.js"
         data-key="YOUR_PUBLIC_KEY" data-voice="true" data-vision="true" defer></script>
 ```
 
