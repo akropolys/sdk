@@ -1,5 +1,5 @@
 import type { EntityImage } from './types';
-/** Preserve order and captions; ignore malformed legacy metadata. */
+/** Images with their captions. */
 export function normalizeEntityImages(raw: unknown, cover?: string, base?: string): EntityImage[] {
   let resolvedBase: string | undefined;
   try { resolvedBase = base ? new URL(base, typeof document !== 'undefined' ? document.baseURI : undefined).href : typeof document !== 'undefined' ? document.baseURI : undefined; } catch { resolvedBase = undefined; }

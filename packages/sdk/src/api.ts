@@ -20,7 +20,7 @@ export interface UIStrings {
   bcp47: string;
 
   font: ScriptFont | null;
-  /** Some keys are still being translated: show these, keep asking, never store them. */
+  /** True while some strings are still being translated. */
   pending?: boolean;
 }
 
