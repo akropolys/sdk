@@ -6,6 +6,7 @@ import { stripToolMarkup } from '../../../utils/toolMarkup';
 import { renderMarkdown, safeHref, createWriting, type WritingStore } from '../../../utils/markdown';
 import { lineDirection } from '../../../utils/textDirection';
 import { LiveTable } from '../../LiveTable';
+import { warmMarkupEditor } from '../../LazyMarkupEditor';
 import { WorkingVeil } from '../../KikuDoodles';
 import { ThinkingBlock, parseThinking, isTeamNote } from './ThinkingBlock';
 import { SourcesCarousel } from './SourcesCarousel';
@@ -413,7 +414,7 @@ export function MessageItem({
                       alt="AI-generated preview"
                       className="hsk-markdown-img"
                       style={vizState[msg.visualization] === 'err' ? { display: 'none' } : undefined}
-                      onLoad={() => setVizState(p => ({ ...p, [msg.visualization!]: 'ok' }))}
+                      onLoad={() => { setVizState(p => ({ ...p, [msg.visualization!]: 'ok' })); warmMarkupEditor(); }}
                       onError={() => setVizState(p => ({ ...p, [msg.visualization!]: 'err' }))}
                     />
                   )}

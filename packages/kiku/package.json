@@ -1,6 +1,6 @@
 {
   "name": "@akropolys/kiku",
-  "version": "2.4.5",
+  "version": "2.4.6",
   "description": "The real-time conversational layer for the living web.",
   "license": "MIT",
   "keywords": [
@@ -34,6 +34,10 @@
     "./kiku.js": "./dist/kiku.js",
     "./voice-worklet.js": "./dist/voice-worklet.js"
   },
+  "sideEffects": [
+    "*.css",
+    "./dist/kiku.js"
+  ],
   "files": [
     "dist",
     "README.md"
@@ -62,6 +66,7 @@
     "@types/react-dom": "^18.0.0",
     "clsx": "^2.1.1",
     "esbuild": "0.27.7",
+    "preact": "11.2.0",
     "tsup": "^8.0.0",
     "typescript": "^5.0.0"
   }

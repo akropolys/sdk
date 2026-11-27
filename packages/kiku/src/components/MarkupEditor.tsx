@@ -9,6 +9,8 @@ interface PinAction { kind: 'pin'; x: number; y: number; id: string; label: stri
 type Action = StrokeAction | PinAction;
 interface Selection { points: Point[]; closed: boolean }
 
+const focusOnMount = (el: HTMLElement | null) => { el?.focus(); };
+
 const MARK_COLOR = '#ff5a5a';
 const MAX_EXPORT_DIM = 1280;
 const MAX_PINS = 4;
@@ -299,7 +301,7 @@ export function MarkupEditor({ src, onCancel, onSend, t }: {
                 style={labelPlacement(editingPin.x / dims.w * 100, Math.max(12, (editingPin.y - editingPin.size * 4) / dims.h * 100))}
               >
                 <input
-                  autoFocus
+                  ref={focusOnMount}
                   aria-label={t('markupPinLabel')}
                   placeholder={t('markupPinLabelHint')}
                   value={editingPin.label}

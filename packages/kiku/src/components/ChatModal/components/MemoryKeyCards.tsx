@@ -2,6 +2,8 @@ import React from 'react';
 import { SparkleIcon, CopyIcon, CheckIcon } from '../icons';
 import type { UIStringKey } from '../types';
 
+const focusOnMount = (el: HTMLElement | null) => { el?.focus(); };
+
 export interface PromptKeyCardProps {
   keyInput: string;
   setKeyInput: (val: string) => void;
@@ -35,7 +37,7 @@ export function PromptKeyCard({
               value={keyInput}
               onChange={e => setKeyInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleUseExistingKey()}
-              autoFocus
+              ref={focusOnMount}
             />
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="hsk-cb-phone-submit" onClick={handleUseExistingKey} disabled={!keyInput.trim()}>

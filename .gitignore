@@ -1,4 +1,5 @@
 dist/
+dist-preact/
 node_modules/
 .turbo/
 .env

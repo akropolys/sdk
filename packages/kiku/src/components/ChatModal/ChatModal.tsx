@@ -1,5 +1,5 @@
 import { hasSeenThemes, initialTheme, rememberThemesSeen } from '../../utils/themePreference';
-import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useId } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useId, Suspense } from 'react';
 import { flushSync } from 'react-dom';
 import { THEMES, isThemeId, themeDef, DEFAULT_THEME, type ThemeId } from './themes';
 import { useKiku, ChatSource, ChatAttachment, CaptureTarget, subscribeLiveStream, type ChatMessage } from '@akropolys/sdk';
@@ -11,7 +11,7 @@ import { resolveTheme } from '../../utils/theme';
 import { useHostFontFace, preloadScriptFont } from '../../utils/hostFont';
 import { useDragToDismiss } from '../../utils/sheetGesture';
 import { downscaleImage } from '../../utils/downscaleImage';
-import { MarkupEditor } from '../MarkupEditor';
+import { MarkupEditor } from '../LazyMarkupEditor';
 import KikuDoodles, { bloomDoodles } from '../KikuDoodles';
 
 import {
@@ -1470,20 +1470,22 @@ export function ChatModal({
             />
 
             {markupSrc && (
-              <div className="hsk-markup-overlay">
-                <MarkupEditor
-                  src={markupSrc}
-                  t={t as (key: string, vars?: Record<string, string>) => string}
-                  onCancel={() => setMarkupSrc(null)}
-                  onSend={(dataUrl, instruction, marks, preview) => {
-                    setMarkupSrc(null);
-                    handleSend(
-                      instruction,
-                      [{ type: 'image', data: dataUrl, annotated: true, marks, instructed: true, preview }],
-                    );
-                  }}
-                />
-              </div>
+              <Suspense fallback={null}>
+                <div className="hsk-markup-overlay">
+                  <MarkupEditor
+                    src={markupSrc}
+                    t={t as (key: string, vars?: Record<string, string>) => string}
+                    onCancel={() => setMarkupSrc(null)}
+                    onSend={(dataUrl, instruction, marks, preview) => {
+                      setMarkupSrc(null);
+                      handleSend(
+                        instruction,
+                        [{ type: 'image', data: dataUrl, annotated: true, marks, instructed: true, preview }],
+                      );
+                    }}
+                  />
+                </div>
+              </Suspense>
             )}
         </>
       </div>
