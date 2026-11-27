@@ -49,7 +49,7 @@ async function embed(out, alias = {}) {
   const main = await build({
     ...common(alias),
     stdin: {
-      contents: "export * from './src/embed.tsx';\nexport * as __react from 'react';\nexport * as __jsx from 'react/jsx-runtime';",
+      contents: (alias.react ? "import { preactEffects } from './scripts/preact-effects.mjs';\npreactEffects();\n" : '') + "export * from './src/embed.tsx';\nexport * as __react from 'react';\nexport * as __jsx from 'react/jsx-runtime';",
       resolveDir: '.', sourcefile: 'embed-entry.tsx', loader: 'tsx',
     },
     outfile: `${out}/embed/embed.js`,

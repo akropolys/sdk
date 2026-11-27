@@ -5,6 +5,7 @@ import { AkropolysClient, siteFromKey } from '@akropolys/sdk';
 import { AkropolysContext } from '@akropolys/sdk';
 import type { AkropolysConfig, Entity } from '@akropolys/sdk';
 import { KikuButton, type KikuButtonProps } from './components/KikuButton';
+import { cachedBaseFont, baseFontSettled } from './utils/chromeWarm';
 
 export type EmbedOptions = AkropolysConfig & {
   siteId?: string;
@@ -46,7 +47,11 @@ export function mount(options: EmbedOptions) {
     </AkropolysContext.Provider>
   ));
   return {
-    open() { active(); container.querySelector<HTMLButtonElement>('button')?.click(); },
+    open() {
+      active();
+      // The first open waits briefly for kiku's font, so text never swaps face on screen.
+      void baseFontSettled(client, 800).then(() => { if (!destroyed) container.querySelector<HTMLButtonElement>('button')?.click(); });
+    },
     ingest(entities: Entity | Entity[]) {
       active();
       return Array.isArray(entities) ? client.api.ingestBatch(entities) : client.api.ingest(entities);
