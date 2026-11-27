@@ -1,6 +1,4 @@
-// Preact build only. React 18 runs useEffect before paint when a click or key
-// caused the render; Preact always waits a frame, so the modal showed a frame
-// of stale state (empty kiku, old text) at those moments. Same timing here.
+// Preact build only: effect timing matches React.
 import { options } from 'preact';
 
 const DISCRETE = new Set(['click', 'dblclick', 'contextmenu', 'keydown', 'keyup', 'input', 'change', 'submit', 'beforeinput',
@@ -28,7 +26,6 @@ export function preactEffects() {
     if (DISCRETE.has(e.type) && !discrete) {
       discrete = true;
       setTimeout(() => { discrete = false; });
-      // Runs after the handler's render; effects still waiting on a frame go now.
       queueMicrotask(() => queueMicrotask(() => flush?.()));
     }
     return prevEvent ? prevEvent(e) : e;
