@@ -20,6 +20,8 @@ export interface UIStrings {
   bcp47: string;
 
   font: ScriptFont | null;
+  /** Some keys are still being translated: show these, keep asking, never store them. */
+  pending?: boolean;
 }
 
 export interface WidgetSettings {
@@ -396,6 +398,7 @@ export class AkropolysAPI {
         dir: data.dir === 'rtl' ? 'rtl' : 'ltr',
         bcp47: typeof data.bcp47 === 'string' ? data.bcp47 : '',
         font: this.parseFont(data.font),
+        pending: data.pending === true,
       };
     } catch {
       return null;

@@ -644,7 +644,7 @@ export class AkropolysClient {
       const raw = localStorage.getItem(cacheKey);
       if (raw) {
         const cached = JSON.parse(raw);
-        if (cached?.strings && Object.keys(cached.strings).length > 0) {
+        if (cached?.strings && Object.keys(cached.strings).length > 0 && !AkropolysClient.holdsEnglish(language, cached.strings, defaults)) {
           return {
             strings: cached.strings,
             complete: true,
@@ -656,6 +656,41 @@ export class AkropolysClient {
       }
     } catch {  }
     return null;
+  }
+
+  // English filler saved as a translation by an older server; such a set is asked for again.
+  private static holdsEnglish(language: string, got: Record<string, string>, defaults: Record<string, string>): boolean {
+    const l = language.toLowerCase().trim();
+    if (!l || l === 'english' || l === 'en') return false;
+    return Object.keys(got).some(k => {
+      const en = defaults[k]?.trim();
+      return !!en && got[k]?.trim() === en && en.split(/\s+/).length >= 3;
+    });
+  }
+
+  // Any earlier dictionary saved for this language, so a changed dictionary first paints the old words, not English.
+  getLastUIStrings(language: string): UIStrings | null {
+    if (typeof window === 'undefined' || !language) return null;
+    const prefix = `akropolys_ui_strings_v${AkropolysClient.CHROME_STRINGS_CACHE_VERSION}_${language.toLowerCase().trim()}_`;
+    const found: any[] = [];
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k || !k.startsWith(prefix)) continue;
+        const c = JSON.parse(localStorage.getItem(k) || 'null');
+        if (c?.strings && Object.keys(c.strings).length > 0) found.push(c);
+      }
+    } catch {  }
+    if (found.length === 0) return null;
+    found.sort((a, b) => Object.keys(a.strings).length - Object.keys(b.strings).length);
+    const top = found[found.length - 1];
+    return {
+      strings: Object.assign({}, ...found.map(c => c.strings)),
+      complete: false,
+      dir: top.dir === 'rtl' ? 'rtl' : 'ltr',
+      bcp47: typeof top.bcp47 === 'string' ? top.bcp47 : '',
+      font: top.font?.family && top.font?.faces?.length ? top.font : null,
+    };
   }
 
   private readonly uiStringsPending = new Map<string, Promise<UIStrings>>();
@@ -680,28 +715,12 @@ export class AkropolysClient {
 
     const english: UIStrings = { strings: {}, complete: false, dir: 'ltr', bcp47: '', font: null };
 
-    if (typeof window !== 'undefined') {
-      try {
-        const raw = localStorage.getItem(cacheKey);
-        if (raw) {
-          const cached = JSON.parse(raw);
-          if (cached?.strings && Object.keys(cached.strings).length > 0) {
-            return {
-              strings: cached.strings,
-              complete: true,
-              dir: cached.dir === 'rtl' ? 'rtl' : 'ltr',
-              bcp47: typeof cached.bcp47 === 'string' ? cached.bcp47 : '',
-              font: cached.font?.family && cached.font?.faces?.length ? cached.font : null,
-            };
-          }
-          localStorage.removeItem(cacheKey);
-        }
-      } catch {  }
-    }
-
     let result = await this.api.uiStrings(language, defaults);
-    if (!result?.complete) result = await this.api.uiStrings(language, defaults);
-    if (!result?.complete || Object.keys(result.strings).length === 0) return english;
+    if (!result?.complete && !result?.pending) result = await this.api.uiStrings(language, defaults);
+    if (!result || Object.keys(result.strings).length === 0) return english;
+    // Partly translated: shown, never stored, asked for again.
+    if (result.pending) return { ...result, complete: true };
+    if (!result.complete) return english;
     const translated = result.strings;
 
     if (typeof window !== 'undefined') {

@@ -58,9 +58,11 @@ export function useScriptFont({ shopperLanguage, theme, preloadedStrings }: UseS
     client?.getCachedUIStrings?.(shopperLanguage, DEFAULT_UI_STRINGS) ??
     client?.getCachedUIStrings?.(shopperLanguage, ONBOARDING_UI_STRINGS)
   ) : null;
+  // Last words for this language stand in until the current dictionary arrives.
+  const staleInitial = shopperLanguage && !cachedInitial ? client?.getLastUIStrings?.(shopperLanguage) ?? null : null;
   const initialStrings = (preloadedStrings && Object.keys(preloadedStrings).length > 0)
     ? preloadedStrings
-    : (cachedInitial?.strings ?? {});
+    : (cachedInitial?.strings ?? staleInitial?.strings ?? {});
   const [chromeStrings, setChromeStrings] = useState<Record<string, string>>(() => initialStrings);
   const [chromeReady, setChromeReady] = useState<boolean>(() => !shopperLanguage || (preloadedStrings && Object.keys(preloadedStrings).length > 0) || !!cachedInitial?.complete);
   const [loadedLang, setLoadedLang] = useState<string>(() => {
@@ -79,6 +81,7 @@ export function useScriptFont({ shopperLanguage, theme, preloadedStrings }: UseS
   const dirKey = shopperLanguage ? `akropolys_ui_dir_${shopperLanguage.toLowerCase()}` : '';
   const [isRTL, setIsRTL] = useState<boolean>(() => {
     if (cachedInitial?.dir) return cachedInitial.dir === 'rtl';
+    if (staleInitial?.dir) return staleInitial.dir === 'rtl';
     const known = knownLanguage(shopperLanguage);
     if (known) return known.dir === 'rtl';
     const meta = getLoadingMeta(shopperLanguage);
@@ -87,9 +90,9 @@ export function useScriptFont({ shopperLanguage, theme, preloadedStrings }: UseS
     try { return localStorage.getItem(dirKey) === 'rtl'; } catch { return false; }
   });
   const [speechLang, setSpeechLang] = useState(() => {
-    return cachedInitial?.bcp47 || knownLanguage(shopperLanguage)?.bcp47 || '';
+    return cachedInitial?.bcp47 || staleInitial?.bcp47 || knownLanguage(shopperLanguage)?.bcp47 || '';
   });
-  const [scriptFont, setScriptFont] = useState<ScriptFont | null>(() => cachedInitial?.font ?? null);
+  const [scriptFont, setScriptFont] = useState<ScriptFont | null>(() => cachedInitial?.font ?? staleInitial?.font ?? null);
   const [baseFont, setBaseFont] = useState<ScriptFont | null>(() => readyBaseFont(client));
   const [baseFontReady, setBaseFontReady] = useState<boolean>(true);
   const [fontWait, setFontWait] = useState(false);
@@ -192,8 +195,16 @@ export function useScriptFont({ shopperLanguage, theme, preloadedStrings }: UseS
       setChromeReady(true);
     } else {
       setFontWait(false);
-      setChromeStrings({});
-      if (known) {
+      const stale = client?.getLastUIStrings?.(shopperLanguage);
+      setChromeStrings(stale?.strings ?? {});
+      if (stale) {
+        setIsRTL(stale.dir === 'rtl');
+        setSpeechLang(stale.bcp47 || known?.bcp47 || '');
+        if (stale.font) {
+          void preloadScriptFont(stale.font);
+          setScriptFont(stale.font);
+        }
+      } else if (known) {
         setIsRTL(known.dir === 'rtl');
         setSpeechLang(known.bcp47);
       } else {
@@ -229,7 +240,7 @@ export function useScriptFont({ shopperLanguage, theme, preloadedStrings }: UseS
 
         const resFull = await client.getUIStrings?.(shopperLanguage, DEFAULT_UI_STRINGS);
         if (!cancelled && resFull?.complete) {
-          got = true;
+          got = !resFull.pending; // a partial set keeps being asked for
           setChromeStrings(prev => ({ ...prev, ...resFull.strings }));
           if (resFull.font) {
             await preloadScriptFont(resFull.font, 1200);

@@ -9,11 +9,7 @@ type Opts = {
   onClosed: () => void;
 };
 
-// The dock is one drop of liquid. A narrow drip hangs from the pill, its bottom fully round, then swells
-// wide (about 3% overshoot, no wobble). Width, height and corners are each a mass-spring simulated per ms,
-// so a tap mid-flight carries on from the shape's real position and velocity. Transform and opacity run
-// on the compositor. The corners are a separate, paint-only animation: under load it can miss a frame
-// without holding the outline up. Springs use SwiftUI's terms: response (s) and damping fraction.
+// Dock shape.
 const CH = ['w', 'h', 'r'] as const;
 type Ch = typeof CH[number];
 type Spring = { resp: number; zeta: number; delay?: number };

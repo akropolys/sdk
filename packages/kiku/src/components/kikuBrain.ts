@@ -1,7 +1,4 @@
-// kiku's living avatar. A small behaviour brain picks the next micro-action by weight, on
-// random timing, and holds; damped springs give every move anticipation, overshoot and
-// settle. The frame loop runs only while something moves; otherwise it sleeps until the
-// next scheduled event. Nothing here touches window at import time.
+// kiku's avatar.
 
 export type Pt = { x: number; y: number };
 type Sp = { x: number; v: number; t: number; f: number; z: number; e: number; F: number };
@@ -16,7 +13,6 @@ const pm = () => (R() < .5 ? -1 : 1);
 const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
 const f2 = (n: number) => '' + Math.round(n * 100) / 100;
 
-// x'' = w²(t - x) - 2ζw x' + F
 const sp = (x: number, f: number, z: number, e: number): Sp => ({ x, v: 0, t: x, f, z, e, F: 0 });
 const isStill = (s: Sp) => Math.abs(s.v) < s.e * 8 && Math.abs(s.t - s.x) < s.e;
 
@@ -55,7 +51,7 @@ const POSE: Record<string, Pose> = {
   // watching the messages with a soft smile and nodding along. No second figure.
   handoff: { x: -3, rot: 5, s: -.03, lid: .88, smile: .55, cheeks: .8, th: -8, follow: .5, gaze: { x: .45, y: .6 } },
 };
-// Left alone while idle: 20 s unlocks a stretch, 40 s a yawn, 75 s drowsy, 110 s asleep.
+// Idle progression.
 const TIER_AT = [0, 20e3, 40e3, 75e3, 110e3];
 const TIER_POSE: Pose[] = [{}, {}, {}, { lid: .55, fy: 1.5, smile: .1, follow: .5, th: 8 },
   { lid: .08, fy: 3, s: -.04, smile: .18, follow: 0, th: 14, gaze: { x: 0, y: .3 } }];
@@ -95,7 +91,7 @@ export function createKiku(svg: SVGSVGElement, onImpact: (splat: number) => void
   const cls = (c: string, on: boolean) => svg.classList.toggle(C + c, on);
   const oneShot = (c: string, calm?: boolean) => { if (calm || !reduced) { cls(c, false); void svg.getBoundingClientRect(); cls(c, true); } };
 
-  // Breathing is a CSS animation on the svg, restarted at the end of each breath with a new depth, length and pause.
+  // breathing
   const breathe = (e?: Event) => {
     if (e && e.target !== svg) return;
     const st = svg.style, slow = deep || tier > 2 && state === 'idle' || state === 'failed';   // deep, sleepy or sighing breaths
@@ -146,7 +142,7 @@ export function createKiku(svg: SVGSVGElement, onImpact: (splat: number) => void
         s.v += (w * w * (s.t - s.x) - 2 * s.z * w * s.v + s.F) * h; s.x += s.v * h;
       }
     }
-    // follow-through: the tuft root's acceleration pushes the tuft (it lags the body); vertical jolts splay the petals
+    // follow-through
     const sy = 1 + S.s.x, a = S.rot.x * Math.PI / 180;
     const rx = S.x.x + Math.sin(a) * 60 * sy, ry = S.y.x + 36 - 60 * sy * Math.cos(a), vx = (rx - prx) / dt, vy = (ry - pry) / dt;
     S.th.F = still ? 0 : -clamp((vx - pvx) / dt, -5e3, 5e3) * 2.2;
@@ -229,7 +225,7 @@ export function createKiku(svg: SVGSVGElement, onImpact: (splat: number) => void
     set({ gaze: { x, y } });
   }
 
-  // blinks: fast close, short hold, slower open; none while asleep
+  // blinks
   function blink(dbl?: boolean) {
     if (bl || tier > 3 && state === 'idle') return;
     bl = [now(), rnd(45, 70), rnd(15, 45), rnd(90, 150)];
@@ -400,7 +396,7 @@ export function createKiku(svg: SVGSVGElement, onImpact: (splat: number) => void
     schedule(entry);
   }
 
-  // talking: one syllable at a time; stressed beats bob the body, the odd pause; runs until the state changes
+  // talking
   function talk() {
     const stress = chance(.22), d = rnd(80, 150), end = chance(.05);
     set({ open: rnd(.4, 1) * (stress ? 1.15 : 1) });
@@ -425,8 +421,7 @@ export function createKiku(svg: SVGSVGElement, onImpact: (splat: number) => void
     schedule(1e3);
     return true;
   }
-  // "Something is up": a breath in, a swell outward and a settle, all on one spring, with a glow on the name pill.
-  // Under reduced motion only the glow plays. A second call while one is running is the same swell.
+  // "Something is up".
   let swellAt = -1e4;
   function swell() {
     const t = now();
