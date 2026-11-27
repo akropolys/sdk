@@ -49,8 +49,8 @@ export function mount(options: EmbedOptions) {
   return {
     open() {
       active();
-      // The first open waits briefly for kiku's font, so text never swaps face on screen.
-      void baseFontSettled(client, 800).then(() => { if (!destroyed) container.querySelector<HTMLButtonElement>('button')?.click(); });
+      // A short wait for kiku's font; past it the sized fallback keeps text from moving.
+      void baseFontSettled(client, 400).then(() => { if (!destroyed) container.querySelector<HTMLButtonElement>('button')?.click(); });
     },
     ingest(entities: Entity | Entity[]) {
       active();

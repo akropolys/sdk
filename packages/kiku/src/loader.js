@@ -36,6 +36,20 @@
     hint.href = url;
     document.head.append(hint);
     loadStyles().catch(() => {});
+    // kiku's font comes alongside the widget, so the first open draws in it.
+    const base = (data.apiUrl || 'https://api.akropolys.cloud/v1').replace(/\/+$/, '');
+    if (window.fetch) fetch(base + '/fonts/v1/base').then(r => r.ok ? r.json() : null).then(f => {
+      for (const face of f?.faces || []) {
+        if (typeof face.url !== 'string' || face.url[0] !== '/') continue;
+        const link = document.createElement('link');
+        link.rel = 'preload';
+        link.as = 'font';
+        link.type = 'font/woff2';
+        link.crossOrigin = '';
+        link.href = base + face.url;
+        document.head.append(link);
+      }
+    }).catch(() => {});
   }
 
   function siteFromKey(key) {
@@ -53,6 +67,7 @@
   const api = window.Kiku = {
     mount(options = {}) {
       if (pending) return pending;
+      warm();
       pending = Promise.all([import(url), loadStyles(), bodyReady()])
         .then(([module]) => {
           instance = module.mount({ ...options, ...identity, button: { ...options.button, voiceWorkletUrl: options.button?.voiceWorkletUrl || workletUrl } });

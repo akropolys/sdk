@@ -370,10 +370,8 @@ export class AkropolysAPI {
 
   async baseFont(): Promise<ScriptFont | null> {
     try {
-      const res = await fetch(`${this.apiUrl}/fonts/v1/base`, {
-        method: 'GET',
-        headers: this.buildHeaders(),
-      });
+      // A plain GET: no preflight, and it shares the HTTP cache with the loader's warm-up.
+      const res = await fetch(`${this.apiUrl}/fonts/v1/base`);
       if (!res.ok) return null;
       return this.parseFont(await res.json());
     } catch {

@@ -1,5 +1,5 @@
 .hsk-cb-panel[data-script="nonlatin"][data-host-font="gap"] {
-    --hsk-font: "Geist", system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
+    --hsk-font: "Geist", "Geist Fallback", system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
 }
 
 .hsk-cb-panel[data-script="nonlatin"],

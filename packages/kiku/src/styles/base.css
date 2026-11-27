@@ -87,7 +87,7 @@
 :host, :root {
   --hsk-border-radius: 0px;
   --hsk-brand-green: #2D7A4B;
-    --hsk-font: "Geist", "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --hsk-font: "Geist", "Geist Fallback", "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --hsk-default-font-size: 15px;
 }
 

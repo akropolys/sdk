@@ -31,7 +31,7 @@ function el(tag) {
   return node;
 }
 
-function load(dataset, { noCurrentScript = false, failImport = false, tags = [] } = {}) {
+function load(dataset, { noCurrentScript = false, failImport = false, tags = [], fetch } = {}) {
   const head = el('head');
   const body = el('body');
   const calls = { imports: [], mounts: [], opens: 0 };
@@ -46,9 +46,9 @@ function load(dataset, { noCurrentScript = false, failImport = false, tags = [] 
     define(name, cls) { registry.set(name, cls); for (const tag of tags) cls.prototype.connectedCallback.call(tag); },
   };
   const connect = tag => { tags.push(tag); registry.get('kiku-button')?.prototype.connectedCallback.call(tag); };
-  const window = { dispatchEvent() {}, customElements };
+  const window = { dispatchEvent() {}, customElements, fetch };
   const ctx = {
-    window, customElements, HTMLElement: class {}, console, URL, Promise, Object, Error, queueMicrotask, atob, TextDecoder, Uint8Array, CustomEvent: class { constructor(t, o) { this.type = t; this.detail = o?.detail; } },
+    window, customElements, fetch, HTMLElement: class {}, console, URL, Promise, Object, Error, queueMicrotask, atob, TextDecoder, Uint8Array, CustomEvent: class { constructor(t, o) { this.type = t; this.detail = o?.detail; } },
     document: {
       currentScript: noCurrentScript ? null : script,
       querySelector: sel => (sel.includes('/kiku.js') ? script : sel === '#header' ? header : sel === 'kiku-button' ? tags[0] || null : null),
@@ -83,6 +83,18 @@ const links = head => head.children.map(c => c.rel);
   button.fire('focus');
   assert.equal(t.head.children.length, 2, 'warming happens once');
   assert.equal(t.calls.imports.length, 0);
+
+  // With fetch, intent also preloads kiku's font faces.
+  const fetched = [];
+  const ft = load({ siteId: 'shop' }, { fetch: async u => { fetched.push(u); return { ok: true, json: async () => ({ family: 'Geist', faces: [{ url: '/fonts/v1/geist-latin.woff2' }, { url: 'https://evil.example/x.woff2' }] }) }; } });
+  await tick();
+  ft.body.children[0].shadow.button.fire('pointerenter');
+  await tick(); await tick();
+  assert.deepEqual(fetched, ['https://api.akropolys.cloud/v1/fonts/v1/base']);
+  const pre = ft.head.children.filter(c => c.rel === 'preload');
+  assert.equal(pre.length, 1, 'only same-api faces are preloaded');
+  assert.equal(pre[0].href, 'https://api.akropolys.cloud/v1/fonts/v1/geist-latin.woff2');
+  assert.equal(pre[0].as, 'font');
 
   // A click mounts the widget, opens it and hands over the button's place.
   button.fire('click');

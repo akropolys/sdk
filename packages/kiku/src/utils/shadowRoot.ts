@@ -1,4 +1,5 @@
 import { KIKU_CSS } from '../styles/cssText';
+import { ensureFallbackFace } from './hostFont';
 
 const CONTAINER_ID = 'akropolys-kiku-root';
 let container: HTMLElement | null = null;
@@ -28,6 +29,7 @@ function applyStyles(root: ShadowRoot): void {
 
 export function getShadowContainer(): HTMLElement | null {
   if (typeof document === 'undefined') return null; // SSR
+  ensureFallbackFace();
   if (shadow) {
     applyStyles(shadow);
     return shadow as unknown as HTMLElement;

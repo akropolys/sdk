@@ -296,24 +296,24 @@ export function useScriptFont({ shopperLanguage, theme, preloadedStrings }: UseS
       : (hostName ? `"${hostName}", ` : '');
 
     if (scriptFont) {
-      return `"${scriptFont.family}", ${host}"Geist", system-ui, sans-serif`;
+      return `"${scriptFont.family}", ${host}"Geist", "Geist Fallback", system-ui, sans-serif`;
     }
 
     const l = shopperLanguage ? shopperLanguage.trim().toLowerCase() : '';
     if (l === 'japanese' || l === 'ja' || l === '日本語') {
-      return `${host}"Geist", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", system-ui, sans-serif`;
+      return `${host}"Geist", "Geist Fallback", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", system-ui, sans-serif`;
     }
     if (l === 'chinese' || l === 'zh' || l === '中文') {
-      return `${host}"Geist", "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", system-ui, sans-serif`;
+      return `${host}"Geist", "Geist Fallback", "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", system-ui, sans-serif`;
     }
     if (l === 'urdu' || l === 'ur' || l === 'اردو') {
-      return `"Noto Nastaliq Urdu", ${host}"IBM Plex Sans Arabic", "Geist", system-ui, sans-serif`;
+      return `"Noto Nastaliq Urdu", ${host}"IBM Plex Sans Arabic", "Geist", "Geist Fallback", system-ui, sans-serif`;
     }
     if (l === 'arabic' || l === 'ar' || l === 'العربية') {
-      return `"IBM Plex Sans Arabic", ${host}"Geist", system-ui, sans-serif`;
+      return `"IBM Plex Sans Arabic", ${host}"Geist", "Geist Fallback", system-ui, sans-serif`;
     }
     if (l === 'hindi' || l === 'hi' || l === 'हिन्दी') {
-      return `"Hind", ${host}"Geist", system-ui, sans-serif`;
+      return `"Hind", ${host}"Geist", "Geist Fallback", system-ui, sans-serif`;
     }
 
     return undefined;
