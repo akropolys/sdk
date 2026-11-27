@@ -3,7 +3,6 @@ import { preloadScriptFont } from './hostFont';
 
 const BASE_FONT = new WeakMap<object, Promise<ScriptFont | null>>();
 const BASE_FONT_READY = new WeakMap<object, ScriptFont | null>();
-const BASE_FONT_FACES = new WeakMap<object, Promise<void>>();
 
 // Resolved base font for a client that already warmed, so a reopen mounts with it.
 export function readyBaseFont(client: any): ScriptFont | null {
@@ -26,14 +25,6 @@ export function cachedBaseFont(client: any): Promise<ScriptFont | null> {
     .catch(() => null);
   BASE_FONT.set(client, p);
   return p;
-}
-
-// Settles once the base font's faces are in, or after capMs, so a first open draws in it.
-export function baseFontSettled(client: any, capMs: number): Promise<void> {
-  return Promise.race([
-    cachedBaseFont(client).then(() => BASE_FONT_FACES.get(client)),
-    new Promise<void>(resolve => setTimeout(resolve, capMs)),
-  ]);
 }
 
 // Pulled forward on hover/idle so the click doesn't pay for the round trips.
