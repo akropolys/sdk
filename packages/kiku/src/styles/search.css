@@ -141,7 +141,7 @@
 
   .hsk-cb-hello {
     font-size: clamp(21px, 5.8vw, 30px) !important;
-    font-weight: 600 !important;
+    font-weight: 400 !important;
     line-height: 1.25 !important;
     letter-spacing: -0.02em !important;
     color: var(--hsk-chat-muted, #8b8b8f) !important;

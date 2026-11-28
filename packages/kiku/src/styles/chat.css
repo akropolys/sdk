@@ -1357,17 +1357,18 @@
   width: 100%;
 }
 
+/* Regular weight: the font swap on first open can't change how bold it looks. */
 .hsk-cb-hello {
   margin: 0;
   font-size: clamp(24px, 4.5vw, 34px);
-  font-weight: 500;
+  font-weight: 400;
   line-height: 1.2;
   letter-spacing: -0.02em;
     color: color-mix(in srgb, var(--hsk-chat-text, #111) 55%, var(--hsk-chat-muted, #8b8b8f));
   text-align: start;
 }
 .hsk-cb-hello b {
-  font-weight: 700;
+  font-weight: inherit;
   color: var(--hsk-primary, #ff6a33);
 }
 

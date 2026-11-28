@@ -422,16 +422,20 @@ export function ChatModal({
       bloomDoodles();
       return;
     }
-    let done = false;
+    let done = false, alive = true, settle = 0;
     const shown = () => box.querySelector('.hsk-cb-hello-wrap, .hsk-cb-msg-group');
+    const go = () => { if (alive) { bloomDoodles(); nudgeContent(false); } };
     const fire = () => {
       if (done) return;
       done = true;
       openBloomedRef.current = true;
       observer.disconnect();
       clearTimeout(limit);
-      bloomDoodles();
-      nudgeContent(false);
+      // Bloom once the panel has landed and the opening work is done, so every frame gets drawn.
+      settle = window.setTimeout(() => {
+        const ric = (window as any).requestIdleCallback;
+        if (ric) ric(go, { timeout: 250 }); else go();
+      }, Math.max(0, 260 - (Date.now() - mountTimeRef.current)));
     };
     const observer = new MutationObserver(() => { if (shown()) fire(); });
     observer.observe(box, { childList: true, subtree: true });
@@ -439,8 +443,10 @@ export function ChatModal({
     if (shown()) fire();
     return () => {
       done = true;
+      alive = false;
       observer.disconnect();
       clearTimeout(limit);
+      clearTimeout(settle);
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 

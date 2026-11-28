@@ -661,10 +661,27 @@ function renderDoodles(
   shimmerProgress: number,
   alphaScale = 1,
   bloomT?: number, // the opening bloom's linear time, 0 to 1
+  layer?: BloomLayer,
 ) {
   ctx.clearRect(0, 0, w, h);
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
+
+  // Doodles that have finished blooming are drawn once to a layer, then copied each frame.
+  if (layer && bloomT !== undefined) {
+    const lc = layer.ctx;
+    lc.lineCap = 'round';
+    lc.lineJoin = 'round';
+    for (const g of glyphs) {
+      if (layer.done.has(g) || (bloomT - g.bloom) / BLOOM_SPAN < 1) continue;
+      layer.done.add(g);
+      paintGlyph(lc, g, g.alpha * alphaScale, g.baseColor, g.lineWidth, 1, 0, 0);
+    }
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(lc.canvas, 0, 0);
+    ctx.restore();
+  }
 
   const isShimmering = shimmerProgress >= 0 && shimmerProgress <= 1.4;
   const wavePos = isShimmering ? shimmerProgress * 1.4 - 0.2 : -999;
@@ -681,7 +698,7 @@ function renderDoodles(
     if (bloomT !== undefined) {
       // Each doodle eases in on its own clock, so the bloom spreads like a breath instead of a line.
       const lp = Math.min(1, Math.max(0, (bloomT - g.bloom) / BLOOM_SPAN));
-      if (lp <= 0) continue;
+      if (lp <= 0 || (layer && layer.done.has(g))) continue;
       const settle = 1 - (1 - lp) ** 3;
       const glint = Math.sin(lp * Math.PI) ** 2;
       alpha = g.alpha * settle + glint * g.glow;
@@ -711,23 +728,27 @@ function renderDoodles(
       }
     }
 
-    ctx.save();
-    ctx.translate(g.x + (g.dx ?? 0) + driftX, g.y + (g.dy ?? 0) + driftY);
-    ctx.rotate(g.rotation + (g.dr ?? 0));
-    if (grow !== 1) ctx.scale(grow, grow);
-    if (g.hop) {
-      ctx.scale(1 + g.hop, 1 + g.hop);
-      alpha *= 1 + g.hop * 2;
-    }
-    ctx.globalAlpha = Math.min(alpha * alphaScale, 1.0);
-    ctx.strokeStyle = stroke;
-    ctx.fillStyle = stroke;
-    ctx.lineWidth = lw;
-
-    const glyphRng = mulberry32(g.seed);
-    g.drawFn(ctx, g.size, glyphRng);
-    ctx.restore();
+    paintGlyph(ctx, g, alpha * alphaScale, stroke, lw, grow, driftX, driftY);
   }
+}
+
+interface BloomLayer { ctx: CanvasRenderingContext2D; done: Set<DoodleGlyph> }
+
+function paintGlyph(ctx: CanvasRenderingContext2D, g: DoodleGlyph, alpha: number, stroke: string, lw: number, grow: number, driftX: number, driftY: number) {
+  ctx.save();
+  ctx.translate(g.x + (g.dx ?? 0) + driftX, g.y + (g.dy ?? 0) + driftY);
+  ctx.rotate(g.rotation + (g.dr ?? 0));
+  if (grow !== 1) ctx.scale(grow, grow);
+  if (g.hop) {
+    ctx.scale(1 + g.hop, 1 + g.hop);
+    alpha *= 1 + g.hop * 2;
+  }
+  ctx.globalAlpha = Math.min(alpha, 1.0);
+  ctx.strokeStyle = stroke;
+  ctx.fillStyle = stroke;
+  ctx.lineWidth = lw;
+  g.drawFn(ctx, g.size, mulberry32(g.seed));
+  ctx.restore();
 }
 
 const KikuDoodles = React.memo(function KikuDoodles({
@@ -755,6 +776,7 @@ const KikuDoodles = React.memo(function KikuDoodles({
 
     const numeric = hashSeed(seed || 'kiku');
     let timer = 0;
+    let layer: BloomLayer | null = null;
 
     const tick = (startTime: number | null, duration: number, glyphs: DoodleGlyph[], isRTL: boolean) => () => {
       const now = performance.now();
@@ -772,9 +794,15 @@ const KikuDoodles = React.memo(function KikuDoodles({
           cv.height = targetH;
         }
         const ctx = cv.getContext('2d');
+        if (layer?.ctx.canvas.width !== targetW || layer.ctx.canvas.height !== targetH) {
+          const el = (cv.ownerDocument as Document | undefined)?.createElement?.('canvas');
+          const lc = el ? Object.assign(el, { width: targetW, height: targetH }).getContext('2d') : null;
+          layer = lc ? { ctx: lc, done: new Set() } : null;
+          lc?.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
         if (ctx) {
           ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-          renderDoodles(ctx, glyphs, w, h, -1, 1, rawProgress);
+          renderDoodles(ctx, glyphs, w, h, -1, 1, rawProgress, layer ?? undefined);
         }
       }
 
@@ -837,6 +865,7 @@ const KikuDoodles = React.memo(function KikuDoodles({
       cancelAnimationFrame(animFrameRef.current);
       isAnimatingRef.current = true;
       const duration = BLOOM_DURATION_MS;
+      layer = null;
       animFrameRef.current = requestAnimationFrame(tick(null, duration, glyphs, isRTL));
     };
 
@@ -860,7 +889,10 @@ const KikuDoodles = React.memo(function KikuDoodles({
       timer = window.setTimeout(updateCanvas, 20);
     };
 
-    updateCanvas();
+    // Waiting doodles are invisible; lay them out when idle, off the opening frames.
+    const ric = (window as any).requestIdleCallback as ((cb: () => void, o?: { timeout: number }) => number) | undefined;
+    const idle = waitingRef.current && ric ? ric(() => { if (waitingRef.current) updateCanvas(); }, { timeout: 400 }) : 0;
+    if (!idle) updateCanvas();
 
     // The doodles were already placed at mount; starting the bloom only
     // animates them. Placing them again here would land a long task in the
@@ -874,6 +906,7 @@ const KikuDoodles = React.memo(function KikuDoodles({
       const isRTL = dir === 'rtl' || getComputedStyle(cv).direction === 'rtl' || cv.closest('[dir="rtl"]') !== null;
       cancelAnimationFrame(animFrameRef.current);
       isAnimatingRef.current = true;
+      layer = null;
       animFrameRef.current = requestAnimationFrame(tick(null, BLOOM_DURATION_MS, glyphs, isRTL));
     };
     bloomListeners.add(start);
@@ -940,6 +973,7 @@ const KikuDoodles = React.memo(function KikuDoodles({
       thumpListeners.delete(onThump);
       bloomListeners.delete(start);
       clearTimeout(waitLimit);
+      if (idle) (window as any).cancelIdleCallback?.(idle);
       clearTimeout(joltTimer);
       clearTimeout(timer);
       cancelAnimationFrame(animFrameRef.current);
