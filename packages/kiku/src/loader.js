@@ -7,6 +7,7 @@
   const url = new URL('./embed/embed.js', base).href;
   const cssUrl = new URL('./styles.css', base).href;
   const workletUrl = new URL('./voice-worklet.js', base).href;
+  const fxUrl = new URL('./effects.js', base).href;
   const data = script.dataset;
   let styled;
   let instance;
@@ -103,7 +104,7 @@
   const options = {
     siteId, apiToken, apiUrl: data.apiUrl, voiceUrl: data.voiceUrl,
     container: data.container,
-    button: { label: data.label || 'Ask Kiku', enableVoice: data.voice === 'true', enableVision: data.vision === 'true' }
+    button: { label: data.label || 'Ask Kiku', enableVoice: data.voice === 'true', enableVision: data.vision === 'true', effect: data.effect, accent: data.accent }
   };
   // data-title, data-logo and data-brand-icon: the site's own name and marks in the chat
   for (const k of ['title', 'logo', 'brandIcon']) if (data[k]) options.button[k] = data[k];
@@ -144,6 +145,8 @@
     const button = shadow.querySelector('button');
     const label = place?.getAttribute?.('label') || options.button.label;
     button.textContent = label;
+    // data-effect: its code loads only when set.
+    if (data.effect) import(fxUrl).then(m => { if (button.isConnected) m.attachEffect(button, data.effect, data.accent); }).catch(() => {});
     for (const type of ['pointerenter', 'touchstart', 'focus']) button.addEventListener(type, warm, { once: true, passive: true });
     button.addEventListener('click', () => {
       if (!pending) {

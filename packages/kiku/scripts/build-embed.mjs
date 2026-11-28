@@ -27,6 +27,7 @@ const lazyMarkup = {
   name: 'lazy-markup',
   setup(b) {
     b.onResolve({ filter: /\/MarkupEditor$/ }, a => a.kind === 'dynamic-import' ? { path: './markup.js', external: true } : undefined);
+    b.onResolve({ filter: /\/effects\/launcherFx$/ }, a => a.kind === 'dynamic-import' ? { path: '../effects.js', external: true } : undefined);
   },
 };
 const fromEmbed = alias => ({
@@ -65,6 +66,8 @@ async function embed(out, alias = {}) {
   const inMain = new Set(inputs(main));
   const twice = inputs(markup).filter(f => inMain.has(f));
   if (twice.length) throw new Error(`markup.js would duplicate modules already in embed.js: ${twice.join(', ')}`);
+  // Launcher effects: their own file, fetched only when data-effect or the effect prop is set.
+  await build({ ...common(alias), entryPoints: ['src/effects/launcherFx.ts'], outfile: `${out}/effects.js` });
   await mkdir('node_modules/.cache', { recursive: true });
   await writeFile(`node_modules/.cache/kiku-embed-meta${alias.react ? '-preact' : ''}.json`, JSON.stringify(main.metafile));
   await writeFile(`${out}/voice-worklet.js`, worklet);

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { primeChimes } from '../utils/chime';
 import { getShadowContainer } from '../utils/shadowRoot';
@@ -47,6 +47,10 @@ export interface KikuButtonProps {
   enableVision?: boolean;
 
   ttsVoice?: string;
+  /** Launcher effect: 'clay', 'paper' or 'beam'. Off by default; its code loads only when set. */
+  effect?: 'clay' | 'paper' | 'beam';
+  /** Effect colour (hex). Defaults to kiku orange. */
+  accent?: string;
 }
 
 export function KikuButton({
@@ -69,6 +73,8 @@ export function KikuButton({
   voiceLang,
   ttsVoice,
   enableVision = false,
+  effect,
+  accent,
 }: KikuButtonProps) {
   const client = useAkropolysContext();
   const [open, setOpen] = useState(false);
@@ -108,6 +114,15 @@ export function KikuButton({
   }, [client]);
 
   const btnRef = useRef<HTMLButtonElement>(null);
+
+  // Layout effect: the wrapper comes off before React removes the button.
+  useLayoutEffect(() => {
+    const b = btnRef.current;
+    if (!effect || !b) return;
+    let off: (() => void) | undefined, live = true;
+    import('../effects/launcherFx').then(m => { if (live) off = m.attachEffect(b, effect, accent); }).catch(() => {});
+    return () => { live = false; off?.(); };
+  }, [effect, accent]);
 
   const openFrom = useCallback(() => {
     const b = btnRef.current?.getBoundingClientRect();
