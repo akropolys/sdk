@@ -143,6 +143,24 @@
   }
 }
 
+/* Held until kiku's fonts are in, then faded in once (fontGate in ChatModal). */
+.hsk-cb-panel[data-hsk-fonts="wait"] > :not(.hsk-cb-doodles) {
+  opacity: 0 !important;
+  pointer-events: none;
+}
+.hsk-cb-panel[data-hsk-fonts="in"] > :not(.hsk-cb-doodles) {
+  animation: hsk-fonts-in .3s cubic-bezier(.16, 1, .3, 1) both;
+}
+@keyframes hsk-fonts-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+/* "Preparing…" shows before the language's own font is in, so it never uses that font. */
+.hsk-lang-loader, .hsk-lang-loader *,
+.hsk-composer-exit-up .hsk-animated-placeholder, .hsk-composer-exit-up .hsk-animated-placeholder * {
+  font-family: "Geist Fallback", system-ui, sans-serif !important;
+}
+
 .hsk-cb-overlay.hsk-cb-overlay--closing {
   animation: hsk-overlay-out .2s cubic-bezier(.4, 0, 1, 1) both !important;
   pointer-events: none;
@@ -1357,18 +1375,17 @@
   width: 100%;
 }
 
-/* Regular weight: the font swap on first open can't change how bold it looks. */
 .hsk-cb-hello {
   margin: 0;
   font-size: clamp(24px, 4.5vw, 34px);
-  font-weight: 400;
+  font-weight: 500;
   line-height: 1.2;
   letter-spacing: -0.02em;
     color: color-mix(in srgb, var(--hsk-chat-text, #111) 55%, var(--hsk-chat-muted, #8b8b8f));
   text-align: start;
 }
 .hsk-cb-hello b {
-  font-weight: inherit;
+  font-weight: 700;
   color: var(--hsk-primary, #ff6a33);
 }
 

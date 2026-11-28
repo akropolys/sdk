@@ -9,6 +9,7 @@ import { cn } from '../../utils/cn';
 import { animateNudge } from '../../utils/nudge';
 import { resolveTheme } from '../../utils/theme';
 import { useHostFontFace, preloadScriptFont } from '../../utils/hostFont';
+import { baseFontLoaded, readyBaseFont } from '../../utils/chromeWarm';
 import { useDragToDismiss } from '../../utils/sheetGesture';
 import { downscaleImage } from '../../utils/downscaleImage';
 import { MarkupEditor } from '../LazyMarkupEditor';
@@ -140,6 +141,8 @@ export function ChatModal({
   const {
     chromeReady,
     baseFontReady,
+    fontsReady,
+    scriptFaceReady,
     isRTL,
     speechLang,
     scriptFont,
@@ -237,6 +240,29 @@ export function ChatModal({
     resumeFromReturn(returnClaim.token, returnPage());
   }, [returnClaim, memory.on, memory.hydrated, resumeFromReturn]);
   const inputLocked = awaitingEntityLang || awaitingConsent || isLangPreparing;
+
+  // kiku's text stays invisible until its fonts are in, then fades in once; it never shows a face that swaps.
+  const [fontGate, setFontGate] = useState<'wait' | 'in' | null>(() => (fontsReady ? null : 'wait'));
+  // Fonts still out when the wait ran out are left out for this visit, so they can't swap in later.
+  const [missedFonts, setMissedFonts] = useState<string[]>(() => (!fontsReady ? ['?'] : readyBaseFont(client) ? [] : ['Geist']));
+  useEffect(() => {
+    if (fontGate !== 'wait' || !fontsReady) return;
+    const missed = [!baseFontLoaded(client) && 'Geist', !scriptFaceReady && scriptFont?.family].filter((f): f is string => !!f);
+    setMissedFonts(missed);
+    setFontGate('in');
+  }, [fontGate, fontsReady, client, scriptFaceReady, scriptFont]);
+  const fontsMissed = missedFonts.some(f => f !== '?');
+  const panelFont = React.useMemo(() => {
+    const missed = missedFonts.filter(f => f !== '?');
+    if (!missed.length) return fontStack;
+    const strip = (s: string) => missed.reduce((acc, f) => acc.split(`"${f}", `).join(''), s);
+    return strip(fontStack ?? '"Geist", "Geist Fallback", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif');
+  }, [missedFonts, fontStack]);
+  useEffect(() => {
+    if (fontGate !== 'in') return;
+    const t = window.setTimeout(() => setFontGate(null), 320);
+    return () => clearTimeout(t);
+  }, [fontGate]);
 
   const [prevPreparingForComposer, setPrevPreparingForComposer] = useState(isLangPreparing);
   const [composerHidden,   setComposerHidden]   = useState(false);
@@ -1149,8 +1175,9 @@ export function ChatModal({
           lang={speechLang || undefined}
           data-script={isNonLatin ? 'nonlatin' : 'latin'}
           data-host-font={hostFontCovers ? 'covers' : 'gap'}
+          data-hsk-fonts={fontGate ?? undefined}
           data-nastaliq={(scriptFont?.family === 'Noto Nastaliq Urdu' || shopperLanguage?.toLowerCase() === 'urdu' || shopperLanguage?.toLowerCase() === 'ur' || shopperLanguage === 'اردو') ? 'true' : undefined}
-          style={fontStack ? ({ '--hsk-font': fontStack } as React.CSSProperties) : undefined}
+          style={panelFont ? ({ '--hsk-font': panelFont, ...(fontsMissed ? { fontFamily: 'var(--hsk-font)' } : {}) } as React.CSSProperties) : undefined}
           onClick={e => {
             e.stopPropagation();
             const target = e.target as HTMLElement;

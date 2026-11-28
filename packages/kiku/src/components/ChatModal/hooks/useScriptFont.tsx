@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import type { ScriptFont, AkropolysTheme } from '@akropolys/sdk';
 import { useAkropolysContext } from '@akropolys/sdk';
 import { useScriptFontFace, preloadScriptFont, loadFontsFor, fontsLoadedFor } from '../../../utils/hostFont';
-import { cachedBaseFont, readyBaseFont } from '../../../utils/chromeWarm';
+import { cachedBaseFont, readyBaseFont, baseFontLoaded } from '../../../utils/chromeWarm';
 import { DEFAULT_UI_STRINGS, ONBOARDING_UI_STRINGS, getLoadingMeta, type UIStringKey } from '../types';
 
 export interface UseScriptFontOptions {
@@ -48,6 +48,7 @@ function resolveFirstFamily(varRef: string): string {
 
 // The clay page holds until the next page's letters are drawn in their own font, but never longer than this.
 const FONT_WAIT_MS = 5000;
+const FONT_SHOW_CAP_MS = 1500;
 
 // The chat waits for its language; a failed load is tried again at these gaps, the last one repeating.
 const LANG_RETRY_MS = [5000, 15000, 45000, 120000];
@@ -94,7 +95,11 @@ export function useScriptFont({ shopperLanguage, theme, preloadedStrings }: UseS
   });
   const [scriptFont, setScriptFont] = useState<ScriptFont | null>(() => cachedInitial?.font ?? staleInitial?.font ?? null);
   const [baseFont, setBaseFont] = useState<ScriptFont | null>(() => readyBaseFont(client));
-  const [baseFontReady, setBaseFontReady] = useState<boolean>(true);
+  const [baseFontReady, setBaseFontReady] = useState<boolean>(() => baseFontLoaded(client));
+  const [scriptFaceReady, setScriptFaceReady] = useState<boolean>(() => {
+    const f = cachedInitial?.font ?? staleInitial?.font;
+    return !f || fontsLoadedFor([f.family], initialStrings);
+  });
   const [fontWait, setFontWait] = useState(false);
   const openedLangRef = React.useRef(shopperLanguage);
 
@@ -265,22 +270,33 @@ export function useScriptFont({ shopperLanguage, theme, preloadedStrings }: UseS
     };
   }, [shopperLanguage, client, dirKey]);
 
+  // Text is shown only once its faces are in; past FONT_SHOW_CAP_MS the sized fallback is the last resort.
   useEffect(() => {
     let cancelled = false;
+    const cap = window.setTimeout(() => setBaseFontReady(true), FONT_SHOW_CAP_MS);
     (async () => {
       try {
         const f = await cachedBaseFont(client);
         if (!cancelled && f) {
           setBaseFont(f);
-          await preloadScriptFont(f, 1200); // wait for the faces, so text does not swap after showing
+          await preloadScriptFont(f, FONT_SHOW_CAP_MS);
         }
       } catch {
 
       }
       if (!cancelled) setBaseFontReady(true);
     })();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; clearTimeout(cap); };
   }, [client]);
+
+  useEffect(() => {
+    if (!scriptFont) { setScriptFaceReady(true); return; }
+    if (fontsLoadedFor([scriptFont.family], chromeStrings)) { setScriptFaceReady(true); return; }
+    let cancelled = false;
+    setScriptFaceReady(false);
+    loadFontsFor([scriptFont.family], chromeStrings, FONT_SHOW_CAP_MS).then(() => { if (!cancelled) setScriptFaceReady(true); });
+    return () => { cancelled = true; };
+  }, [scriptFont, chromeStrings]);
 
   useScriptFontFace(scriptFont);
   useScriptFontFace(baseFont);
@@ -401,6 +417,8 @@ export function useScriptFont({ shopperLanguage, theme, preloadedStrings }: UseS
     isNonLatin,
     hostFontCovers,
     baseFontReady,
+    fontsReady: baseFontReady && scriptFaceReady,
+    scriptFaceReady,
     t,
     tNode,
   };
