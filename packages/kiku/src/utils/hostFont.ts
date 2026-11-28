@@ -7,7 +7,8 @@ const MOUNTED = new Map<string, number>();
 const LATIN = 'U+0000-00FF,U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2000-206F,U+2074,U+20A0-20C0,U+2113,U+2122,U+2191,U+2193,U+2212,U+2215,U+2C60-2C7F,U+A720-A7FF,U+FEFF,U+FFFD';
 const REGULAR = 'local("Arial"),local("ArialMT"),local("Helvetica"),local("Roboto"),local("Roboto-Regular")';
 const BOLD = 'local("Arial Bold"),local("Arial-BoldMT"),local("Helvetica Bold"),local("Roboto Bold"),local("Roboto-Bold")';
-const FALLBACKS: Array<[string, string, number]> = [[REGULAR, '100 449', 101.5], [REGULAR, '450 549', 104], [BOLD, '550 900', 98.5]];
+// Headings without a local bold (Android) use the regular face, sized to Geist 600; a later face that fails to load is skipped.
+const FALLBACKS: Array<[string, string, number]> = [[REGULAR, '100 449', 101.5], [REGULAR, '450 549', 104], [REGULAR, '550 900', 106.4], [BOLD, '550 900', 99.3]];
 let fallbackAdded = false;
 
 // Added and loaded up front: a local face still loads on first use, which would miss the modal's first frame.

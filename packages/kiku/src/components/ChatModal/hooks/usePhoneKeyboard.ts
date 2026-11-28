@@ -113,6 +113,14 @@ export function usePhoneKeyboard(
     let anchorEnd = 0, writing = false, compH = -1, compEl: Element | null = null;
     let seen: { c: number; s: number } | null = null;
     let learned = store.get();
+    let editedAt = 0;
+    const root = ov.getRootNode() as Document | ShadowRoot;
+    // A keyboard is only up while a field has focus; any other report is stale.
+    const typing = () => {
+      const a = root.activeElement as HTMLElement | null;
+      if (a && (a.tagName === 'TEXTAREA' || a.tagName === 'INPUT' || a.isContentEditable)) editedAt = performance.now();
+      return performance.now() - editedAt < 1000;
+    };
 
     const off = () => (vv ? vv.offsetTop : 0);
     const vh = () => (vv ? vv.height : ov.clientHeight);
@@ -207,6 +215,14 @@ export function usePhoneKeyboard(
     const keyboardShown = () => (useVk && kb > 0) || lh0 - vh() > 80;
     const onLayout = () => {
       syncComp();
+      if (!typing()) {
+        lhPrev = ov.clientHeight;
+        nav = sab.offsetHeight;
+        if (kb || kbY) { kb = 0; kbY = 0; wrap()?.removeAttribute('data-kb'); }
+        vkLift = 0;
+        if (!anim) { place(0, 0); if (cY || sY) setT(0, 0); }
+        return;
+      }
       const lh = ov.clientHeight, o = off(), h = vh();
       if (!keyboardShown()) nav = sab.offsetHeight;
       const d = lhPrev - lh;
@@ -259,6 +275,7 @@ export function usePhoneKeyboard(
       if (Math.abs(g) > 0.5) { vkLift = Math.max(0, Math.round(vkLift - g)); place(padTop, vkLift); }
     });
     const onKeyboard = (height: number, y: number) => {
+      if (height && !typing()) { height = 0; y = 0; }
       if (height === kb && y === kbY) return;
       const before = where();
       kb = height; kbY = y;
@@ -292,6 +309,9 @@ export function usePhoneKeyboard(
     if (useVk) vk.addEventListener('geometrychange', onGeo);
     dock.addEventListener('focusin', onFocus);
     dock.addEventListener('focusout', onBlur);
+    const recheck = () => { onLayout(); if (useVk) pollVk(); };
+    window.addEventListener('pageshow', recheck);
+    document.addEventListener('visibilitychange', recheck);
     onLayout();
     if (useVk) pollVk();
 
@@ -304,6 +324,8 @@ export function usePhoneKeyboard(
       if (useVk) vk.removeEventListener('geometrychange', onGeo);
       dock.removeEventListener('focusin', onFocus);
       dock.removeEventListener('focusout', onBlur);
+      window.removeEventListener('pageshow', recheck);
+      document.removeEventListener('visibilitychange', recheck);
       try { if (vk) vk.overlaysContent = prevVk; } catch {}
       if (meta && metaPrev !== null) meta.setAttribute('content', metaPrev);
       if (themeOwned) themeMeta.remove(); else if (themePrev !== null) themeMeta.setAttribute('content', themePrev);

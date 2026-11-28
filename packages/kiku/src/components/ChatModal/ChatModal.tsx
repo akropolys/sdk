@@ -245,6 +245,8 @@ export function ChatModal({
   const composerWasHidden = useRef(false);
   const composerHideTimer   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const composerRevealTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const preparingRef = useRef(isLangPreparing);
+  preparingRef.current = isLangPreparing;
 
   if (isLangPreparing !== prevPreparingForComposer) {
     setPrevPreparingForComposer(isLangPreparing);
@@ -253,6 +255,7 @@ export function ChatModal({
       setComposerRevealing(false);
       setComposerExiting(true);
       composerHideTimer.current = setTimeout(() => {
+        if (!preparingRef.current) return;
         setComposerHidden(true);
         setComposerExiting(false);
         composerWasHidden.current = true;
@@ -268,6 +271,11 @@ export function ChatModal({
       }
     }
   }
+
+  // The input is only ever away while a language is being prepared.
+  useEffect(() => {
+    if (!isLangPreparing && (composerHidden || composerExiting)) { setComposerHidden(false); setComposerExiting(false); }
+  }, [isLangPreparing, composerHidden, composerExiting]);
 
   useEffect(() => () => {
     if (composerHideTimer.current) clearTimeout(composerHideTimer.current);
