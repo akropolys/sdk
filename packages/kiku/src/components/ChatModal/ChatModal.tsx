@@ -741,12 +741,12 @@ export function ChatModal({
   }, [exitOverlay, onClose, leaveHuman]);
   // Asks once whether to remember the chat, then carries on with what the visitor was doing.
   const afterMemoryRef = useRef<(() => void) | null>(null);
+  const memoryWorth = messages.some(m => m.role === 'user') && !inOnboarding && !humanPending && memory.choice === null && !memory.on;
   const askMemory = useCallback((then: () => void) => {
-    const worth = messages.some(m => m.role === 'user') && !inOnboarding && !humanPending && memory.choice === null && !memory.on;
-    if (!worth) return then();
+    if (!memoryWorth) return then();
     afterMemoryRef.current = then;
     setLeaveAsk('memory');
-  }, [messages, inOnboarding, humanPending, memory.choice, memory.on]);
+  }, [memoryWorth]);
   const answerMemory = useCallback(async (remember: boolean) => {
     if (remember) {
       setMemoryBusy(true);
@@ -795,6 +795,12 @@ export function ChatModal({
     panel: useCallback(() => panelRef.current, []),
     scroller: useCallback(() => msgsContainerRef.current, []),
     onDismiss: onClose,
+    // A swipe down asks first, like the close button; when there is nothing to ask it closes as before.
+    resist: () => {
+      if (!leaveAsk && !humanPending && !memoryWorth) return false;
+      requestClose();
+      return true;
+    },
     quiescent: useCallback(() => performance.now() - lastExternalScrollRef.current > 90, []),
   });
 

@@ -50,14 +50,17 @@ type Opts = {
   panel: () => HTMLElement | null;
   scroller: () => HTMLElement | null;
   onDismiss: () => void;
-
+  // Called on a dismissing swipe; true means the sheet springs back instead (it has something to ask).
+  resist?: () => boolean;
   quiescent?: () => boolean;
   enabled?: boolean;
 };
 
-export function useDragToDismiss({ panel, scroller, onDismiss, quiescent, enabled = true }: Opts): void {
+export function useDragToDismiss({ panel, scroller, onDismiss, resist, quiescent, enabled = true }: Opts): void {
   const dismissRef = useRef(onDismiss);
   dismissRef.current = onDismiss;
+  const resistRef = useRef(resist);
+  resistRef.current = resist;
 
   useEffect(() => {
     if (!enabled) return;
@@ -131,7 +134,9 @@ export function useDragToDismiss({ panel, scroller, onDismiss, quiescent, enable
       dragging = false;
       const h = el.offsetHeight || 1;
       const projected = spring.value + velocity * 0.12;
-      if (projected > h * 0.3 || velocity > 900) {
+      if ((projected > h * 0.3 || velocity > 900) && resistRef.current?.()) {
+        spring.to(0, velocity);
+      } else if (projected > h * 0.3 || velocity > 900) {
         exiting = true;
         el.style.pointerEvents = 'none';
         spring.to(h, velocity);
